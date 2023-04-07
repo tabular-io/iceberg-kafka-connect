@@ -9,17 +9,26 @@ import org.apache.kafka.connect.sink.SinkConnector;
 
 public class IcebergSinkConnector extends SinkConnector {
 
+  private Map<String, String> props;
+
   @Override
-  public void start(Map<String, String> props) {}
+  public String version() {
+    return "0.0.1";
+  }
+
+  @Override
+  public void start(Map<String, String> props) {
+    this.props = props;
+  }
 
   @Override
   public Class<? extends Task> taskClass() {
-    return null;
+    return IcebergSinkConnectorTask.class;
   }
 
   @Override
   public List<Map<String, String>> taskConfigs(int maxTasks) {
-    return null;
+    return List.of(props);
   }
 
   @Override
@@ -27,11 +36,6 @@ public class IcebergSinkConnector extends SinkConnector {
 
   @Override
   public ConfigDef config() {
-    return null;
-  }
-
-  @Override
-  public String version() {
-    return null;
+    return new ConfigDef();
   }
 }

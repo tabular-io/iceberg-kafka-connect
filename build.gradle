@@ -26,12 +26,21 @@ dependencies {
   testImplementation libs.assertj
   testImplementation libs.awaitility
   testImplementation libs.testcontainers.kafka
+  testImplementation libs.testcontainers.debezium
+  testImplementation libs.kafka.clients
   testCompileOnly libs.lombok
   testAnnotationProcessor libs.lombok
 }
 
 compileJava {
-  options.release.set(17)
+  options.release.set(11) // TODO: Debezium image uses java 11
+}
+
+// build the jar first so it can be installed into kafka connect
+test.dependsOn(jar)
+
+test {
+  useJUnitPlatform()
 }
 
 spotless {
