@@ -1,0 +1,33 @@
+[versions]
+assertj-ver = "3.23.1"
+awaitility-ver = "4.2.0"
+aws-sdk-ver = "2.20.18"
+iceberg-ver = "1.2.1-tabular.13"
+junit-ver = "5.9.2"
+kafka-connect-ver = "3.4.0"
+lombok-ver = "1.18.26"
+slf4j-ver = "2.0.7"
+testcontainers-ver = "1.17.6"
+
+
+[libraries]
+awssdk-bundle = { module = "software.amazon.awssdk:dynamodb", version.ref = "aws-sdk-ver" }
+iceberg-api = { module = "org.apache.iceberg:iceberg-api", version.ref = "iceberg-ver" }
+iceberg-aws = { module = "org.apache.iceberg:iceberg-aws", version.ref = "iceberg-ver" }
+iceberg-core = { module = "org.apache.iceberg:iceberg-core", version.ref = "iceberg-ver" }
+iceberg-guava = { module = "org.apache.iceberg:iceberg-bundled-guava", version.ref = "iceberg-ver" }
+kafka-connect-api = "org.apache.kafka:connect-api:3.4.0"
+lombok = "org.projectlombok:lombok:1.18.26"
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j-ver" }
+
+# test dependencies
+assertj = { module = "org.assertj:assertj-core", version.ref = "assertj-ver" }
+awaitility = { module = "org.awaitility:awaitility", version.ref = "awaitility-ver" }
+junit-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit-ver" }
+junit-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit-ver" }
+mockito = "org.mockito:mockito-core:4.8.1"
+testcontainers-kafka = { module = "org.testcontainers:kafka", version.ref = "testcontainers-ver" }
+
+
+[bundles]
+iceberg = ["iceberg-api", "iceberg-core", "iceberg-aws", "iceberg-guava"]

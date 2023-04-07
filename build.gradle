@@ -1,0 +1,43 @@
+plugins {
+  id "java"
+  id 'com.diffplug.spotless' version "6.18.0"
+}
+
+group "io.tabular.connect"
+version "0.0.1"
+
+repositories {
+  mavenCentral()
+  maven {
+    url "https://tabular-repository-public.s3.amazonaws.com/releases"
+  }
+}
+
+dependencies {
+  implementation libs.bundles.iceberg
+  implementation libs.awssdk.bundle
+  compileOnly libs.kafka.connect.api
+  compileOnly libs.lombok
+  annotationProcessor libs.lombok
+
+  testImplementation libs.junit.api
+  testRuntimeOnly libs.junit.engine
+  testImplementation libs.mockito
+  testImplementation libs.assertj
+  testImplementation libs.awaitility
+  testImplementation libs.testcontainers.kafka
+  testCompileOnly libs.lombok
+  testAnnotationProcessor libs.lombok
+}
+
+compileJava {
+  options.release.set(17)
+}
+
+spotless {
+  java {
+    target "src/**/*.java"
+    googleJavaFormat()
+    licenseHeaderFile "$rootDir/LICENSE.txt"
+  }
+}

@@ -1,0 +1,5 @@
+hs_err_pid*
+.gradle
+build
+.idea
+.DS_Store
