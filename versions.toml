@@ -26,12 +26,14 @@ hadoop-common = { module = "org.apache.hadoop:hadoop-common", version.ref = "had
 iceberg-api = { module = "org.apache.iceberg:iceberg-api", version.ref = "iceberg-ver" }
 iceberg-aws = { module = "org.apache.iceberg:iceberg-aws", version.ref = "iceberg-ver" }
 iceberg-core = { module = "org.apache.iceberg:iceberg-core", version.ref = "iceberg-ver" }
+iceberg-data = { module = "org.apache.iceberg:iceberg-data", version.ref = "iceberg-ver" }
 iceberg-guava = { module = "org.apache.iceberg:iceberg-bundled-guava", version.ref = "iceberg-ver" }
+iceberg-orc = { module = "org.apache.iceberg:iceberg-orc", version.ref = "iceberg-ver" }
 iceberg-parquet = { module = "org.apache.iceberg:iceberg-parquet", version.ref = "iceberg-ver" }
 kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka-ver" }
 kafka-connect-api = { module = "org.apache.kafka:connect-api", version.ref = "kafka-ver" }
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok-ver" }
-parquet = { module = "org.apache.parquet:parquet-hadoop", version.ref = "parquet-ver" }
+#parquet = { module = "org.apache.parquet:parquet-hadoop", version.ref = "parquet-ver" }
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j-ver" }
 
 # test dependencies
@@ -49,4 +51,4 @@ testcontainers-localstack = { module = "org.testcontainers:localstack", version.
 
 [bundles]
 aws = ["aws-dynamodb", "aws-glue", "aws-kms", "aws-s3", "aws-sts"]
-iceberg = ["iceberg-api", "iceberg-core", "iceberg-aws", "iceberg-guava", "iceberg-parquet"]
+iceberg = ["iceberg-api", "iceberg-aws", "iceberg-core", "iceberg-data", "iceberg-guava", "iceberg-orc", "iceberg-parquet"]

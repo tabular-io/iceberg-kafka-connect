@@ -18,7 +18,6 @@ dependencies {
   implementation libs.bundles.iceberg
   implementation libs.bundles.aws
   implementation libs.hadoop.common
-  implementation libs.parquet
   compileOnly libs.kafka.connect.api
   compileOnly libs.lombok
   annotationProcessor libs.lombok

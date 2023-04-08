@@ -1,26 +1,33 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.connect.poc;
 
+import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT;
+import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT_DEFAULT;
+import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES;
+import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
 import lombok.SneakyThrows;
-import org.apache.iceberg.DataFile;
-import org.apache.iceberg.DataFiles;
+import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.FileFormat;
-import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.data.GenericAppenderFactory;
 import org.apache.iceberg.data.GenericRecord;
-import org.apache.iceberg.data.parquet.GenericParquetWriter;
-import org.apache.iceberg.io.FileAppender;
-import org.apache.iceberg.io.OutputFile;
-import org.apache.iceberg.parquet.Parquet;
+import org.apache.iceberg.data.Record;
+import org.apache.iceberg.io.FileAppenderFactory;
+import org.apache.iceberg.io.OutputFileFactory;
+import org.apache.iceberg.io.TaskWriter;
+import org.apache.iceberg.io.UnpartitionedWriter;
+import org.apache.iceberg.util.PropertyUtil;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -52,41 +59,66 @@ public class IcebergSinkConnectorTask extends SinkTask {
   @SneakyThrows
   public void put(Collection<SinkRecord> sinkRecords) {
     Table table = catalog.loadTable(TableIdentifier.parse(tableName));
-    OutputFile outputFile =
-        table.io().newOutputFile(table.location() + "/" + UUID.randomUUID() + ".parquet");
 
-    try (FileAppender<GenericRecord> appender =
-        Parquet.write(outputFile)
-            .forTable(table)
-            .createWriterFunc(GenericParquetWriter::buildWriter)
-            .build()) {
+    TaskWriter<Record> writer = createWriter(table);
+    sinkRecords.forEach(
+        record -> {
+          GenericRecord row = GenericRecord.create(table.schema());
+          row.setField("id", ThreadLocalRandom.current().nextLong());
+          row.setField("data", record.value().toString());
+          row.setField("ts", LocalDateTime.now());
+          try {
+            writer.write(row);
+          } catch (IOException e) {
+            throw new UncheckedIOException(e);
+          }
+        });
+    writer.close();
 
-      List<GenericRecord> records =
-          sinkRecords.stream()
-              .map(
-                  record -> {
-                    GenericRecord rec = GenericRecord.create(table.schema());
-                    rec.setField("id", ThreadLocalRandom.current().nextLong());
-                    rec.setField("data", record.value().toString());
-                    rec.setField("ts", LocalDateTime.now());
-                    return rec;
-                  })
-              .collect(Collectors.toList());
-
-      appender.addAll(records);
-    }
-
-    DataFile dataFile =
-        DataFiles.builder(PartitionSpec.unpartitioned())
-            .withPath(outputFile.location())
-            .withFormat(FileFormat.PARQUET)
-            .withFileSizeInBytes(1)
-            .withRecordCount(1)
-            .build();
-
-    table.newAppend().appendFile(dataFile).commit();
+    AppendFiles appendOp = table.newAppend();
+    Arrays.stream(writer.dataFiles()).forEach(appendOp::appendFile);
+    appendOp.commit();
   }
 
   @Override
   public void stop() {}
+
+  private TaskWriter<Record> createWriter(Table table) {
+    String formatStr =
+        table.properties().getOrDefault(DEFAULT_FILE_FORMAT, DEFAULT_FILE_FORMAT_DEFAULT);
+    FileFormat format = FileFormat.valueOf(formatStr.toUpperCase());
+
+    long targetFileSize =
+        PropertyUtil.propertyAsLong(
+            table.properties(), WRITE_TARGET_FILE_SIZE_BYTES, WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT);
+
+    FileAppenderFactory<Record> appenderFactory =
+        new GenericAppenderFactory(table.schema(), table.spec());
+
+    // (partition ID + task ID + operation ID) must be unique
+    OutputFileFactory fileFactory =
+        OutputFileFactory.builderFor(table, 1, System.currentTimeMillis())
+            .defaultSpec(table.spec())
+            .operationId(UUID.randomUUID().toString())
+            .format(format)
+            .build();
+
+    TaskWriter<Record> writer;
+    if (table.spec().isUnpartitioned()) {
+      writer =
+          new UnpartitionedWriter<>(
+              table.spec(), format, appenderFactory, fileFactory, table.io(), targetFileSize);
+    } else {
+      writer =
+          new PartitionedFanoutRecordWriter(
+              table.spec(),
+              format,
+              appenderFactory,
+              fileFactory,
+              table.io(),
+              targetFileSize,
+              table.schema());
+    }
+    return writer;
+  }
 }
