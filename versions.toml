@@ -10,6 +10,7 @@ iceberg-ver = "1.2.1-tabular.13"
 junit-ver = "5.9.2"
 kafka-ver = "3.4.0"
 lombok-ver = "1.18.26"
+parquet-ver = '1.12.3'
 slf4j-ver = "2.0.7"
 testcontainers-ver = "1.17.6"
 
@@ -19,15 +20,18 @@ aws-dynamodb = { module = "software.amazon.awssdk:dynamodb", version.ref = "aws-
 aws-glue = { module = "software.amazon.awssdk:glue", version.ref = "aws-ver" }
 aws-kms = { module = "software.amazon.awssdk:kms", version.ref = "aws-ver" }
 aws-s3 = { module = "software.amazon.awssdk:s3", version.ref = "aws-ver" }
+aws-sts = { module = "software.amazon.awssdk:sts", version.ref = "aws-ver" }
 awsv1-core = { module = "com.amazonaws:aws-java-sdk-core", version.ref = "awsv1-ver" }
 hadoop-common = { module = "org.apache.hadoop:hadoop-common", version.ref = "hadoop-ver" }
 iceberg-api = { module = "org.apache.iceberg:iceberg-api", version.ref = "iceberg-ver" }
 iceberg-aws = { module = "org.apache.iceberg:iceberg-aws", version.ref = "iceberg-ver" }
 iceberg-core = { module = "org.apache.iceberg:iceberg-core", version.ref = "iceberg-ver" }
 iceberg-guava = { module = "org.apache.iceberg:iceberg-bundled-guava", version.ref = "iceberg-ver" }
+iceberg-parquet = { module = "org.apache.iceberg:iceberg-parquet", version.ref = "iceberg-ver" }
 kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka-ver" }
 kafka-connect-api = { module = "org.apache.kafka:connect-api", version.ref = "kafka-ver" }
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok-ver" }
+parquet = { module = "org.apache.parquet:parquet-hadoop", version.ref = "parquet-ver" }
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j-ver" }
 
 # test dependencies
@@ -44,5 +48,5 @@ testcontainers-localstack = { module = "org.testcontainers:localstack", version.
 
 
 [bundles]
-aws = ["aws-dynamodb", "aws-glue", "aws-kms", "aws-s3"]
-iceberg = ["iceberg-api", "iceberg-core", "iceberg-aws", "iceberg-guava"]
+aws = ["aws-dynamodb", "aws-glue", "aws-kms", "aws-s3", "aws-sts"]
+iceberg = ["iceberg-api", "iceberg-core", "iceberg-aws", "iceberg-guava", "iceberg-parquet"]

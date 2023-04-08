@@ -1,12 +1,12 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.connect.poc;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static java.lang.String.format;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.google.common.collect.Iterables;
 import io.debezium.testing.testcontainers.ConnectorConfiguration;
 import io.debezium.testing.testcontainers.DebeziumContainer;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.Schema;
+import org.apache.iceberg.Table;
 import org.apache.iceberg.aws.AwsProperties;
 import org.apache.iceberg.aws.s3.S3FileIO;
 import org.apache.iceberg.catalog.Namespace;
@@ -55,7 +56,8 @@ public class IntegrationTest {
 
   private static final String CONNECTOR_NAME = "test_connector";
   private static final String TEST_TOPIC = "test_topic";
-  private static final String TEST_FILE = "test.txt";
+  private static final String TEST_DB = "default";
+  private static final String TEST_TABLE = "foobar";
 
   private static final String LOCAL_JARS_DIR = "build/out";
   private static final String LOCAL_OUTPUT_DIR = "build/output";
@@ -134,9 +136,12 @@ public class IntegrationTest {
             .with("tasks.max", "1")
             .with("key.converter", "org.apache.kafka.connect.storage.StringConverter")
             .with("value.converter", "org.apache.kafka.connect.storage.StringConverter")
-            .with("iceberg.output", REMOTE_OUTPUT_DIR + "/" + TEST_FILE) // TODO: remove this
+            .with("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE)) // TODO
             .with("iceberg.catalog", RESTCatalog.class.getName())
             .with("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
+            .with(
+                "iceberg.catalog." + AwsProperties.HTTP_CLIENT_TYPE,
+                AwsProperties.HTTP_CLIENT_TYPE_APACHE)
             .with("iceberg.catalog." + AwsProperties.S3FILEIO_ENDPOINT, "http://aws:4566")
             .with("iceberg.catalog." + AwsProperties.S3FILEIO_ACCESS_KEY_ID, aws.getAccessKey())
             .with("iceberg.catalog." + AwsProperties.S3FILEIO_SECRET_ACCESS_KEY, aws.getSecretKey())
@@ -157,20 +162,25 @@ public class IntegrationTest {
                 new StringSerializer())) {
 
       String localCatalogUri = "http://localhost:" + catalog.getMappedPort(8181);
+      TableIdentifier tableIdentifier = TableIdentifier.of(TEST_DB, TEST_TABLE);
       restCatalog.initialize("local", Map.of(CatalogProperties.URI, localCatalogUri));
-      restCatalog.createNamespace(Namespace.of("default"));
+      restCatalog.createNamespace(Namespace.of(TEST_DB));
       restCatalog.createTable(
-          TableIdentifier.of("default", "foobar"),
+          tableIdentifier,
           new Schema(
-              Types.NestedField.required(1, "ts", Types.TimestampType.withoutZone()),
-              Types.NestedField.required(2, "event_id", Types.LongType.get()),
-              Types.NestedField.required(3, "data", Types.StringType.get())));
+              Types.NestedField.required(1, "id", Types.LongType.get()),
+              Types.NestedField.required(2, "data", Types.StringType.get()),
+              Types.NestedField.required(3, "ts", Types.TimestampType.withoutZone())));
 
       producer.send(new ProducerRecord<>(TEST_TOPIC, "foo", "bar")).get();
 
       Awaitility.await()
           .atMost(10, TimeUnit.SECONDS)
-          .untilAsserted(() -> assertTrue(Files.exists(Path.of(LOCAL_OUTPUT_DIR, TEST_FILE))));
+          .untilAsserted(
+              () -> {
+                Table table = restCatalog.loadTable(tableIdentifier);
+                assertEquals(1, Iterables.size(table.snapshots()));
+              });
     }
   }
 }
