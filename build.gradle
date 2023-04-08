@@ -1,6 +1,7 @@
 plugins {
   id "java"
-  id 'com.diffplug.spotless' version "6.18.0"
+  id "com.diffplug.spotless" version "6.18.0"
+  id "com.github.johnrengelman.shadow" version "8.1.0"
 }
 
 group "io.tabular.connect"
@@ -16,6 +17,7 @@ repositories {
 dependencies {
   implementation libs.bundles.iceberg
   implementation libs.awssdk.bundle
+  implementation libs.hadoop.common
   compileOnly libs.kafka.connect.api
   compileOnly libs.lombok
   annotationProcessor libs.lombok
@@ -25,9 +27,11 @@ dependencies {
   testImplementation libs.mockito
   testImplementation libs.assertj
   testImplementation libs.awaitility
+  testImplementation libs.testcontainers
   testImplementation libs.testcontainers.kafka
   testImplementation libs.testcontainers.debezium
   testImplementation libs.kafka.clients
+  testImplementation libs.h2
   testCompileOnly libs.lombok
   testAnnotationProcessor libs.lombok
 }
@@ -37,11 +41,22 @@ compileJava {
 }
 
 // build the jar first so it can be installed into kafka connect
-test.dependsOn(jar)
+test.dependsOn(shadowJar)
 
 test {
   useJUnitPlatform()
 }
+
+shadowJar {
+  zip64 true
+}
+
+task copyShadowJar(type: Copy) {
+  from shadowJar
+  into "${buildDir}/out"
+}
+
+shadowJar.finalizedBy copyShadowJar
 
 spotless {
   java {

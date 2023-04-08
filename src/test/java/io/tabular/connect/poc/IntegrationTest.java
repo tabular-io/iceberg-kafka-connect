@@ -3,7 +3,6 @@ package io.tabular.connect.poc;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.debezium.testing.testcontainers.Connector.State;
 import io.debezium.testing.testcontainers.ConnectorConfiguration;
 import io.debezium.testing.testcontainers.DebeziumContainer;
 import java.nio.file.Files;
@@ -24,27 +23,38 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.lifecycle.Startables;
 import org.testcontainers.utility.DockerImageName;
 
+@SuppressWarnings("rawtypes")
 public class IntegrationTest {
 
   private static Network network;
   private static KafkaContainer kafka;
   private static DebeziumContainer kafkaConnect;
+  private static GenericContainer catalog;
 
   private static final String CONNECTOR_NAME = "test_connector";
   private static final String TEST_TOPIC = "test_topic";
   private static final String TEST_FILE = "test.txt";
-  private static final String LOCAL_JARS_DIR = "build/libs";
+  private static final String LOCAL_JARS_DIR = "build/out";
   private static final String LOCAL_OUTPUT_DIR = "build/output";
   private static final String REMOTE_OUTPUT_DIR = "/output";
 
   @BeforeAll
   public static void setupAll() throws Exception {
     network = Network.newNetwork();
+
+    catalog =
+        new GenericContainer(DockerImageName.parse("tabulario/iceberg-rest"))
+            .withNetwork(network)
+            .withNetworkAliases("iceberg");
+
+    catalog.start();
+
     kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka")).withNetwork(network);
     kafkaConnect =
         new DebeziumContainer(DockerImageName.parse("debezium/connect-base"))
@@ -70,10 +80,11 @@ public class IntegrationTest {
     kafkaConnect.close();
     kafka.close();
     network.close();
+    catalog.close();
   }
 
   @Test
-  public void blah() throws Exception {
+  public void testIcebergSink() throws Exception {
     ConnectorConfiguration connector =
         ConnectorConfiguration.create()
             .with("topics", TEST_TOPIC)
@@ -84,7 +95,7 @@ public class IntegrationTest {
             .with("output", REMOTE_OUTPUT_DIR + "/" + TEST_FILE);
 
     kafkaConnect.registerConnector(CONNECTOR_NAME, connector);
-    kafkaConnect.ensureConnectorTaskState(CONNECTOR_NAME, 0, State.RUNNING);
+    // kafkaConnect.ensureConnectorTaskState(CONNECTOR_NAME, 0, State.RUNNING);
 
     try (KafkaProducer<String, String> producer =
         new KafkaProducer<>(

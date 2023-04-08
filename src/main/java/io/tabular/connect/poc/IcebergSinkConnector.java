@@ -3,6 +3,8 @@ package io.tabular.connect.poc;
 
 import java.util.List;
 import java.util.Map;
+import org.apache.iceberg.catalog.Catalog;
+import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -10,6 +12,7 @@ import org.apache.kafka.connect.sink.SinkConnector;
 public class IcebergSinkConnector extends SinkConnector {
 
   private Map<String, String> props;
+  private Catalog catalog;
 
   @Override
   public String version() {
@@ -19,6 +22,11 @@ public class IcebergSinkConnector extends SinkConnector {
   @Override
   public void start(Map<String, String> props) {
     this.props = props;
+
+    Map<String, String> catalogProps = Map.of("uri", "http://iceberg:8181/");
+
+    catalog = new RESTCatalog();
+    catalog.initialize("local", catalogProps);
   }
 
   @Override
