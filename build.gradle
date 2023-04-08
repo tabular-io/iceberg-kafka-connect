@@ -16,7 +16,7 @@ repositories {
 
 dependencies {
   implementation libs.bundles.iceberg
-  implementation libs.awssdk.bundle
+  implementation libs.bundles.aws
   implementation libs.hadoop.common
   compileOnly libs.kafka.connect.api
   compileOnly libs.lombok
@@ -28,12 +28,16 @@ dependencies {
   testImplementation libs.assertj
   testImplementation libs.awaitility
   testImplementation libs.testcontainers
-  testImplementation libs.testcontainers.kafka
   testImplementation libs.testcontainers.debezium
+  testImplementation libs.testcontainers.kafka
+  testImplementation libs.testcontainers.localstack
   testImplementation libs.kafka.clients
-  testImplementation libs.h2
+  testRuntimeOnly libs.h2
+  testRuntimeOnly libs.awsv1.core // for localstack
+
   testCompileOnly libs.lombok
   testAnnotationProcessor libs.lombok
+
 }
 
 compileJava {

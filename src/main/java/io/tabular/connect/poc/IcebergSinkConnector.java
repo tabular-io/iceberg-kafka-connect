@@ -1,10 +1,12 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.connect.poc;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.catalog.Catalog;
-import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -13,6 +15,10 @@ public class IcebergSinkConnector extends SinkConnector {
 
   private Map<String, String> props;
   private Catalog catalog;
+
+  private static final String CATALOG_PROP = "iceberg.catalog";
+  private static final String CATALOG_PROP_PREFIX = "iceberg.catalog.";
+  private static final int CATALOG_PROP_PREFIX_LEN = CATALOG_PROP_PREFIX.length();
 
   @Override
   public String version() {
@@ -23,10 +29,15 @@ public class IcebergSinkConnector extends SinkConnector {
   public void start(Map<String, String> props) {
     this.props = props;
 
-    Map<String, String> catalogProps = Map.of("uri", "http://iceberg:8181/");
+    String catalogImpl = props.get(CATALOG_PROP);
+    Map<String, String> catalogProps = new HashMap<>();
+    for (Entry<String, String> entry : props.entrySet()) {
+      if (entry.getKey().startsWith(CATALOG_PROP_PREFIX)) {
+        catalogProps.put(entry.getKey().substring(CATALOG_PROP_PREFIX_LEN), entry.getValue());
+      }
+    }
 
-    catalog = new RESTCatalog();
-    catalog.initialize("local", catalogProps);
+    catalog = CatalogUtil.loadCatalog(catalogImpl, "iceberg", catalogProps, null);
   }
 
   @Override

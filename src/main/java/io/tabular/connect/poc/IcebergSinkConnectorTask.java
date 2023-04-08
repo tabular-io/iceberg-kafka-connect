@@ -27,7 +27,7 @@ public class IcebergSinkConnectorTask extends SinkTask {
 
   @Override
   public void start(Map<String, String> props) {
-    output = Path.of(props.get("output"));
+    output = Path.of(props.get("iceberg.output"));
   }
 
   @Override

@@ -12,6 +12,14 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
+import org.apache.iceberg.CatalogProperties;
+import org.apache.iceberg.Schema;
+import org.apache.iceberg.aws.AwsProperties;
+import org.apache.iceberg.aws.s3.S3FileIO;
+import org.apache.iceberg.catalog.Namespace;
+import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.rest.RESTCatalog;
+import org.apache.iceberg.types.Types;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -26,8 +34,14 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.Network;
+import org.testcontainers.containers.localstack.LocalStackContainer;
+import org.testcontainers.containers.localstack.LocalStackContainer.Service;
 import org.testcontainers.lifecycle.Startables;
 import org.testcontainers.utility.DockerImageName;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
 
 @SuppressWarnings("rawtypes")
 public class IntegrationTest {
@@ -36,34 +50,50 @@ public class IntegrationTest {
   private static KafkaContainer kafka;
   private static DebeziumContainer kafkaConnect;
   private static GenericContainer catalog;
+  private static LocalStackContainer aws;
+  private static S3Client s3;
 
   private static final String CONNECTOR_NAME = "test_connector";
   private static final String TEST_TOPIC = "test_topic";
   private static final String TEST_FILE = "test.txt";
+
   private static final String LOCAL_JARS_DIR = "build/out";
   private static final String LOCAL_OUTPUT_DIR = "build/output";
   private static final String REMOTE_OUTPUT_DIR = "/output";
+  private static final String BUCKET = "bucket";
 
   @BeforeAll
   public static void setupAll() throws Exception {
     network = Network.newNetwork();
-
+    aws =
+        new LocalStackContainer(DockerImageName.parse("localstack/localstack"))
+            .withNetwork(network)
+            .withNetworkAliases("aws")
+            .withServices(Service.S3);
     catalog =
         new GenericContainer(DockerImageName.parse("tabulario/iceberg-rest"))
             .withNetwork(network)
-            .withNetworkAliases("iceberg");
-
-    catalog.start();
+            .withNetworkAliases("iceberg")
+            .dependsOn(aws)
+            .withExposedPorts(8181)
+            .withEnv("CATALOG_WAREHOUSE", "s3://" + BUCKET + "/warehouse")
+            .withEnv("CATALOG_IO__IMPL", S3FileIO.class.getName())
+            .withEnv("CATALOG_S3_ENDPOINT", "http://aws:4566")
+            .withEnv("CATALOG_S3_ACCESS__KEY__ID", aws.getAccessKey())
+            .withEnv("CATALOG_S3_SECRET__ACCESS__KEY", aws.getSecretKey())
+            .withEnv("CATALOG_S3_PATH__STYLE__ACCESS", "true")
+            .withEnv("AWS_REGION", aws.getRegion());
 
     kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka")).withNetwork(network);
     kafkaConnect =
         new DebeziumContainer(DockerImageName.parse("debezium/connect-base"))
             .withNetwork(network)
             .withKafka(kafka)
-            .dependsOn(kafka)
+            .dependsOn(catalog, kafka)
             .withFileSystemBind(LOCAL_JARS_DIR, "/kafka/connect/" + CONNECTOR_NAME)
             .withFileSystemBind(LOCAL_OUTPUT_DIR, REMOTE_OUTPUT_DIR);
-    Startables.deepStart(Stream.of(kafka, kafkaConnect)).join();
+
+    Startables.deepStart(Stream.of(aws, catalog, kafka, kafkaConnect)).join();
 
     try (AdminClient adminClient =
         AdminClient.create(
@@ -73,14 +103,26 @@ public class IntegrationTest {
           .all()
           .get(30, TimeUnit.SECONDS);
     }
+
+    s3 =
+        S3Client.builder()
+            .endpointOverride(aws.getEndpointOverride(Service.S3))
+            .region(Region.of(aws.getRegion()))
+            .credentialsProvider(
+                StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create(aws.getAccessKey(), aws.getSecretKey())))
+            .build();
+    s3.createBucket(req -> req.bucket(BUCKET));
   }
 
   @AfterAll
   public static void teardownAll() {
     kafkaConnect.close();
     kafka.close();
-    network.close();
     catalog.close();
+    s3.close();
+    aws.close();
+    network.close();
   }
 
   @Test
@@ -92,20 +134,38 @@ public class IntegrationTest {
             .with("tasks.max", "1")
             .with("key.converter", "org.apache.kafka.connect.storage.StringConverter")
             .with("value.converter", "org.apache.kafka.connect.storage.StringConverter")
-            .with("output", REMOTE_OUTPUT_DIR + "/" + TEST_FILE);
+            .with("iceberg.output", REMOTE_OUTPUT_DIR + "/" + TEST_FILE) // TODO: remove this
+            .with("iceberg.catalog", RESTCatalog.class.getName())
+            .with("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
+            .with("iceberg.catalog." + AwsProperties.S3FILEIO_ENDPOINT, "http://aws:4566")
+            .with("iceberg.catalog." + AwsProperties.S3FILEIO_ACCESS_KEY_ID, aws.getAccessKey())
+            .with("iceberg.catalog." + AwsProperties.S3FILEIO_SECRET_ACCESS_KEY, aws.getSecretKey())
+            .with("iceberg.catalog." + AwsProperties.S3FILEIO_PATH_STYLE_ACCESS, true)
+            .with("iceberg.catalog." + AwsProperties.CLIENT_REGION, aws.getRegion());
 
     kafkaConnect.registerConnector(CONNECTOR_NAME, connector);
-    // kafkaConnect.ensureConnectorTaskState(CONNECTOR_NAME, 0, State.RUNNING);
 
-    try (KafkaProducer<String, String> producer =
-        new KafkaProducer<>(
-            Map.of(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
-                kafka.getBootstrapServers(),
-                ProducerConfig.CLIENT_ID_CONFIG,
-                UUID.randomUUID().toString()),
-            new StringSerializer(),
-            new StringSerializer())) {
+    try (RESTCatalog restCatalog = new RESTCatalog();
+        KafkaProducer<String, String> producer =
+            new KafkaProducer<>(
+                Map.of(
+                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                    kafka.getBootstrapServers(),
+                    ProducerConfig.CLIENT_ID_CONFIG,
+                    UUID.randomUUID().toString()),
+                new StringSerializer(),
+                new StringSerializer())) {
+
+      String localCatalogUri = "http://localhost:" + catalog.getMappedPort(8181);
+      restCatalog.initialize("local", Map.of(CatalogProperties.URI, localCatalogUri));
+      restCatalog.createNamespace(Namespace.of("default"));
+      restCatalog.createTable(
+          TableIdentifier.of("default", "foobar"),
+          new Schema(
+              Types.NestedField.required(1, "ts", Types.TimestampType.withoutZone()),
+              Types.NestedField.required(2, "event_id", Types.LongType.get()),
+              Types.NestedField.required(3, "data", Types.StringType.get())));
+
       producer.send(new ProducerRecord<>(TEST_TOPIC, "foo", "bar")).get();
 
       Awaitility.await()
