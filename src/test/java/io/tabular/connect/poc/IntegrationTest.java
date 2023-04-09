@@ -142,8 +142,8 @@ public class IntegrationTest {
             .with("topics", TEST_TOPIC)
             .with("connector.class", "io.tabular.connect.poc.IcebergSinkConnector")
             .with("tasks.max", "1")
-            .with("key.converter", "org.apache.kafka.connect.storage.StringConverter")
-            .with("value.converter", "org.apache.kafka.connect.storage.StringConverter")
+            .with("key.converter", "org.apache.kafka.connect.converters.ByteArrayConverter")
+            .with("value.converter", "org.apache.kafka.connect.converters.ByteArrayConverter")
             .with("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE)) // TODO
             .with("iceberg.catalog", RESTCatalog.class.getName())
             .with("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")

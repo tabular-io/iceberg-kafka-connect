@@ -71,7 +71,7 @@ public class IcebergSinkConnectorTask extends SinkTask {
     sinkRecords.forEach(
         record -> {
           try {
-            Record row = ConvertUtil.convert(record.value().toString(), schemaType);
+            Record row = ConvertUtil.convert((byte[]) record.value(), schemaType);
             writer.write(row);
           } catch (IOException e) {
             throw new UncheckedIOException(e);

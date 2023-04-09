@@ -25,31 +25,16 @@ public class ConvertUtil {
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   @SneakyThrows
-  public static GenericRecord convert(String json, StructType schema) {
+  public static GenericRecord convert(byte[] json, StructType schema) {
     JsonNode jsonNode = MAPPER.readTree(json);
-    return convertJsonMap(jsonNode, schema);
-  }
-
-  private static GenericRecord convertJsonMap(JsonNode node, StructType schema) {
-    GenericRecord record = GenericRecord.create(schema);
-    Streams.stream(node.fields())
-        .forEach(
-            child -> {
-              NestedField field = schema.field(child.getKey());
-              if (field != null) {
-                record.setField(field.name(), convertValue(child.getValue(), field.type()));
-              } else {
-                // TODO: warn or throw exception if missing?
-              }
-            });
-    return record;
+    return convertRecordValue(jsonNode, schema);
   }
 
   private static Object convertValue(JsonNode value, Type type) {
     Object result;
     switch (type.typeId()) {
       case STRUCT:
-        result = convertJsonMap(value, type.asStructType());
+        result = convertRecordValue(value, type.asStructType());
         break;
       case LIST:
         result = convertListValue(value, type.asListType());
@@ -88,6 +73,21 @@ public class ConvertUtil {
         throw new RuntimeException("Unsupported type: " + type.typeId());
     }
     return result;
+  }
+
+  private static GenericRecord convertRecordValue(JsonNode node, StructType schema) {
+    GenericRecord record = GenericRecord.create(schema);
+    Streams.stream(node.fields())
+        .forEach(
+            child -> {
+              NestedField field = schema.field(child.getKey());
+              if (field != null) {
+                record.setField(field.name(), convertValue(child.getValue(), field.type()));
+              } else {
+                // TODO: warn or throw exception if missing?
+              }
+            });
+    return record;
   }
 
   private static List<Object> convertListValue(JsonNode items, ListType type) {
