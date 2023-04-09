@@ -137,14 +137,15 @@ public class IntegrationTest {
 
   @Test
   public void testIcebergSink() throws Exception {
-    ConnectorConfiguration connector =
+    ConnectorConfiguration connectorConfig =
         ConnectorConfiguration.create()
             .with("topics", TEST_TOPIC)
             .with("connector.class", "io.tabular.connect.poc.IcebergSinkConnector")
-            .with("tasks.max", "1")
+            .with("tasks.max", 1)
             .with("key.converter", "org.apache.kafka.connect.converters.ByteArrayConverter")
             .with("value.converter", "org.apache.kafka.connect.converters.ByteArrayConverter")
-            .with("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE)) // TODO
+            .with("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE))
+            .with("iceberg.table.commitIntervalMs", 0) // commit immediately
             .with("iceberg.catalog", RESTCatalog.class.getName())
             .with("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
             .with(
@@ -156,7 +157,7 @@ public class IntegrationTest {
             .with("iceberg.catalog." + AwsProperties.S3FILEIO_PATH_STYLE_ACCESS, true)
             .with("iceberg.catalog." + AwsProperties.CLIENT_REGION, aws.getRegion());
 
-    kafkaConnect.registerConnector(CONNECTOR_NAME, connector);
+    kafkaConnect.registerConnector(CONNECTOR_NAME, connectorConfig);
 
     try (RESTCatalog restCatalog = new RESTCatalog();
         KafkaProducer<String, String> producer =
@@ -187,11 +188,10 @@ public class IntegrationTest {
 
       String event1 = format(RECORD_FORMAT, 1, "hello world!", System.currentTimeMillis());
       String event2 = format(RECORD_FORMAT, 2, "foo bar", System.currentTimeMillis());
-      Future<RecordMetadata> f1 = producer.send(new ProducerRecord<>(TEST_TOPIC, "key1", event1));
-      Future<RecordMetadata> f2 = producer.send(new ProducerRecord<>(TEST_TOPIC, "key2", event2));
+      Future<RecordMetadata> f1 = producer.send(new ProducerRecord<>(TEST_TOPIC, event1));
+      Future<RecordMetadata> f2 = producer.send(new ProducerRecord<>(TEST_TOPIC, event2));
       f1.get();
       f2.get();
-      kafkaConnect.deleteConnector(CONNECTOR_NAME); // delete to force a flush
 
       Awaitility.await()
           .atMost(10, TimeUnit.SECONDS)

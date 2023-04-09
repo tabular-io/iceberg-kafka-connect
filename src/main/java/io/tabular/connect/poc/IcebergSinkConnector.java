@@ -1,8 +1,11 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.connect.poc;
 
+import static java.util.stream.Collectors.toList;
+
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
@@ -31,7 +34,7 @@ public class IcebergSinkConnector extends SinkConnector {
 
   @Override
   public List<Map<String, String>> taskConfigs(int maxTasks) {
-    return List.of(props);
+    return IntStream.range(0, maxTasks).mapToObj(i -> props).collect(toList());
   }
 
   @Override
