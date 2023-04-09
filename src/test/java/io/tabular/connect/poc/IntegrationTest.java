@@ -2,9 +2,10 @@
 package io.tabular.connect.poc;
 
 import static java.lang.String.format;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import io.debezium.testing.testcontainers.ConnectorConfiguration;
 import io.debezium.testing.testcontainers.DebeziumContainer;
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import org.apache.iceberg.CatalogProperties;
+import org.apache.iceberg.DataFile;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.aws.AwsProperties;
@@ -163,7 +165,17 @@ public class IntegrationTest {
 
       String localCatalogUri = "http://localhost:" + catalog.getMappedPort(8181);
       TableIdentifier tableIdentifier = TableIdentifier.of(TEST_DB, TEST_TABLE);
-      restCatalog.initialize("local", Map.of(CatalogProperties.URI, localCatalogUri));
+      restCatalog.initialize(
+          "local",
+          Map.of(
+              CatalogProperties.URI, localCatalogUri,
+              CatalogProperties.FILE_IO_IMPL, S3FileIO.class.getName(),
+              AwsProperties.HTTP_CLIENT_TYPE, AwsProperties.HTTP_CLIENT_TYPE_APACHE,
+              AwsProperties.S3FILEIO_ENDPOINT, aws.getEndpointOverride(Service.S3).toString(),
+              AwsProperties.S3FILEIO_ACCESS_KEY_ID, aws.getAccessKey(),
+              AwsProperties.S3FILEIO_SECRET_ACCESS_KEY, aws.getSecretKey(),
+              AwsProperties.S3FILEIO_PATH_STYLE_ACCESS, "true",
+              AwsProperties.CLIENT_REGION, aws.getRegion()));
       restCatalog.createNamespace(Namespace.of(TEST_DB));
       restCatalog.createTable(
           tableIdentifier,
@@ -179,8 +191,13 @@ public class IntegrationTest {
           .untilAsserted(
               () -> {
                 Table table = restCatalog.loadTable(tableIdentifier);
-                assertEquals(1, Iterables.size(table.snapshots()));
+                assertThat(table.snapshots()).hasSize(1);
               });
+
+      Table table = restCatalog.loadTable(tableIdentifier);
+      List<DataFile> files = Lists.newArrayList(table.currentSnapshot().addedDataFiles(table.io()));
+      assertThat(files).hasSize(1);
+      assertEquals(1, files.get(0).recordCount());
     }
   }
 }
