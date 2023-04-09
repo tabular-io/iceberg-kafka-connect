@@ -6,7 +6,6 @@ import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT_DEFAULT;
 import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES;
 import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
@@ -25,8 +24,11 @@ import org.apache.iceberg.io.FileAppenderFactory;
 import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.UnpartitionedWriter;
+import org.apache.iceberg.io.WriteResult;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.util.PropertyUtil;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -34,10 +36,11 @@ import org.apache.kafka.connect.sink.SinkTaskContext;
 public class IcebergSinkConnectorTask extends SinkTask {
 
   private Catalog catalog;
-  private String tableName;
+  private TableIdentifier tableIdentifier;
+  private Table table;
+  private TaskWriter<Record> writer;
 
   private static final String TABLE_PROP = "iceberg.table";
-  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   @Override
   public String version() {
@@ -52,16 +55,19 @@ public class IcebergSinkConnectorTask extends SinkTask {
   @Override
   public void start(Map<String, String> props) {
     this.catalog = IcebergUtil.loadCatalog(props);
-    this.tableName = props.get(TABLE_PROP);
+    this.tableIdentifier = TableIdentifier.parse(props.get(TABLE_PROP));
   }
 
   @Override
   @SneakyThrows
   public void put(Collection<SinkRecord> sinkRecords) {
-    Table table = catalog.loadTable(TableIdentifier.parse(tableName));
+    if (table == null) {
+      refreshTable();
+    }
+    if (writer == null) {
+      writer = createWriter(table);
+    }
     StructType schemaType = table.schema().asStruct();
-
-    TaskWriter<Record> writer = createWriter(table);
     sinkRecords.forEach(
         record -> {
           try {
@@ -71,15 +77,32 @@ public class IcebergSinkConnectorTask extends SinkTask {
             throw new UncheckedIOException(e);
           }
         });
-    writer.close();
-
-    AppendFiles appendOp = table.newAppend();
-    Arrays.stream(writer.dataFiles()).forEach(appendOp::appendFile);
-    appendOp.commit();
   }
 
   @Override
-  public void stop() {}
+  @SneakyThrows
+  public void flush(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
+    WriteResult result = writer.complete();
+    writer = null;
+
+    AppendFiles appendOp = table.newAppend();
+    Arrays.stream(result.dataFiles()).forEach(appendOp::appendFile);
+    appendOp.commit();
+
+    refreshTable();
+  }
+
+  private void refreshTable() {
+    table = catalog.loadTable(tableIdentifier);
+  }
+
+  @Override
+  @SneakyThrows
+  public void stop() {
+    if (writer != null) {
+      writer.abort();
+    }
+  }
 
   private TaskWriter<Record> createWriter(Table table) {
     String formatStr =

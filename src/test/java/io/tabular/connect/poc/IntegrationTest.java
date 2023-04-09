@@ -11,6 +11,7 @@ import io.debezium.testing.testcontainers.DebeziumContainer;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import org.apache.iceberg.CatalogProperties;
@@ -29,6 +30,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
@@ -183,8 +185,13 @@ public class IntegrationTest {
       restCatalog.createNamespace(Namespace.of(TEST_DB));
       restCatalog.createTable(tableIdentifier, TEST_SCHEMA);
 
-      String event = format(RECORD_FORMAT, 1, "hello world!", System.currentTimeMillis());
-      producer.send(new ProducerRecord<>(TEST_TOPIC, "key1", event)).get();
+      String event1 = format(RECORD_FORMAT, 1, "hello world!", System.currentTimeMillis());
+      String event2 = format(RECORD_FORMAT, 2, "foo bar", System.currentTimeMillis());
+      Future<RecordMetadata> f1 = producer.send(new ProducerRecord<>(TEST_TOPIC, "key1", event1));
+      Future<RecordMetadata> f2 = producer.send(new ProducerRecord<>(TEST_TOPIC, "key2", event2));
+      f1.get();
+      f2.get();
+      kafkaConnect.deleteConnector(CONNECTOR_NAME); // delete to force a flush
 
       Awaitility.await()
           .atMost(10, TimeUnit.SECONDS)
@@ -197,7 +204,7 @@ public class IntegrationTest {
       Table table = restCatalog.loadTable(tableIdentifier);
       List<DataFile> files = Lists.newArrayList(table.currentSnapshot().addedDataFiles(table.io()));
       assertThat(files).hasSize(1);
-      assertEquals(1, files.get(0).recordCount());
+      assertEquals(2, files.get(0).recordCount());
     }
   }
 }
