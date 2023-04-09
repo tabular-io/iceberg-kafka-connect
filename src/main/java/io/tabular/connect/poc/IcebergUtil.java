@@ -8,7 +8,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.catalog.Catalog;
 
-public class Util {
+public class IcebergUtil {
 
   private static final String CATALOG_PROP = "iceberg.catalog";
   private static final String CATALOG_PROP_PREFIX = "iceberg.catalog.";

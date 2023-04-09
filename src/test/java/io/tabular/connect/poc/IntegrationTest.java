@@ -60,10 +60,15 @@ public class IntegrationTest {
   private static final String TEST_TOPIC = "test_topic";
   private static final String TEST_DB = "default";
   private static final String TEST_TABLE = "foobar";
+  private static final Schema TEST_SCHEMA =
+      new Schema(
+          Types.NestedField.required(1, "id", Types.LongType.get()),
+          Types.NestedField.required(2, "data", Types.StringType.get()),
+          Types.NestedField.required(3, "ts", Types.TimestampType.withoutZone()));
+
+  private static final String RECORD_FORMAT = "{\"id\":%d,\"data\":\"%s\",\"ts\":%d}";
 
   private static final String LOCAL_JARS_DIR = "build/out";
-  private static final String LOCAL_OUTPUT_DIR = "build/output";
-  private static final String REMOTE_OUTPUT_DIR = "/output";
   private static final String BUCKET = "bucket";
 
   @BeforeAll
@@ -94,8 +99,7 @@ public class IntegrationTest {
             .withNetwork(network)
             .withKafka(kafka)
             .dependsOn(catalog, kafka)
-            .withFileSystemBind(LOCAL_JARS_DIR, "/kafka/connect/" + CONNECTOR_NAME)
-            .withFileSystemBind(LOCAL_OUTPUT_DIR, REMOTE_OUTPUT_DIR);
+            .withFileSystemBind(LOCAL_JARS_DIR, "/kafka/connect/" + CONNECTOR_NAME);
 
     Startables.deepStart(Stream.of(aws, catalog, kafka, kafkaConnect)).join();
 
@@ -177,14 +181,10 @@ public class IntegrationTest {
               AwsProperties.S3FILEIO_PATH_STYLE_ACCESS, "true",
               AwsProperties.CLIENT_REGION, aws.getRegion()));
       restCatalog.createNamespace(Namespace.of(TEST_DB));
-      restCatalog.createTable(
-          tableIdentifier,
-          new Schema(
-              Types.NestedField.required(1, "id", Types.LongType.get()),
-              Types.NestedField.required(2, "data", Types.StringType.get()),
-              Types.NestedField.required(3, "ts", Types.TimestampType.withoutZone())));
+      restCatalog.createTable(tableIdentifier, TEST_SCHEMA);
 
-      producer.send(new ProducerRecord<>(TEST_TOPIC, "foo", "bar")).get();
+      String event = format(RECORD_FORMAT, 1, "hello world!", System.currentTimeMillis());
+      producer.send(new ProducerRecord<>(TEST_TOPIC, "key1", event)).get();
 
       Awaitility.await()
           .atMost(10, TimeUnit.SECONDS)

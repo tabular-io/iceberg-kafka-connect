@@ -21,7 +21,7 @@ public class IcebergSinkConnector extends SinkConnector {
   @Override
   public void start(Map<String, String> props) {
     this.props = props;
-    this.catalog = Util.loadCatalog(props);
+    this.catalog = IcebergUtil.loadCatalog(props);
   }
 
   @Override
