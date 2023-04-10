@@ -17,6 +17,7 @@ repositories {
 dependencies {
   implementation libs.bundles.iceberg
   implementation libs.bundles.aws
+  implementation libs.bundles.jackson
   implementation libs.hadoop.common
   compileOnly libs.kafka.connect.api
   compileOnly libs.lombok

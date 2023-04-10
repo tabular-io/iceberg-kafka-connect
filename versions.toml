@@ -6,6 +6,7 @@ debezium-ver = "2.1.4.Final"
 h2-ver = "2.1.214"
 hadoop-ver = "3.3.2"
 iceberg-ver = "1.2.1-tabular.13"
+jackson-ver = "2.14.2"
 junit-ver = "5.9.2"
 kafka-ver = "3.4.0"
 lombok-ver = "1.18.26"
@@ -30,6 +31,8 @@ iceberg-orc = { module = "org.apache.iceberg:iceberg-orc", version.ref = "iceber
 iceberg-parquet = { module = "org.apache.iceberg:iceberg-parquet", version.ref = "iceberg-ver" }
 kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka-ver" }
 kafka-connect-api = { module = "org.apache.kafka:connect-api", version.ref = "kafka-ver" }
+jackson-core = { module = "com.fasterxml.jackson.core:jackson-core", version.ref = "jackson-ver" }
+jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson-ver" }
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok-ver" }
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j-ver" }
 
@@ -48,3 +51,4 @@ testcontainers-kafka = { module = "org.testcontainers:kafka", version.ref = "tes
 [bundles]
 aws = ["aws-dynamodb", "aws-glue", "aws-kms", "aws-s3", "aws-sts"]
 iceberg = ["iceberg-api", "iceberg-aws", "iceberg-core", "iceberg-data", "iceberg-guava", "iceberg-orc", "iceberg-parquet"]
+jackson = ["jackson-core", "jackson-databind"]

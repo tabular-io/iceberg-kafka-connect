@@ -14,6 +14,9 @@ import org.apache.kafka.connect.sink.SinkTaskContext;
 
 public class IcebergSinkConnectorTask extends SinkTask {
 
+  private Catalog catalog;
+  private TableIdentifier tableIdentifier;
+  private Map<String, String> props;
   private IcebergWriter writer;
 
   private static final String TABLE_PROP = "iceberg.table";
@@ -32,23 +35,24 @@ public class IcebergSinkConnectorTask extends SinkTask {
 
   @Override
   public void start(Map<String, String> props) {
-    Catalog catalog = IcebergUtil.loadCatalog(props);
-    TableIdentifier tableIdentifier = TableIdentifier.parse(props.get(TABLE_PROP));
-    this.writer =
-        new IcebergWriter(
-            catalog,
-            tableIdentifier,
-            PropertyUtil.propertyAsInt(props, COMMIT_INTERVAL_MS_PROP, COMMIT_INTERVAL_MS_DEFAULT));
+    this.catalog = IcebergUtil.loadCatalog(props);
+    this.tableIdentifier = TableIdentifier.parse(props.get(TABLE_PROP));
+    this.props = props;
   }
 
   @Override
   public void put(Collection<SinkRecord> sinkRecords) {
+    if (writer == null) {
+      writer = createWriter();
+    }
     writer.write(sinkRecords);
   }
 
   @Override
   public void flush(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
-    writer.commitIfNeeded();
+    if (writer != null) {
+      writer.commitIfNeeded();
+    }
   }
 
   @Override
@@ -56,5 +60,12 @@ public class IcebergSinkConnectorTask extends SinkTask {
     if (writer != null) {
       writer.close();
     }
+  }
+
+  private IcebergWriter createWriter() {
+    return new IcebergWriter(
+        catalog,
+        tableIdentifier,
+        PropertyUtil.propertyAsInt(props, COMMIT_INTERVAL_MS_PROP, COMMIT_INTERVAL_MS_DEFAULT));
   }
 }
