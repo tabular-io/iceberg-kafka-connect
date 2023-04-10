@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.google.common.collect.Lists;
 import io.debezium.testing.testcontainers.ConnectorConfiguration;
+import io.tabular.connect.poc.custom.TabularEventTransform;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.Future;
@@ -38,12 +39,13 @@ public class IntegrationTest extends IntegrationTestBase {
   private static final Schema TEST_SCHEMA =
       new Schema(
           Types.NestedField.required(1, "id", Types.LongType.get()),
-          Types.NestedField.required(2, "data", Types.StringType.get()),
-          Types.NestedField.required(3, "ts", Types.TimestampType.withoutZone()));
+          Types.NestedField.required(2, "type", Types.StringType.get()),
+          Types.NestedField.required(3, "ts", Types.TimestampType.withoutZone()),
+          Types.NestedField.required(4, "payload", Types.StringType.get()));
   private static final PartitionSpec TEST_SPEC =
       PartitionSpec.builderFor(TEST_SCHEMA).day("ts").build();
 
-  private static final String RECORD_FORMAT = "{\"id\":%d,\"data\":\"%s\",\"ts\":%d}";
+  private static final String RECORD_FORMAT = "{\"id\":%d,\"type\":\"%s\",\"event_ts_ms\":%d}";
 
   @BeforeEach
   public void setup() {
@@ -64,12 +66,14 @@ public class IntegrationTest extends IntegrationTestBase {
     ConnectorConfiguration connectorConfig =
         ConnectorConfiguration.create()
             .with("topics", TEST_TOPIC)
-            .with("connector.class", "io.tabular.connect.poc.IcebergSinkConnector")
+            .with("connector.class", IcebergSinkConnector.class.getName())
             .with("tasks.max", 1)
             .with("key.converter", "org.apache.kafka.connect.json.JsonConverter")
             .with("key.converter.schemas.enable", false)
             .with("value.converter", "org.apache.kafka.connect.json.JsonConverter")
             .with("value.converter.schemas.enable", false)
+            .with("transforms", "tabular")
+            .with("transforms.tabular.type", TabularEventTransform.class.getName())
             .with("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE))
             .with("iceberg.table.commitIntervalMs", 0) // commit immediately
             .with("iceberg.catalog", RESTCatalog.class.getName())
@@ -109,13 +113,10 @@ public class IntegrationTest extends IntegrationTestBase {
   }
 
   private void runTest() throws Exception {
-    String event1 = format(RECORD_FORMAT, 1, "hello world!", System.currentTimeMillis());
+    String event1 = format(RECORD_FORMAT, 1, "type1", System.currentTimeMillis());
     String event2 =
         format(
-            RECORD_FORMAT,
-            2,
-            "foo bar",
-            System.currentTimeMillis() - Duration.ofDays(3).toMillis());
+            RECORD_FORMAT, 2, "type2", System.currentTimeMillis() - Duration.ofDays(3).toMillis());
     Future<RecordMetadata> f1 = producer.send(new ProducerRecord<>(TEST_TOPIC, event1));
     Future<RecordMetadata> f2 = producer.send(new ProducerRecord<>(TEST_TOPIC, event2));
     f1.get();

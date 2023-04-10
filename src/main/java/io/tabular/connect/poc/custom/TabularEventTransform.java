@@ -16,11 +16,11 @@ public class TabularEventTransform<R extends ConnectRecord<R>> implements Transf
     Preconditions.checkArgument(record.value() instanceof Map);
     Map<?, ?> original = (Map<?, ?>) record.value();
 
-    final Map<String, Object> event = new HashMap<>();
-    event.put("id", original.get("id"));
-    event.put("type", original.get("type"));
-    event.put("event_ts", original.get("event_ts_ms"));
-    event.put("payload", record.value());
+    final Map<String, Object> updated = new HashMap<>();
+    updated.put("id", original.get("id"));
+    updated.put("type", original.get("type"));
+    updated.put("ts", original.get("event_ts_ms"));
+    updated.put("payload", record.value());
 
     return record.newRecord(
         record.topic(),
@@ -28,7 +28,7 @@ public class TabularEventTransform<R extends ConnectRecord<R>> implements Transf
         record.keySchema(),
         record.key(),
         record.valueSchema(),
-        event,
+        updated,
         record.timestamp());
   }
 

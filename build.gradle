@@ -37,7 +37,6 @@ dependencies {
 
   testCompileOnly libs.lombok
   testAnnotationProcessor libs.lombok
-
 }
 
 compileJava {
@@ -49,6 +48,10 @@ test.dependsOn(shadowJar)
 
 test {
   useJUnitPlatform()
+}
+
+configurations {
+  testImplementation.extendsFrom compileOnly
 }
 
 shadowJar {
