@@ -18,23 +18,18 @@ import org.apache.iceberg.types.Types.StructType;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 public class IcebergWriter implements Closeable {
-  private final Catalog catalog;
-  private final TableIdentifier tableIdentifier;
   private final int commitIntervalMs;
-
-  private Table table;
+  private final Table table;
   private TaskWriter<Record> writer;
   private long startTime;
 
   public IcebergWriter(Catalog catalog, TableIdentifier tableIdentifier, int commitIntervalMs) {
-    this.catalog = catalog;
-    this.tableIdentifier = tableIdentifier;
+    this.table = catalog.loadTable(tableIdentifier);
     this.commitIntervalMs = commitIntervalMs;
   }
 
   public void write(Collection<SinkRecord> sinkRecords) {
     if (writer == null) {
-      table = catalog.loadTable(tableIdentifier);
       writer = IcebergUtil.createTableWriter(table);
       startTime = System.currentTimeMillis();
     }
@@ -59,8 +54,11 @@ public class IcebergWriter implements Closeable {
       WriteResult result = writer.complete();
       writer = null;
 
+      table.refresh();
       AppendFiles appendOp = table.newAppend();
-      Arrays.stream(result.dataFiles()).forEach(appendOp::appendFile);
+      Arrays.stream(result.dataFiles())
+          .filter(f -> f.recordCount() > 0)
+          .forEach(appendOp::appendFile);
       appendOp.commit();
 
       // TODO: offsets
