@@ -60,13 +60,16 @@ public class IntegrationTest extends IntegrationTestBase {
 
   @Test
   public void testIcebergSink() throws Exception {
+
     ConnectorConfiguration connectorConfig =
         ConnectorConfiguration.create()
             .with("topics", TEST_TOPIC)
             .with("connector.class", "io.tabular.connect.poc.IcebergSinkConnector")
             .with("tasks.max", 1)
-            .with("key.converter", "org.apache.kafka.connect.converters.ByteArrayConverter")
-            .with("value.converter", "org.apache.kafka.connect.converters.ByteArrayConverter")
+            .with("key.converter", "org.apache.kafka.connect.json.JsonConverter")
+            .with("key.converter.schemas.enable", false)
+            .with("value.converter", "org.apache.kafka.connect.json.JsonConverter")
+            .with("value.converter.schemas.enable", false)
             .with("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE))
             .with("iceberg.table.commitIntervalMs", 0) // commit immediately
             .with("iceberg.catalog", RESTCatalog.class.getName())
