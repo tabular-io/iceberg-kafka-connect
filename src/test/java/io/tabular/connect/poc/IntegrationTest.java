@@ -19,10 +19,11 @@ import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.iceberg.types.Types;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.awaitility.Awaitility;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 public class IntegrationTest extends IntegrationTestBase {
@@ -39,10 +40,23 @@ public class IntegrationTest extends IntegrationTestBase {
 
   private static final String RECORD_FORMAT = "{\"id\":%d,\"data\":\"%s\",\"ts\":%d}";
 
+  @BeforeEach
+  public void setup() {
+    createTopic(TEST_TOPIC);
+    TableIdentifier tableIdentifier = TableIdentifier.of(TEST_DB, TEST_TABLE);
+    restCatalog.createNamespace(Namespace.of(TEST_DB));
+    restCatalog.createTable(tableIdentifier, TEST_SCHEMA);
+  }
+
+  @AfterEach
+  public void teardown() {
+    deleteTopic(TEST_TOPIC);
+    restCatalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE));
+    restCatalog.dropNamespace(Namespace.of(TEST_DB));
+  }
+
   @Test
   public void testIcebergSink() throws Exception {
-    createTopic(TEST_TOPIC);
-
     ConnectorConfiguration connectorConfig =
         ConnectorConfiguration.create()
             .with("topics", TEST_TOPIC)
@@ -57,40 +71,33 @@ public class IntegrationTest extends IntegrationTestBase {
             .with(
                 "iceberg.catalog." + AwsProperties.HTTP_CLIENT_TYPE,
                 AwsProperties.HTTP_CLIENT_TYPE_APACHE)
-            .with("iceberg.catalog." + AwsProperties.S3FILEIO_ENDPOINT, "http://aws:4566")
-            .with("iceberg.catalog." + AwsProperties.S3FILEIO_ACCESS_KEY_ID, aws.getAccessKey())
-            .with("iceberg.catalog." + AwsProperties.S3FILEIO_SECRET_ACCESS_KEY, aws.getSecretKey())
+            .with("iceberg.catalog." + AwsProperties.S3FILEIO_ENDPOINT, "http://minio:9000")
+            .with("iceberg.catalog." + AwsProperties.S3FILEIO_ACCESS_KEY_ID, AWS_ACCESS_KEY)
+            .with("iceberg.catalog." + AwsProperties.S3FILEIO_SECRET_ACCESS_KEY, AWS_SECRET_KEY)
             .with("iceberg.catalog." + AwsProperties.S3FILEIO_PATH_STYLE_ACCESS, true)
-            .with("iceberg.catalog." + AwsProperties.CLIENT_REGION, aws.getRegion());
+            .with("iceberg.catalog." + AwsProperties.CLIENT_REGION, AWS_REGION);
 
     kafkaConnect.registerConnector(CONNECTOR_NAME, connectorConfig);
 
-    try (RESTCatalog restCatalog = initLocalCatalog();
-        KafkaProducer<String, String> producer = initLocalProducer()) {
+    String event1 = format(RECORD_FORMAT, 1, "hello world!", System.currentTimeMillis());
+    String event2 = format(RECORD_FORMAT, 2, "foo bar", System.currentTimeMillis());
+    Future<RecordMetadata> f1 = producer.send(new ProducerRecord<>(TEST_TOPIC, event1));
+    Future<RecordMetadata> f2 = producer.send(new ProducerRecord<>(TEST_TOPIC, event2));
+    f1.get();
+    f2.get();
 
-      TableIdentifier tableIdentifier = TableIdentifier.of(TEST_DB, TEST_TABLE);
-      restCatalog.createNamespace(Namespace.of(TEST_DB));
-      restCatalog.createTable(tableIdentifier, TEST_SCHEMA);
+    TableIdentifier tableIdentifier = TableIdentifier.of(TEST_DB, TEST_TABLE);
+    Awaitility.await()
+        .atMost(10, TimeUnit.SECONDS)
+        .untilAsserted(
+            () -> {
+              Table table = restCatalog.loadTable(tableIdentifier);
+              assertThat(table.snapshots()).hasSize(1);
+            });
 
-      String event1 = format(RECORD_FORMAT, 1, "hello world!", System.currentTimeMillis());
-      String event2 = format(RECORD_FORMAT, 2, "foo bar", System.currentTimeMillis());
-      Future<RecordMetadata> f1 = producer.send(new ProducerRecord<>(TEST_TOPIC, event1));
-      Future<RecordMetadata> f2 = producer.send(new ProducerRecord<>(TEST_TOPIC, event2));
-      f1.get();
-      f2.get();
-
-      Awaitility.await()
-          .atMost(10, TimeUnit.SECONDS)
-          .untilAsserted(
-              () -> {
-                Table table = restCatalog.loadTable(tableIdentifier);
-                assertThat(table.snapshots()).hasSize(1);
-              });
-
-      Table table = restCatalog.loadTable(tableIdentifier);
-      List<DataFile> files = Lists.newArrayList(table.currentSnapshot().addedDataFiles(table.io()));
-      assertThat(files).hasSize(1);
-      assertEquals(2, files.get(0).recordCount());
-    }
+    Table table = restCatalog.loadTable(tableIdentifier);
+    List<DataFile> files = Lists.newArrayList(table.currentSnapshot().addedDataFiles(table.io()));
+    assertThat(files).hasSize(1);
+    assertEquals(2, files.get(0).recordCount());
   }
 }

@@ -2,7 +2,6 @@
 assertj-ver = "3.23.1"
 awaitility-ver = "4.2.0"
 aws-ver = "2.20.18"
-awsv1-ver = "1.11.1026"
 debezium-ver = "2.1.4.Final"
 h2-ver = "2.1.214"
 hadoop-ver = "3.3.2"
@@ -21,7 +20,6 @@ aws-glue = { module = "software.amazon.awssdk:glue", version.ref = "aws-ver" }
 aws-kms = { module = "software.amazon.awssdk:kms", version.ref = "aws-ver" }
 aws-s3 = { module = "software.amazon.awssdk:s3", version.ref = "aws-ver" }
 aws-sts = { module = "software.amazon.awssdk:sts", version.ref = "aws-ver" }
-awsv1-core = { module = "com.amazonaws:aws-java-sdk-core", version.ref = "awsv1-ver" }
 hadoop-common = { module = "org.apache.hadoop:hadoop-common", version.ref = "hadoop-ver" }
 iceberg-api = { module = "org.apache.iceberg:iceberg-api", version.ref = "iceberg-ver" }
 iceberg-aws = { module = "org.apache.iceberg:iceberg-aws", version.ref = "iceberg-ver" }
@@ -33,7 +31,6 @@ iceberg-parquet = { module = "org.apache.iceberg:iceberg-parquet", version.ref =
 kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka-ver" }
 kafka-connect-api = { module = "org.apache.kafka:connect-api", version.ref = "kafka-ver" }
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok-ver" }
-#parquet = { module = "org.apache.parquet:parquet-hadoop", version.ref = "parquet-ver" }
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j-ver" }
 
 # test dependencies
@@ -46,7 +43,6 @@ mockito = "org.mockito:mockito-core:4.8.1"
 testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers-ver" }
 testcontainers-debezium = { module = "io.debezium:debezium-testing-testcontainers", version.ref = "debezium-ver" }
 testcontainers-kafka = { module = "org.testcontainers:kafka", version.ref = "testcontainers-ver" }
-testcontainers-localstack = { module = "org.testcontainers:localstack", version.ref = "testcontainers-ver" }
 
 
 [bundles]

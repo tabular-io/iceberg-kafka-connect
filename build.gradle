@@ -30,10 +30,8 @@ dependencies {
   testImplementation libs.testcontainers
   testImplementation libs.testcontainers.debezium
   testImplementation libs.testcontainers.kafka
-  testImplementation libs.testcontainers.localstack
   testImplementation libs.kafka.clients
   testRuntimeOnly libs.h2
-  testRuntimeOnly libs.awsv1.core // for localstack
 
   testCompileOnly libs.lombok
   testAnnotationProcessor libs.lombok
