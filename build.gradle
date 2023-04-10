@@ -20,6 +20,7 @@ dependencies {
   implementation libs.bundles.jackson
   implementation libs.hadoop.common
   compileOnly libs.kafka.connect.api
+  compileOnly libs.kafka.connect.transforms
   compileOnly libs.lombok
   annotationProcessor libs.lombok
 
