@@ -43,7 +43,7 @@ dependencies {
 }
 
 compileJava {
-  options.release.set(11) // TODO: Debezium image uses java 11
+  options.release.set(11) // KC and Debezium images use java 11
 }
 
 // build the jar first so it can be installed into kafka connect
