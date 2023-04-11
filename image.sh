@@ -11,5 +11,5 @@ aws ecr get-login-password --region us-west-2 | docker login --username AWS --pa
 docker buildx build  \
   --platform linux/amd64,linux/arm64 \
   --pull --push \
-  -t 561839024272.dkr.ecr.us-west-2.amazonaws.com/kc-poc:latest \
+  -t 561839024272.dkr.ecr.us-west-2.amazonaws.com/kafka-connect:latest \
   -f Dockerfile .
