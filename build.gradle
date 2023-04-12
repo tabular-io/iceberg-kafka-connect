@@ -9,12 +9,6 @@ version "0.0.1"
 
 repositories {
   mavenCentral()
-  maven {
-    url "https://tabular-repository-public.s3.amazonaws.com/releases"
-  }
-  maven {
-    url = "https://repository.apache.org/content/repositories/orgapacheiceberg-1131/"
-  }
 }
 
 dependencies {
