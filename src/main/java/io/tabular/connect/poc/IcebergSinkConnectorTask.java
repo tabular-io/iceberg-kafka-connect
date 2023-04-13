@@ -35,9 +35,9 @@ public class IcebergSinkConnectorTask extends SinkTask {
 
   @Override
   public void start(Map<String, String> props) {
+    this.props = props;
     this.catalog = IcebergUtil.loadCatalog(props);
     this.tableIdentifier = TableIdentifier.parse(props.get(TABLE_PROP));
-    this.props = props;
   }
 
   @Override
