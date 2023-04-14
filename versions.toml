@@ -24,6 +24,7 @@ aws-sts = { module = "software.amazon.awssdk:sts", version.ref = "aws-ver" }
 hadoop-common = { module = "org.apache.hadoop:hadoop-common", version.ref = "hadoop-ver" }
 iceberg-api = { module = "org.apache.iceberg:iceberg-api", version.ref = "iceberg-ver" }
 iceberg-aws = { module = "org.apache.iceberg:iceberg-aws", version.ref = "iceberg-ver" }
+iceberg-common = { module = "org.apache.iceberg:iceberg-common", version.ref = "iceberg-ver" }
 iceberg-core = { module = "org.apache.iceberg:iceberg-core", version.ref = "iceberg-ver" }
 iceberg-data = { module = "org.apache.iceberg:iceberg-data", version.ref = "iceberg-ver" }
 iceberg-guava = { module = "org.apache.iceberg:iceberg-bundled-guava", version.ref = "iceberg-ver" }
@@ -31,6 +32,7 @@ iceberg-orc = { module = "org.apache.iceberg:iceberg-orc", version.ref = "iceber
 iceberg-parquet = { module = "org.apache.iceberg:iceberg-parquet", version.ref = "iceberg-ver" }
 kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka-ver" }
 kafka-connect-api = { module = "org.apache.kafka:connect-api", version.ref = "kafka-ver" }
+kafka-connect-json = { module = "org.apache.kafka:connect-json", version.ref = "kafka-ver" }
 kafka-connect-transforms = { module = "org.apache.kafka:connect-transforms", version.ref = "kafka-ver" }
 jackson-core = { module = "com.fasterxml.jackson.core:jackson-core", version.ref = "jackson-ver" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson-ver" }
@@ -51,5 +53,6 @@ testcontainers-kafka = { module = "org.testcontainers:kafka", version.ref = "tes
 
 [bundles]
 aws = ["aws-dynamodb", "aws-glue", "aws-kms", "aws-s3", "aws-sts"]
-iceberg = ["iceberg-api", "iceberg-aws", "iceberg-core", "iceberg-data", "iceberg-guava", "iceberg-orc", "iceberg-parquet"]
+iceberg = ["iceberg-api", "iceberg-aws", "iceberg-common", "iceberg-core", "iceberg-data", "iceberg-guava", "iceberg-orc", "iceberg-parquet"]
 jackson = ["jackson-core", "jackson-databind"]
+kafka-connect = ["kafka-connect-api", "kafka-connect-json", "kafka-connect-transforms"]

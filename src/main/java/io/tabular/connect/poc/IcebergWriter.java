@@ -1,7 +1,7 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.connect.poc;
 
-import io.tabular.connect.poc.convert.ConvertUtil;
+import io.tabular.connect.poc.convert.RecordConverter;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -40,7 +40,7 @@ public class IcebergWriter implements Closeable {
     sinkRecords.forEach(
         record -> {
           try {
-            Record row = ConvertUtil.convert(record.value(), schemaType);
+            Record row = RecordConverter.convert(record.value(), schemaType);
             writer.write(row);
           } catch (IOException e) {
             throw new UncheckedIOException(e);
