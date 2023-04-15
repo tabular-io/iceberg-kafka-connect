@@ -1,6 +1,8 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.connect.poc;
 
+import io.tabular.connect.poc.commit.Coordinator;
+import io.tabular.connect.poc.commit.Worker;
 import java.util.Collection;
 import java.util.Map;
 import org.apache.iceberg.catalog.Catalog;
@@ -10,7 +12,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
-import org.apache.kafka.connect.sink.SinkTaskContext;
 
 public class IcebergSinkConnectorTask extends SinkTask {
 
@@ -18,6 +19,8 @@ public class IcebergSinkConnectorTask extends SinkTask {
   private TableIdentifier tableIdentifier;
   private Map<String, String> props;
   private IcebergWriter writer;
+  private Coordinator coordinator;
+  private Worker worker;
 
   private static final String TABLE_PROP = "iceberg.table";
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.table.commitIntervalMs";
@@ -29,15 +32,16 @@ public class IcebergSinkConnectorTask extends SinkTask {
   }
 
   @Override
-  public void initialize(SinkTaskContext context) {
-    super.initialize(context);
-  }
-
-  @Override
   public void start(Map<String, String> props) {
     this.props = props;
     this.catalog = IcebergUtil.loadCatalog(props);
     this.tableIdentifier = TableIdentifier.parse(props.get(TABLE_PROP));
+
+    // TODO: handle leader election when there are multiple topics
+    if (context.assignment().stream().anyMatch(tp -> tp.partition() == 0)) {
+      coordinator = new Coordinator(props);
+    }
+    worker = new Worker(props);
   }
 
   @Override

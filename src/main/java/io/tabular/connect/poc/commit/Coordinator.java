@@ -8,4 +8,9 @@ public class Coordinator extends Channel {
   public Coordinator(Map<String, String> props) {
     super(props);
   }
+
+  @Override
+  public void notify(byte[] message) {
+    // TODO
+  }
 }

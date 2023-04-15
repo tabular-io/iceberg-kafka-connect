@@ -7,4 +7,9 @@ public class Worker extends Channel {
   public Worker(Map<String, String> props) {
     super(props);
   }
+
+  @Override
+  public void notify(byte[] message) {
+    // TODO
+  }
 }
