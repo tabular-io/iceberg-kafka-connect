@@ -8,6 +8,7 @@ import io.tabular.connect.poc.IcebergWriter;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import lombok.extern.log4j.Log4j;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
@@ -15,6 +16,7 @@ import org.apache.iceberg.util.Pair;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 
+@Log4j
 public class Worker extends Channel {
 
   private final Catalog catalog;
@@ -30,6 +32,7 @@ public class Worker extends Channel {
   @Override
   protected void receive(Message message) {
     if (message.getType() == BEGIN_COMMIT) {
+      log.info("Processing begin commit message");
       Pair<List<DataFile>, Map<TopicPartition, Long>> commitResult = writer.commit();
       Message filesMessage =
           Message.builder()

@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import lombok.extern.log4j.Log4j;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
@@ -20,6 +21,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.TopicPartition;
 
+@Log4j
 public class Coordinator extends Channel {
 
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.table.commitIntervalMs";
@@ -45,6 +47,7 @@ public class Coordinator extends Channel {
 
     // send out begin commit
     if (System.currentTimeMillis() - startTime >= commitIntervalMs) {
+      log.info("Sending begin commit message");
       send(Message.builder().type(BEGIN_COMMIT).build());
       startTime = System.currentTimeMillis();
     }
@@ -53,6 +56,7 @@ public class Coordinator extends Channel {
   @Override
   protected void receive(Message message) {
     if (message.getType() == DATA_FILES) {
+      log.info("Processing data files message");
       commitBuffer.add(message);
       commitIfComplete();
     }
@@ -85,11 +89,12 @@ public class Coordinator extends Channel {
     Map<String, Integer> numPartitions = getNumPartitions(pending.keySet());
     for (Entry<String, List<TopicPartition>> entry : pending.entrySet()) {
       if (numPartitions.getOrDefault(entry.getKey(), 0) < entry.getValue().size()) {
-        // not all partitions are accounted for yet
+        log.info("Commit not ready, waiting for more results");
         return;
       }
     }
 
+    log.info("Commit ready");
     table.refresh();
     AppendFiles appendOp = table.newAppend();
     commitBuffer.stream()
@@ -98,6 +103,7 @@ public class Coordinator extends Channel {
         .forEach(appendOp::appendFile);
     appendOp.commit();
     commitBuffer.clear();
+    log.info("Commit complete");
 
     // TODO: offsets
   }

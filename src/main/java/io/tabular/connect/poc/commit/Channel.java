@@ -10,6 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
+import lombok.extern.log4j.Log4j;
 import org.apache.iceberg.util.SerializationUtil;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -19,6 +20,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 
+@Log4j
 public abstract class Channel {
 
   private final String coordinatorTopic;
@@ -72,6 +74,7 @@ public abstract class Channel {
   }
 
   public void start() {
+    log.info("Channel starting");
     consumer.subscribe(List.of(coordinatorTopic));
     executor.submit(
         () -> {
@@ -85,6 +88,7 @@ public abstract class Channel {
 
   @SneakyThrows
   public void stop() {
+    log.info("Channel stopping");
     producer.close();
     consumer.close();
     executor.shutdown();
