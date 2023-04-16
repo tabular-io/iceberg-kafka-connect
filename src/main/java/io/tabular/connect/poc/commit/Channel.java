@@ -18,6 +18,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 
 @Log4j
@@ -50,9 +51,9 @@ public abstract class Channel {
                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 bootstrapServers,
                 ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-                ByteArraySerializer.class,
+                ByteArrayDeserializer.class,
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                ByteArraySerializer.class,
+                ByteArrayDeserializer.class,
                 ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
                 "latest",
                 ConsumerConfig.GROUP_ID_CONFIG,
@@ -60,8 +61,10 @@ public abstract class Channel {
   }
 
   protected void send(Message message) {
+    log.info("Sending message of type: " + message.getType().name());
     byte[] data = SerializationUtil.serializeToBytes(message);
     producer.send(new ProducerRecord<>(coordinatorTopic, data));
+    producer.flush();
   }
 
   protected abstract void receive(Message message);
@@ -69,6 +72,7 @@ public abstract class Channel {
   public void process() {
     while (queue.peek() != null) {
       Message message = SerializationUtil.deserializeFromBytes(queue.remove());
+      log.info("Received message of type: " + message.getType().name());
       receive(message);
     }
   }

@@ -33,6 +33,7 @@ public class IntegrationTest extends IntegrationTestBase {
 
   private static final String CONNECTOR_NAME = "test_connector";
   private static final String TEST_TOPIC = "test_topic";
+  private static final String COORDINATOR_TOPIC = "coordinator_topic";
   private static final String TEST_DB = "default";
   private static final String TEST_TABLE = "foobar";
   private static final TableIdentifier TABLE_IDENTIFIER = TableIdentifier.of(TEST_DB, TEST_TABLE);
@@ -49,6 +50,7 @@ public class IntegrationTest extends IntegrationTestBase {
 
   @BeforeEach
   public void setup() {
+    createTopic(COORDINATOR_TOPIC);
     createTopic(TEST_TOPIC);
     restCatalog.createNamespace(Namespace.of(TEST_DB));
   }
@@ -56,6 +58,7 @@ public class IntegrationTest extends IntegrationTestBase {
   @AfterEach
   public void teardown() {
     deleteTopic(TEST_TOPIC);
+    deleteTopic(COORDINATOR_TOPIC);
     restCatalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE));
     restCatalog.dropNamespace(Namespace.of(TEST_DB));
   }
@@ -76,6 +79,7 @@ public class IntegrationTest extends IntegrationTestBase {
             .with("transforms", "tabular")
             .with("transforms.tabular.type", TabularEventTransform.class.getName())
             .with("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE))
+            .with("iceberg.coordinator.topic", COORDINATOR_TOPIC)
             .with("iceberg.table.commitIntervalMs", 0) // commit immediately
             .with("iceberg.catalog", RESTCatalog.class.getName())
             .with("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")

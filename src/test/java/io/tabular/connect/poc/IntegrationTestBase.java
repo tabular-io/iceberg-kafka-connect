@@ -85,7 +85,8 @@ public class IntegrationTestBase {
             .withNetwork(network)
             .withKafka(kafka)
             .dependsOn(catalog, kafka)
-            .withFileSystemBind(LOCAL_JARS_DIR, "/kafka/connect/test");
+            .withFileSystemBind(LOCAL_JARS_DIR, "/kafka/connect/test")
+            .withEnv("OFFSET_FLUSH_INTERVAL_MS", "1000");
 
     Startables.deepStart(Stream.of(minio, catalog, kafka, kafkaConnect)).join();
 

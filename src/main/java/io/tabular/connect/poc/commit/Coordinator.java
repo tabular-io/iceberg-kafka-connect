@@ -4,6 +4,7 @@ package io.tabular.connect.poc.commit;
 import static io.tabular.connect.poc.commit.Message.Type.BEGIN_COMMIT;
 import static io.tabular.connect.poc.commit.Message.Type.DATA_FILES;
 import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.toList;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -13,6 +14,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import lombok.extern.log4j.Log4j;
 import org.apache.iceberg.AppendFiles;
+import org.apache.iceberg.DataFile;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
@@ -28,7 +30,8 @@ public class Coordinator extends Channel {
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
 
   private final String bootstrapServers;
-  private final Table table;
+  private final Catalog catalog;
+  private final TableIdentifier tableIdentifier;
   private final List<Message> commitBuffer;
   private final int commitIntervalMs;
   private long startTime;
@@ -36,7 +39,8 @@ public class Coordinator extends Channel {
   public Coordinator(Catalog catalog, TableIdentifier tableIdentifier, Map<String, String> props) {
     super(props);
     this.bootstrapServers = props.get("bootstrap.servers");
-    this.table = catalog.loadTable(tableIdentifier);
+    this.catalog = catalog;
+    this.tableIdentifier = tableIdentifier;
     this.commitBuffer = new ArrayList<>();
     this.commitIntervalMs =
         PropertyUtil.propertyAsInt(props, COMMIT_INTERVAL_MS_PROP, COMMIT_INTERVAL_MS_DEFAULT);
@@ -47,7 +51,6 @@ public class Coordinator extends Channel {
 
     // send out begin commit
     if (System.currentTimeMillis() - startTime >= commitIntervalMs) {
-      log.info("Sending begin commit message");
       send(Message.builder().type(BEGIN_COMMIT).build());
       startTime = System.currentTimeMillis();
     }
@@ -56,7 +59,6 @@ public class Coordinator extends Channel {
   @Override
   protected void receive(Message message) {
     if (message.getType() == DATA_FILES) {
-      log.info("Processing data files message");
       commitBuffer.add(message);
       commitIfComplete();
     }
@@ -95,12 +97,19 @@ public class Coordinator extends Channel {
     }
 
     log.info("Commit ready");
-    table.refresh();
+    List<DataFile> dataFiles =
+        commitBuffer.stream()
+            .flatMap(message -> message.getDataFiles().stream())
+            .filter(dataFile -> dataFile.recordCount() > 0)
+            .collect(toList());
+    if (dataFiles.isEmpty()) {
+      log.info("Nothing to commit");
+      return;
+    }
+
+    Table table = catalog.loadTable(tableIdentifier);
     AppendFiles appendOp = table.newAppend();
-    commitBuffer.stream()
-        .flatMap(message -> message.getDataFiles().stream())
-        .filter(dataFile -> dataFile.recordCount() > 0)
-        .forEach(appendOp::appendFile);
+    dataFiles.forEach(appendOp::appendFile);
     appendOp.commit();
     commitBuffer.clear();
     log.info("Commit complete");

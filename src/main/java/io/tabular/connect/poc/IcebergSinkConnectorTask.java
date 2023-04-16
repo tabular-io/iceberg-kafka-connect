@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.Map;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -45,11 +46,20 @@ public class IcebergSinkConnectorTask extends SinkTask {
 
   @Override
   public void put(Collection<SinkRecord> sinkRecords) {
+    worker.save(sinkRecords);
+    coordinate();
+  }
+
+  @Override
+  public void flush(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
+    coordinate();
+  }
+
+  private void coordinate() {
     if (coordinator != null) {
       coordinator.process();
     }
     worker.process();
-    worker.save(sinkRecords);
   }
 
   @Override
