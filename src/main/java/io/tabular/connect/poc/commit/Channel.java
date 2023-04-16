@@ -10,6 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
+import org.apache.iceberg.util.SerializationUtil;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -56,17 +57,19 @@ public abstract class Channel {
                 "cg-iceberg-" + UUID.randomUUID()));
   }
 
-  public void send(byte[] message) {
-    producer.send(new ProducerRecord<>(coordinatorTopic, message));
+  protected void send(Message message) {
+    byte[] data = SerializationUtil.serializeToBytes(message);
+    producer.send(new ProducerRecord<>(coordinatorTopic, data));
   }
 
-  public void receive() {
+  protected abstract void receive(Message message);
+
+  public void process() {
     while (queue.peek() != null) {
-      notify(queue.remove());
+      Message message = SerializationUtil.deserializeFromBytes(queue.remove());
+      receive(message);
     }
   }
-
-  public abstract void notify(byte[] message);
 
   public void start() {
     consumer.subscribe(List.of(coordinatorTopic));

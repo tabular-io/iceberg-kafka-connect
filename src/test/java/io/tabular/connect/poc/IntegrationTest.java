@@ -62,9 +62,10 @@ public class IntegrationTest extends IntegrationTestBase {
 
   @Test
   public void testIcebergSink() throws Exception {
-
+    // TODO: get bootstrap.servers from worker properties
     ConnectorConfiguration connectorConfig =
         ConnectorConfiguration.create()
+            .with("bootstrap.servers", kafka.getNetworkAliases().get(0) + ":9092")
             .with("topics", TEST_TOPIC)
             .with("connector.class", IcebergSinkConnector.class.getName())
             .with("tasks.max", 1)
