@@ -10,7 +10,6 @@ import io.debezium.testing.testcontainers.ConnectorConfiguration;
 import io.tabular.connect.poc.custom.TabularEventTransform;
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.DataFile;
@@ -23,7 +22,6 @@ import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.iceberg.types.Types;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,7 +78,7 @@ public class IntegrationTest extends IntegrationTestBase {
             .with("transforms.tabular.type", TabularEventTransform.class.getName())
             .with("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE))
             .with("iceberg.coordinator.topic", COORDINATOR_TOPIC)
-            .with("iceberg.table.commitIntervalMs", 0) // commit immediately
+            .with("iceberg.table.commitIntervalMs", 1000)
             .with("iceberg.catalog", RESTCatalog.class.getName())
             .with("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
             .with(
@@ -92,11 +90,11 @@ public class IntegrationTest extends IntegrationTestBase {
             .with("iceberg.catalog." + AwsProperties.S3FILEIO_PATH_STYLE_ACCESS, true)
             .with("iceberg.catalog." + AwsProperties.CLIENT_REGION, AWS_REGION);
 
-    kafkaConnect.registerConnector(CONNECTOR_NAME, connectorConfig);
-
     // partitioned table
 
     restCatalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA, TEST_SPEC);
+
+    kafkaConnect.registerConnector(CONNECTOR_NAME, connectorConfig);
 
     runTest();
 
@@ -109,6 +107,7 @@ public class IntegrationTest extends IntegrationTestBase {
 
     restCatalog.dropTable(TABLE_IDENTIFIER);
     restCatalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA);
+    Thread.sleep(1000); // wait for the table refresh in the writer
 
     runTest();
 
@@ -117,15 +116,14 @@ public class IntegrationTest extends IntegrationTestBase {
     assertEquals(2, files.get(0).recordCount());
   }
 
-  private void runTest() throws Exception {
+  private void runTest() {
     String event1 = format(RECORD_FORMAT, 1, "type1", System.currentTimeMillis());
     String event2 =
         format(
             RECORD_FORMAT, 2, "type2", System.currentTimeMillis() - Duration.ofDays(3).toMillis());
-    Future<RecordMetadata> f1 = producer.send(new ProducerRecord<>(TEST_TOPIC, event1));
-    Future<RecordMetadata> f2 = producer.send(new ProducerRecord<>(TEST_TOPIC, event2));
-    f1.get();
-    f2.get();
+    producer.send(new ProducerRecord<>(TEST_TOPIC, event1));
+    producer.send(new ProducerRecord<>(TEST_TOPIC, event2));
+    producer.flush();
 
     Awaitility.await().atMost(10, TimeUnit.SECONDS).untilAsserted(this::assertSnapshotAdded);
   }

@@ -24,40 +24,27 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 @Log4j
 public abstract class Channel {
 
+  private final String bootstrapServers;
   private final String coordinatorTopic;
   private final ExecutorService executor;
   private final ConcurrentLinkedQueue<byte[]> queue;
   private final KafkaProducer<byte[], byte[]> producer;
-  private final KafkaConsumer<byte[], byte[]> consumer;
 
   private static final int CONSUMER_POLL_TIMEOUT_MS = 500;
   private static final int EXEC_SHUTDOWN_WAIT_MS = 5000;
 
   public Channel(Map<String, String> props) {
+    this.bootstrapServers = props.get("bootstrap.servers");
     this.coordinatorTopic = props.get("iceberg.coordinator.topic");
     this.executor = Executors.newSingleThreadExecutor();
     this.queue = new ConcurrentLinkedQueue<>();
 
-    String bootstrapServers = props.get("bootstrap.servers");
     producer =
         new KafkaProducer<>(
             Map.of(
                 ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class,
                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class));
-    consumer =
-        new KafkaConsumer<>(
-            Map.of(
-                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-                bootstrapServers,
-                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-                ByteArrayDeserializer.class,
-                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                ByteArrayDeserializer.class,
-                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
-                "latest",
-                ConsumerConfig.GROUP_ID_CONFIG,
-                "cg-iceberg-" + UUID.randomUUID()));
   }
 
   protected void send(Message message) {
@@ -79,22 +66,39 @@ public abstract class Channel {
 
   public void start() {
     log.info("Channel starting");
-    consumer.subscribe(List.of(coordinatorTopic));
     executor.submit(
         () -> {
+          // TODO: consumer cleanup/close
+          KafkaConsumer<byte[], byte[]> consumer = createConsumer();
+          consumer.subscribe(List.of(coordinatorTopic));
           while (true) {
             ConsumerRecords<byte[], byte[]> records =
                 consumer.poll(Duration.ofMillis(CONSUMER_POLL_TIMEOUT_MS));
             records.forEach(record -> queue.add(record.value()));
+            consumer.commitSync();
           }
         });
+  }
+
+  private KafkaConsumer<byte[], byte[]> createConsumer() {
+    return new KafkaConsumer<>(
+        Map.of(
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+            bootstrapServers,
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+            ByteArrayDeserializer.class,
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+            ByteArrayDeserializer.class,
+            ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+            "latest",
+            ConsumerConfig.GROUP_ID_CONFIG,
+            "cg-iceberg-" + UUID.randomUUID()));
   }
 
   @SneakyThrows
   public void stop() {
     log.info("Channel stopping");
     producer.close();
-    consumer.close();
     executor.shutdown();
     executor.awaitTermination(EXEC_SHUTDOWN_WAIT_MS, TimeUnit.MILLISECONDS);
   }

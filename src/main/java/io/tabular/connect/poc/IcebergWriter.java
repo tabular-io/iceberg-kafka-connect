@@ -30,14 +30,12 @@ public class IcebergWriter implements Closeable {
 
   public IcebergWriter(Catalog catalog, TableIdentifier tableIdentifier) {
     this.table = catalog.loadTable(tableIdentifier);
+    this.writer = IcebergUtil.createTableWriter(table);
+    this.offsets = new HashMap<>();
   }
 
   public void write(Collection<SinkRecord> sinkRecords) {
-    if (writer == null) {
-      table.refresh();
-      writer = IcebergUtil.createTableWriter(table);
-      offsets = new HashMap<>();
-    }
+    // TODO: detect schema change
 
     StructType schemaType = table.schema().asStruct();
     sinkRecords.forEach(
@@ -55,16 +53,13 @@ public class IcebergWriter implements Closeable {
 
   @SneakyThrows
   public Pair<List<DataFile>, Map<TopicPartition, Long>> commit() {
-    if (writer == null) {
-      return Pair.of(List.of(), Map.of());
-    }
-
     WriteResult writeResult = writer.complete();
     Pair<List<DataFile>, Map<TopicPartition, Long>> result =
         Pair.of(Arrays.asList(writeResult.dataFiles()), offsets);
 
-    writer = null;
-    offsets = null;
+    table.refresh();
+    writer = IcebergUtil.createTableWriter(table);
+    offsets = new HashMap<>();
 
     return result;
   }
@@ -72,8 +67,6 @@ public class IcebergWriter implements Closeable {
   @Override
   @SneakyThrows
   public void close() {
-    if (writer != null) {
-      writer.close();
-    }
+    writer.close();
   }
 }

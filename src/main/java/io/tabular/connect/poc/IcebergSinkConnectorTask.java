@@ -5,6 +5,7 @@ import io.tabular.connect.poc.commit.Coordinator;
 import io.tabular.connect.poc.commit.Worker;
 import java.util.Collection;
 import java.util.Map;
+import lombok.extern.log4j.Log4j;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -12,6 +13,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 
+@Log4j
 public class IcebergSinkConnectorTask extends SinkTask {
 
   private Map<String, String> props;
@@ -37,16 +39,20 @@ public class IcebergSinkConnectorTask extends SinkTask {
 
     // TODO: handle leader election when there are multiple topics
     if (partitions.stream().anyMatch(tp -> tp.partition() == 0)) {
+      log.info("Worker elected leader, starting commit coordinator");
       coordinator = new Coordinator(catalog, tableIdentifier, props);
       coordinator.start();
     }
+    log.info("Starting commit worker");
     worker = new Worker(catalog, tableIdentifier, props);
     worker.start();
   }
 
   @Override
   public void put(Collection<SinkRecord> sinkRecords) {
-    worker.save(sinkRecords);
+    if (sinkRecords != null && !sinkRecords.isEmpty()) {
+      worker.save(sinkRecords);
+    }
     coordinate();
   }
 
@@ -55,11 +61,19 @@ public class IcebergSinkConnectorTask extends SinkTask {
     coordinate();
   }
 
+  @Override
+  public Map<TopicPartition, OffsetAndMetadata> preCommit(
+      Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
+    // manually manage offsets, during table commit
+    // return Map.of();
+    return super.preCommit(currentOffsets); // TODO
+  }
+
   private void coordinate() {
+    worker.process();
     if (coordinator != null) {
       coordinator.process();
     }
-    worker.process();
   }
 
   @Override

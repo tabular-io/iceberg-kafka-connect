@@ -17,14 +17,11 @@ import org.apache.kafka.connect.sink.SinkRecord;
 
 public class Worker extends Channel {
 
-  private final Catalog catalog;
-  private final TableIdentifier tableIdentifier;
-  private IcebergWriter writer;
+  private final IcebergWriter writer;
 
   public Worker(Catalog catalog, TableIdentifier tableIdentifier, Map<String, String> props) {
     super(props);
-    this.catalog = catalog;
-    this.tableIdentifier = tableIdentifier;
+    this.writer = new IcebergWriter(catalog, tableIdentifier);
   }
 
   @Override
@@ -44,19 +41,10 @@ public class Worker extends Channel {
   @Override
   public void stop() {
     super.stop();
-    if (writer != null) {
-      writer.close();
-    }
+    writer.close();
   }
 
   public void save(Collection<SinkRecord> sinkRecords) {
-    if (writer == null) {
-      writer = createWriter();
-    }
     writer.write(sinkRecords);
-  }
-
-  private IcebergWriter createWriter() {
-    return new IcebergWriter(catalog, tableIdentifier);
   }
 }

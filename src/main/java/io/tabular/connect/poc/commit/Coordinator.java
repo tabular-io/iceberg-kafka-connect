@@ -29,58 +29,61 @@ public class Coordinator extends Channel {
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.table.commitIntervalMs";
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
 
-  private final String bootstrapServers;
-  private final Catalog catalog;
-  private final TableIdentifier tableIdentifier;
+  private final Table table;
   private final List<Message> commitBuffer;
   private final int commitIntervalMs;
+  private final AdminClient adminClient;
   private long startTime;
+  private boolean commitInProgress;
 
   public Coordinator(Catalog catalog, TableIdentifier tableIdentifier, Map<String, String> props) {
     super(props);
-    this.bootstrapServers = props.get("bootstrap.servers");
-    this.catalog = catalog;
-    this.tableIdentifier = tableIdentifier;
+    this.table = catalog.loadTable(tableIdentifier);
     this.commitBuffer = new ArrayList<>();
     this.commitIntervalMs =
         PropertyUtil.propertyAsInt(props, COMMIT_INTERVAL_MS_PROP, COMMIT_INTERVAL_MS_DEFAULT);
+
+    String bootstrapServers = props.get("bootstrap.servers");
+    this.adminClient =
+        AdminClient.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
   }
 
   public void process() {
-    super.process();
-
     // send out begin commit
-    if (System.currentTimeMillis() - startTime >= commitIntervalMs) {
+    if (!commitInProgress && System.currentTimeMillis() - startTime >= commitIntervalMs) {
+      commitInProgress = true;
       send(Message.builder().type(BEGIN_COMMIT).build());
       startTime = System.currentTimeMillis();
     }
+
+    super.process();
   }
 
   @Override
   protected void receive(Message message) {
     if (message.getType() == DATA_FILES) {
+      if (!commitInProgress) {
+        throw new IllegalStateException("Received data files when no commit in progress");
+      }
       commitBuffer.add(message);
       commitIfComplete();
     }
   }
 
   private Map<String, Integer> getNumPartitions(Collection<String> topicNames) {
-    try (AdminClient adminClient =
-        AdminClient.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers))) {
-      Map<String, Integer> result = new HashMap<>();
-      adminClient
-          .describeTopics(topicNames)
-          .topicNameValues()
-          .forEach(
-              (key, value) -> {
-                try {
-                  result.put(key, value.get().partitions().size());
-                } catch (Exception e) {
-                  throw new RuntimeException(e);
-                }
-              });
-      return result;
-    }
+    Map<String, Integer> result = new HashMap<>();
+    adminClient
+        .describeTopics(topicNames)
+        .topicNameValues()
+        .forEach(
+            (key, value) -> {
+              try {
+                result.put(key, value.get().partitions().size());
+              } catch (Exception e) {
+                throw new RuntimeException(e);
+              }
+            });
+    return result;
   }
 
   private void commitIfComplete() {
@@ -88,6 +91,7 @@ public class Coordinator extends Channel {
         commitBuffer.stream()
             .flatMap(message -> message.getOffsets().keySet().stream())
             .collect(groupingBy(TopicPartition::topic));
+    // TODO: avoid getting number of partitions so often
     Map<String, Integer> numPartitions = getNumPartitions(pending.keySet());
     for (Entry<String, List<TopicPartition>> entry : pending.entrySet()) {
       if (numPartitions.getOrDefault(entry.getKey(), 0) < entry.getValue().size()) {
@@ -104,16 +108,25 @@ public class Coordinator extends Channel {
             .collect(toList());
     if (dataFiles.isEmpty()) {
       log.info("Nothing to commit");
+      commitInProgress = false;
       return;
     }
 
-    Table table = catalog.loadTable(tableIdentifier);
+    table.refresh();
     AppendFiles appendOp = table.newAppend();
     dataFiles.forEach(appendOp::appendFile);
     appendOp.commit();
     commitBuffer.clear();
+    commitInProgress = false;
+
     log.info("Commit complete");
 
-    // TODO: offsets
+    // TODO: handle offset commit, send offset commit message for workers?
+  }
+
+  @Override
+  public void stop() {
+    super.stop();
+    adminClient.close();
   }
 }
