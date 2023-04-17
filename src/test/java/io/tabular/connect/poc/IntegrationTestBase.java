@@ -110,12 +110,12 @@ public class IntegrationTestBase {
   }
 
   @SneakyThrows
-  protected void createTopic(String topicName) {
+  protected void createTopic(String topicName, int partitions) {
     try (AdminClient adminClient =
         AdminClient.create(
             Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
       adminClient
-          .createTopics(List.of(new NewTopic(topicName, 1, (short) 1)))
+          .createTopics(List.of(new NewTopic(topicName, partitions, (short) 1)))
           .all()
           .get(10, TimeUnit.SECONDS);
     }

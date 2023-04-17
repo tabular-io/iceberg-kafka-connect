@@ -14,14 +14,21 @@ import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.util.Pair;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.sink.SinkTaskContext;
 
 public class Worker extends Channel {
 
   private final IcebergWriter writer;
+  private final SinkTaskContext context;
 
-  public Worker(Catalog catalog, TableIdentifier tableIdentifier, Map<String, String> props) {
+  public Worker(
+      Catalog catalog,
+      TableIdentifier tableIdentifier,
+      Map<String, String> props,
+      SinkTaskContext context) {
     super(props);
     this.writer = new IcebergWriter(catalog, tableIdentifier);
+    this.context = context;
   }
 
   @Override
@@ -33,6 +40,7 @@ public class Worker extends Channel {
               .type(DATA_FILES)
               .dataFiles(commitResult.first())
               .offsets(commitResult.second())
+              .assignments(context.assignment())
               .build();
       send(filesMessage);
     }

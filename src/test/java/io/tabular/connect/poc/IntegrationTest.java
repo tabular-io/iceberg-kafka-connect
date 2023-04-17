@@ -48,8 +48,8 @@ public class IntegrationTest extends IntegrationTestBase {
 
   @BeforeEach
   public void setup() {
-    createTopic(COORDINATOR_TOPIC);
-    createTopic(TEST_TOPIC);
+    createTopic(COORDINATOR_TOPIC, 1);
+    createTopic(TEST_TOPIC, 2);
     restCatalog.createNamespace(Namespace.of(TEST_DB));
   }
 
@@ -68,7 +68,7 @@ public class IntegrationTest extends IntegrationTestBase {
         ConnectorConfiguration.create()
             .with("topics", TEST_TOPIC)
             .with("connector.class", IcebergSinkConnector.class.getName())
-            .with("tasks.max", 1)
+            .with("tasks.max", 2)
             .with("key.converter", "org.apache.kafka.connect.json.JsonConverter")
             .with("key.converter.schemas.enable", false)
             .with("value.converter", "org.apache.kafka.connect.json.JsonConverter")

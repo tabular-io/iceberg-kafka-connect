@@ -44,7 +44,7 @@ public class IcebergSinkConnectorTask extends SinkTask {
       coordinator.start();
     }
     log.info("Starting commit worker");
-    worker = new Worker(catalog, tableIdentifier, props);
+    worker = new Worker(catalog, tableIdentifier, props, context);
     worker.start();
   }
 

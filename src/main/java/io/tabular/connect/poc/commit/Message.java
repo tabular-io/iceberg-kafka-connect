@@ -4,6 +4,7 @@ package io.tabular.connect.poc.commit;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.Builder;
 import lombok.Getter;
 import org.apache.iceberg.DataFile;
@@ -20,4 +21,5 @@ public class Message implements Serializable {
   private Type type;
   private List<DataFile> dataFiles;
   private Map<TopicPartition, Long> offsets;
+  private Set<TopicPartition> assignments;
 }
