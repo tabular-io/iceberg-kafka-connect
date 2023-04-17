@@ -20,7 +20,6 @@ import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.util.PropertyUtil;
 import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.TopicPartition;
 
 @Log4j
@@ -43,9 +42,8 @@ public class Coordinator extends Channel {
     this.commitIntervalMs =
         PropertyUtil.propertyAsInt(props, COMMIT_INTERVAL_MS_PROP, COMMIT_INTERVAL_MS_DEFAULT);
 
-    String bootstrapServers = props.get("bootstrap.servers");
-    this.adminClient =
-        AdminClient.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
+    Map<String, Object> adminCliProps = new HashMap<>(kafkaProps);
+    this.adminClient = AdminClient.create(adminCliProps);
   }
 
   public void process() {

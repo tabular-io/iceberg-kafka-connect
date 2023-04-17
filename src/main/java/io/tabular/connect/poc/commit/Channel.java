@@ -2,6 +2,7 @@
 package io.tabular.connect.poc.commit;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -11,12 +12,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j;
+import org.apache.iceberg.util.PropertyUtil;
 import org.apache.iceberg.util.SerializationUtil;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -24,7 +25,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 @Log4j
 public abstract class Channel {
 
-  private final String bootstrapServers;
+  protected final Map<String, String> kafkaProps;
   private final String coordinatorTopic;
   private final ExecutorService executor;
   private final ConcurrentLinkedQueue<byte[]> queue;
@@ -34,17 +35,14 @@ public abstract class Channel {
   private static final int EXEC_SHUTDOWN_WAIT_MS = 5000;
 
   public Channel(Map<String, String> props) {
-    this.bootstrapServers = props.get("bootstrap.servers");
+    this.kafkaProps = PropertyUtil.propertiesWithPrefix(props, "iceberg.kafka.");
     this.coordinatorTopic = props.get("iceberg.coordinator.topic");
     this.executor = Executors.newSingleThreadExecutor();
     this.queue = new ConcurrentLinkedQueue<>();
 
-    producer =
-        new KafkaProducer<>(
-            Map.of(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class,
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class));
+    Map<String, Object> producerProps = new HashMap<>(kafkaProps);
+    this.producer =
+        new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer());
   }
 
   protected void send(Message message) {
@@ -81,18 +79,11 @@ public abstract class Channel {
   }
 
   private KafkaConsumer<byte[], byte[]> createConsumer() {
+    Map<String, Object> consumerProps = new HashMap<>(kafkaProps);
+    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "cg-iceberg-" + UUID.randomUUID());
     return new KafkaConsumer<>(
-        Map.of(
-            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-            bootstrapServers,
-            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-            ByteArrayDeserializer.class,
-            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-            ByteArrayDeserializer.class,
-            ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
-            "latest",
-            ConsumerConfig.GROUP_ID_CONFIG,
-            "cg-iceberg-" + UUID.randomUUID()));
+        consumerProps, new ByteArrayDeserializer(), new ByteArrayDeserializer());
   }
 
   @SneakyThrows

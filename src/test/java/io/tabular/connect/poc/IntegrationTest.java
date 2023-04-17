@@ -66,7 +66,6 @@ public class IntegrationTest extends IntegrationTestBase {
     // TODO: get bootstrap.servers from worker properties
     ConnectorConfiguration connectorConfig =
         ConnectorConfiguration.create()
-            .with("bootstrap.servers", kafka.getNetworkAliases().get(0) + ":9092")
             .with("topics", TEST_TOPIC)
             .with("connector.class", IcebergSinkConnector.class.getName())
             .with("tasks.max", 1)
@@ -78,6 +77,7 @@ public class IntegrationTest extends IntegrationTestBase {
             .with("transforms.tabular.type", TabularEventTransform.class.getName())
             .with("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE))
             .with("iceberg.coordinator.topic", COORDINATOR_TOPIC)
+            .with("iceberg.kafka.bootstrap.servers", kafka.getNetworkAliases().get(0) + ":9092")
             .with("iceberg.table.commitIntervalMs", 1000)
             .with("iceberg.catalog", RESTCatalog.class.getName())
             .with("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
