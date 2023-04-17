@@ -20,7 +20,9 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.util.PropertyUtil;
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 
 @Log4j
 public class Coordinator extends Channel {
@@ -32,7 +34,8 @@ public class Coordinator extends Channel {
   private final List<Message> commitBuffer;
   private final int commitIntervalMs;
   private final Set<String> topics;
-  private final AdminClient adminClient;
+  private final String consumerGroup;
+  private final Admin admin;
   private long startTime;
   private boolean commitInProgress;
 
@@ -43,9 +46,10 @@ public class Coordinator extends Channel {
     this.commitIntervalMs =
         PropertyUtil.propertyAsInt(props, COMMIT_INTERVAL_MS_PROP, COMMIT_INTERVAL_MS_DEFAULT);
     this.topics = Arrays.stream(props.get("topics").split(",")).map(String::trim).collect(toSet());
+    this.consumerGroup = "connect-" + props.get("group.id");
 
     Map<String, Object> adminCliProps = new HashMap<>(kafkaProps);
-    this.adminClient = AdminClient.create(adminCliProps);
+    this.admin = Admin.create(adminCliProps);
   }
 
   public void process() {
@@ -75,7 +79,7 @@ public class Coordinator extends Channel {
   }
 
   private int getTotalPartitionCount() {
-    return adminClient.describeTopics(topics).topicNameValues().values().stream()
+    return admin.describeTopics(topics).topicNameValues().values().stream()
         .mapToInt(
             value -> {
               try {
@@ -113,18 +117,23 @@ public class Coordinator extends Channel {
       AppendFiles appendOp = table.newAppend();
       dataFiles.forEach(appendOp::appendFile);
       appendOp.commit();
-      log.info("Commit complete");
+      log.info("Iceberg commit complete");
+
+      Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+      commitBuffer.stream()
+          .flatMap(message -> message.getOffsets().entrySet().stream())
+          .forEach(entry -> offsets.put(entry.getKey(), new OffsetAndMetadata(entry.getValue())));
+      admin.alterConsumerGroupOffsets(consumerGroup, offsets);
+      log.info("Kafka offset commit complete");
     }
 
     commitBuffer.clear();
     commitInProgress = false;
-
-    // TODO: handle offset commit, send offset commit message for workers?
   }
 
   @Override
   public void stop() {
     super.stop();
-    adminClient.close();
+    admin.close();
   }
 }

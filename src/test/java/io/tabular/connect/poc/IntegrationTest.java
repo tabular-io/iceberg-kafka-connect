@@ -30,8 +30,9 @@ import org.junit.jupiter.api.Test;
 public class IntegrationTest extends IntegrationTestBase {
 
   private static final String CONNECTOR_NAME = "test_connector";
-  private static final String TEST_TOPIC = "test_topic";
-  private static final String COORDINATOR_TOPIC = "coordinator_topic";
+  private static final String TEST_TOPIC = "test-topic";
+  private static final String TEST_GROUP_ID = "test-cg";
+  private static final String COORDINATOR_TOPIC = "coordinator-topic";
   private static final String TEST_DB = "default";
   private static final String TEST_TABLE = "foobar";
   private static final TableIdentifier TABLE_IDENTIFIER = TableIdentifier.of(TEST_DB, TEST_TABLE);
@@ -67,6 +68,7 @@ public class IntegrationTest extends IntegrationTestBase {
     ConnectorConfiguration connectorConfig =
         ConnectorConfiguration.create()
             .with("topics", TEST_TOPIC)
+            .with("group.id", TEST_GROUP_ID)
             .with("connector.class", IcebergSinkConnector.class.getName())
             .with("tasks.max", 2)
             .with("key.converter", "org.apache.kafka.connect.json.JsonConverter")
@@ -111,6 +113,7 @@ public class IntegrationTest extends IntegrationTestBase {
 
     runTest();
 
+    // TODO: with parallelism of 2 this may sometimes return 2 files
     files = getDataFiles();
     assertThat(files).hasSize(1);
     assertEquals(2, files.get(0).recordCount());
