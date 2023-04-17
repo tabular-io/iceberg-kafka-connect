@@ -34,7 +34,7 @@ public class Coordinator extends Channel {
   private final List<Message> commitBuffer;
   private final int commitIntervalMs;
   private final Set<String> topics;
-  private final String consumerGroup;
+  private final String commitGroupId;
   private final Admin admin;
   private long startTime;
   private boolean commitInProgress;
@@ -46,7 +46,7 @@ public class Coordinator extends Channel {
     this.commitIntervalMs =
         PropertyUtil.propertyAsInt(props, COMMIT_INTERVAL_MS_PROP, COMMIT_INTERVAL_MS_DEFAULT);
     this.topics = Arrays.stream(props.get("topics").split(",")).map(String::trim).collect(toSet());
-    this.consumerGroup = "connect-" + props.get("group.id");
+    this.commitGroupId = props.get("iceberg.commit.group.id");
 
     Map<String, Object> adminCliProps = new HashMap<>(kafkaProps);
     this.admin = Admin.create(adminCliProps);
@@ -119,12 +119,17 @@ public class Coordinator extends Channel {
       appendOp.commit();
       log.info("Iceberg commit complete");
 
+      // the consumer stores the offset that corresponds to the next record to consume,
+      // so increment the offset by one
       Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
       commitBuffer.stream()
           .flatMap(message -> message.getOffsets().entrySet().stream())
-          .forEach(entry -> offsets.put(entry.getKey(), new OffsetAndMetadata(entry.getValue())));
-      admin.alterConsumerGroupOffsets(consumerGroup, offsets);
+          .forEach(
+              entry -> offsets.put(entry.getKey(), new OffsetAndMetadata(entry.getValue() + 1)));
+      admin.alterConsumerGroupOffsets(commitGroupId, offsets);
       log.info("Kafka offset commit complete");
+
+      // TODO: trigger offset commit on workers? won't be saved until flush()
     }
 
     commitBuffer.clear();

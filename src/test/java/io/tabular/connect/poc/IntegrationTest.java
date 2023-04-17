@@ -31,7 +31,7 @@ public class IntegrationTest extends IntegrationTestBase {
 
   private static final String CONNECTOR_NAME = "test_connector";
   private static final String TEST_TOPIC = "test-topic";
-  private static final String TEST_GROUP_ID = "test-cg";
+  private static final String COMMIT_GROUP_ID = "commit-cg";
   private static final String COORDINATOR_TOPIC = "coordinator-topic";
   private static final String TEST_DB = "default";
   private static final String TEST_TABLE = "foobar";
@@ -68,7 +68,6 @@ public class IntegrationTest extends IntegrationTestBase {
     ConnectorConfiguration connectorConfig =
         ConnectorConfiguration.create()
             .with("topics", TEST_TOPIC)
-            .with("group.id", TEST_GROUP_ID)
             .with("connector.class", IcebergSinkConnector.class.getName())
             .with("tasks.max", 2)
             .with("key.converter", "org.apache.kafka.connect.json.JsonConverter")
@@ -78,6 +77,7 @@ public class IntegrationTest extends IntegrationTestBase {
             .with("transforms", "tabular")
             .with("transforms.tabular.type", TabularEventTransform.class.getName())
             .with("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE))
+            .with("iceberg.commit.group.id", COMMIT_GROUP_ID)
             .with("iceberg.coordinator.topic", COORDINATOR_TOPIC)
             .with("iceberg.kafka.bootstrap.servers", kafka.getNetworkAliases().get(0) + ":9092")
             .with("iceberg.table.commitIntervalMs", 1000)

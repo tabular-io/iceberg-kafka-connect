@@ -45,6 +45,7 @@ public class IcebergSinkConnectorTask extends SinkTask {
     }
     log.info("Starting commit worker");
     worker = new Worker(catalog, tableIdentifier, props, context);
+    worker.syncCommitOffsets();
     worker.start();
   }
 
@@ -64,9 +65,7 @@ public class IcebergSinkConnectorTask extends SinkTask {
   @Override
   public Map<TopicPartition, OffsetAndMetadata> preCommit(
       Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
-    // manually manage offsets, during table commit
-    // return Map.of();
-    return super.preCommit(currentOffsets); // TODO
+    return worker.getCommitOffsets();
   }
 
   private void coordinate() {
