@@ -50,6 +50,15 @@ public class IcebergSinkConnectorTask extends SinkTask {
   }
 
   @Override
+  public void close(Collection<TopicPartition> partitions) {
+    worker.stop();
+    if (coordinator != null) {
+      coordinator.stop();
+      coordinator = null;
+    }
+  }
+
+  @Override
   public void put(Collection<SinkRecord> sinkRecords) {
     if (sinkRecords != null && !sinkRecords.isEmpty()) {
       worker.save(sinkRecords);
