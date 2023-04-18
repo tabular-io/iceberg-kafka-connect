@@ -18,18 +18,19 @@ import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.WriteResult;
-import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.util.Pair;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 public class IcebergWriter implements Closeable {
   private final Table table;
+  private RecordConverter recordConverter;
   private TaskWriter<Record> writer;
   private Map<TopicPartition, Long> offsets;
 
   public IcebergWriter(Catalog catalog, TableIdentifier tableIdentifier) {
     this.table = catalog.loadTable(tableIdentifier);
+    this.recordConverter = new RecordConverter(table);
     this.writer = IcebergUtil.createTableWriter(table);
     this.offsets = new HashMap<>();
   }
@@ -37,13 +38,12 @@ public class IcebergWriter implements Closeable {
   public void write(Collection<SinkRecord> sinkRecords) {
     // TODO: detect schema change
 
-    StructType schemaType = table.schema().asStruct();
     sinkRecords.forEach(
         record -> {
           offsets.put(
               new TopicPartition(record.topic(), record.kafkaPartition()), record.kafkaOffset());
           try {
-            Record row = RecordConverter.convert(record.value(), schemaType);
+            Record row = recordConverter.convert(record.value());
             writer.write(row);
           } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -58,6 +58,7 @@ public class IcebergWriter implements Closeable {
         Pair.of(Arrays.asList(writeResult.dataFiles()), offsets);
 
     table.refresh();
+    recordConverter = new RecordConverter(table);
     writer = IcebergUtil.createTableWriter(table);
     offsets = new HashMap<>();
 

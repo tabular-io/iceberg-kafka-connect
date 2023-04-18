@@ -20,14 +20,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.SneakyThrows;
+import org.apache.iceberg.Table;
+import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.common.DynMethods;
 import org.apache.iceberg.common.DynMethods.BoundMethod;
 import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
+import org.apache.iceberg.mapping.MappedField;
+import org.apache.iceberg.mapping.NameMapping;
+import org.apache.iceberg.mapping.NameMappingParser;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types.ListType;
 import org.apache.iceberg.types.Types.MapType;
+import org.apache.iceberg.types.Types.NestedField;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.types.Types.TimestampType;
 import org.apache.kafka.connect.data.Schema;
@@ -39,11 +45,15 @@ public class RecordConverter {
   private static final ZoneId DEFAULT_TZ = ZoneId.systemDefault();
   private static final long NANOS_PER_MILLI = 1_000_000L;
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static final RecordConverter INSTANCE = new RecordConverter();
 
+  private final StructType tableSchema;
+  private final NameMapping nameMapping;
   private final BoundMethod convertToJson;
 
-  private RecordConverter() {
+  public RecordConverter(Table table) {
+    this.tableSchema = table.schema().asStruct();
+    this.nameMapping = getNameMapping(table);
+
     JsonConverter jsonConverter = new JsonConverter();
     convertToJson =
         DynMethods.builder("convertToJsonWithoutEnvelope")
@@ -52,17 +62,22 @@ public class RecordConverter {
   }
 
   @SneakyThrows
-  public static Record convert(Object data, StructType tableSchema) {
+  public Record convert(Object data) {
     if (data instanceof org.apache.kafka.common.protocol.types.Struct || data instanceof Map) {
-      return INSTANCE.convertStructValue(data, tableSchema);
+      return convertStructValue(data, tableSchema);
     } else if (data instanceof String) {
       Map<?, ?> map = MAPPER.readValue((String) data, Map.class);
-      return INSTANCE.convertStructValue(map, tableSchema);
+      return convertStructValue(map, tableSchema);
     } else if (data instanceof byte[]) {
       Map<?, ?> map = MAPPER.readValue((byte[]) data, Map.class);
-      return INSTANCE.convertStructValue(map, tableSchema);
+      return convertStructValue(map, tableSchema);
     }
     throw new IllegalArgumentException("Cannot convert type: " + data.getClass().getName());
+  }
+
+  private NameMapping getNameMapping(Table table) {
+    String nameMappingString = table.properties().get(TableProperties.DEFAULT_NAME_MAPPING);
+    return nameMappingString != null ? NameMappingParser.fromJson(nameMappingString) : null;
   }
 
   private Object convertValue(Object value, Type type) {
@@ -111,7 +126,7 @@ public class RecordConverter {
         .fields()
         .forEach(
             field -> {
-              Object fieldVal = getValueFromStruct(value, field.name());
+              Object fieldVal = getValueFromStruct(value, field);
               if (fieldVal != null) {
                 record.setField(field.name(), convertValue(fieldVal, field.type()));
               }
@@ -119,7 +134,24 @@ public class RecordConverter {
     return record;
   }
 
-  protected Object getValueFromStruct(Object value, String fieldName) {
+  private Object getValueFromStruct(Object value, NestedField field) {
+    if (nameMapping == null) {
+      return getFieldValue(value, field.name());
+    }
+
+    MappedField mappedField = nameMapping.find(field.fieldId());
+    if (mappedField != null) {
+      for (String fieldName : mappedField.names()) {
+        Object result = getFieldValue(value, fieldName);
+        if (result != null) {
+          return result;
+        }
+      }
+    }
+    return getFieldValue(value, field.name());
+  }
+
+  private Object getFieldValue(Object value, String fieldName) {
     if (value instanceof Map) {
       return ((Map<?, ?>) value).get(fieldName);
     } else if (value instanceof Struct) {
