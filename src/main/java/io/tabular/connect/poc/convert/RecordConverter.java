@@ -135,20 +135,21 @@ public class RecordConverter {
   }
 
   private Object getValueFromStruct(Object value, NestedField field) {
-    if (nameMapping == null) {
+    MappedField mappedField = nameMapping == null ? null : nameMapping.find(field.fieldId());
+
+    if (mappedField == null || mappedField.names().isEmpty()) {
+      // if no name mappings then use the field name in the schema
       return getFieldValue(value, field.name());
     }
 
-    MappedField mappedField = nameMapping.find(field.fieldId());
-    if (mappedField != null) {
-      for (String fieldName : mappedField.names()) {
-        Object result = getFieldValue(value, fieldName);
-        if (result != null) {
-          return result;
-        }
+    for (String fieldName : mappedField.names()) {
+      Object result = getFieldValue(value, fieldName);
+      if (result != null) {
+        return result;
       }
     }
-    return getFieldValue(value, field.name());
+
+    return null; // no field matches in the source
   }
 
   private Object getFieldValue(Object value, String fieldName) {
