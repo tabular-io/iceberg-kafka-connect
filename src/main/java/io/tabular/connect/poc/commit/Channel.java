@@ -28,6 +28,7 @@ public abstract class Channel {
   protected final Map<String, String> kafkaProps;
   private final String coordinatorTopic;
   private final ExecutorService executor;
+  private volatile boolean executorTerminated;
   private final ConcurrentLinkedQueue<byte[]> queue;
   private final KafkaProducer<byte[], byte[]> producer;
 
@@ -64,12 +65,13 @@ public abstract class Channel {
 
   public void start() {
     log.info("Channel starting");
+    executorTerminated = false;
     executor.submit(
         () -> {
           // TODO: consumer cleanup/close
           KafkaConsumer<byte[], byte[]> consumer = createConsumer();
           consumer.subscribe(List.of(coordinatorTopic));
-          while (true) {
+          while (!executorTerminated) {
             ConsumerRecords<byte[], byte[]> records =
                 consumer.poll(Duration.ofMillis(CONSUMER_POLL_TIMEOUT_MS));
             records.forEach(record -> queue.add(record.value()));
@@ -91,6 +93,7 @@ public abstract class Channel {
     log.info("Channel stopping");
     producer.close();
     executor.shutdown();
+    executorTerminated = true;
     executor.awaitTermination(EXEC_SHUTDOWN_WAIT_MS, TimeUnit.MILLISECONDS);
   }
 }
