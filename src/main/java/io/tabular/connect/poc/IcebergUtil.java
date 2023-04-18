@@ -43,7 +43,7 @@ public class IcebergUtil {
             table.properties(), WRITE_TARGET_FILE_SIZE_BYTES, WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT);
 
     FileAppenderFactory<Record> appenderFactory =
-        new GenericAppenderFactory(table.schema(), table.spec());
+        new GenericAppenderFactory(table.schema(), table.spec()).setAll(table.properties());
 
     // (partition ID + task ID + operation ID) must be unique
     OutputFileFactory fileFactory =
