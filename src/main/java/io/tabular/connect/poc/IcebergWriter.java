@@ -31,7 +31,7 @@ public class IcebergWriter implements Closeable {
   public IcebergWriter(Catalog catalog, TableIdentifier tableIdentifier) {
     this.table = catalog.loadTable(tableIdentifier);
     this.recordConverter = new RecordConverter(table);
-    this.writer = IcebergUtil.createTableWriter(table);
+    this.writer = Utilities.createTableWriter(table);
     this.offsets = new HashMap<>();
   }
 
@@ -59,7 +59,7 @@ public class IcebergWriter implements Closeable {
 
     table.refresh();
     recordConverter = new RecordConverter(table);
-    writer = IcebergUtil.createTableWriter(table);
+    writer = Utilities.createTableWriter(table);
     offsets = new HashMap<>();
 
     return result;

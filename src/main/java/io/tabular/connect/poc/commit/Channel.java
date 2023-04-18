@@ -32,12 +32,14 @@ public abstract class Channel {
   private final ConcurrentLinkedQueue<byte[]> queue;
   private final KafkaProducer<byte[], byte[]> producer;
 
+  private static final String COORDINATOR_TOPIC_PROP = "iceberg.coordinator.topic";
+  private static final String KAFKA_PROP_PREFIX = "iceberg.kafka.";
   private static final int CONSUMER_POLL_TIMEOUT_MS = 500;
   private static final int EXEC_SHUTDOWN_WAIT_MS = 5000;
 
   public Channel(Map<String, String> props) {
-    this.kafkaProps = PropertyUtil.propertiesWithPrefix(props, "iceberg.kafka.");
-    this.coordinatorTopic = props.get("iceberg.coordinator.topic");
+    this.kafkaProps = PropertyUtil.propertiesWithPrefix(props, KAFKA_PROP_PREFIX);
+    this.coordinatorTopic = props.get(COORDINATOR_TOPIC_PROP);
     this.executor = Executors.newSingleThreadExecutor();
     this.queue = new ConcurrentLinkedQueue<>();
 

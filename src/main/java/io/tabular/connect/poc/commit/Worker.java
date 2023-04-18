@@ -25,6 +25,8 @@ import org.apache.kafka.connect.sink.SinkTaskContext;
 
 public class Worker extends Channel {
 
+  private static final String COMMIT_GROUP_ID_PROP = "iceberg.commit.group.id";
+
   private final IcebergWriter writer;
   private final SinkTaskContext context;
   private final String commitGroupId;
@@ -38,7 +40,7 @@ public class Worker extends Channel {
     super(props);
     this.writer = new IcebergWriter(catalog, tableIdentifier);
     this.context = context;
-    this.commitGroupId = props.get("iceberg.commit.group.id");
+    this.commitGroupId = props.get(COMMIT_GROUP_ID_PROP);
 
     Map<String, Object> adminCliProps = new HashMap<>(kafkaProps);
     this.admin = Admin.create(adminCliProps);

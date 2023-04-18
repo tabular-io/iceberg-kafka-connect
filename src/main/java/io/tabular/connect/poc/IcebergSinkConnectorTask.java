@@ -34,11 +34,10 @@ public class IcebergSinkConnectorTask extends SinkTask {
 
   @Override
   public void open(Collection<TopicPartition> partitions) {
-    Catalog catalog = IcebergUtil.loadCatalog(props);
+    Catalog catalog = Utilities.loadCatalog(props);
     TableIdentifier tableIdentifier = TableIdentifier.parse(props.get(TABLE_PROP));
 
-    // TODO: handle leader election when there are multiple topics
-    if (partitions.stream().anyMatch(tp -> tp.partition() == 0)) {
+    if (isLeader(partitions)) {
       log.info("Worker elected leader, starting commit coordinator");
       coordinator = new Coordinator(catalog, tableIdentifier, props);
       coordinator.start();
@@ -47,6 +46,15 @@ public class IcebergSinkConnectorTask extends SinkTask {
     worker = new Worker(catalog, tableIdentifier, props, context);
     worker.syncCommitOffsets();
     worker.start();
+  }
+
+  private boolean isLeader(Collection<TopicPartition> partitions) {
+    // there should only be one worker assigned partition 0 of the first
+    // topic, so elect that one the leader
+    String firstTopic = Utilities.getTopics(props).first();
+    return partitions.stream()
+        .filter(tp -> tp.topic().equals(firstTopic))
+        .anyMatch(tp -> tp.partition() == 0);
   }
 
   @Override

@@ -5,10 +5,9 @@ import static io.tabular.connect.poc.commit.Message.Type.BEGIN_COMMIT;
 import static io.tabular.connect.poc.commit.Message.Type.DATA_FILES;
 import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
-import static java.util.stream.Collectors.toSet;
 
+import io.tabular.connect.poc.Utilities;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +28,7 @@ public class Coordinator extends Channel {
 
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.table.commitIntervalMs";
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
+  private static final String COMMIT_GROUP_ID_PROP = "iceberg.commit.group.id";
 
   private final Table table;
   private final List<Message> commitBuffer;
@@ -45,8 +45,8 @@ public class Coordinator extends Channel {
     this.commitBuffer = new ArrayList<>();
     this.commitIntervalMs =
         PropertyUtil.propertyAsInt(props, COMMIT_INTERVAL_MS_PROP, COMMIT_INTERVAL_MS_DEFAULT);
-    this.topics = Arrays.stream(props.get("topics").split(",")).map(String::trim).collect(toSet());
-    this.commitGroupId = props.get("iceberg.commit.group.id");
+    this.topics = Utilities.getTopics(props);
+    this.commitGroupId = props.get(COMMIT_GROUP_ID_PROP);
 
     Map<String, Object> adminCliProps = new HashMap<>(kafkaProps);
     this.admin = Admin.create(adminCliProps);
