@@ -1,5 +1,5 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.connect.poc;
+package io.tabular.iceberg.connect;
 
 import static java.util.stream.Collectors.toList;
 
@@ -28,7 +28,7 @@ public class IcebergSinkConnector extends SinkConnector {
 
   @Override
   public Class<? extends Task> taskClass() {
-    return IcebergSinkConnectorTask.class;
+    return IcebergSinkTask.class;
   }
 
   @Override

@@ -1,5 +1,5 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.connect.poc;
+package io.tabular.iceberg.connect;
 
 import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT;
 import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT_DEFAULT;

@@ -1,1 +1,1 @@
-# Kafka Connect for Iceberg POC
+# Kafka Connect Iceberg Sink

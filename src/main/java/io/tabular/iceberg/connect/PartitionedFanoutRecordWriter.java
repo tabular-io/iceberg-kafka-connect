@@ -1,5 +1,5 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.connect.poc;
+package io.tabular.iceberg.connect;
 
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.PartitionKey;

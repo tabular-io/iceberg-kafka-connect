@@ -1,7 +1,6 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.connect.poc;
+package io.tabular.iceberg.connect;
 
-import io.tabular.connect.poc.convert.RecordConverter;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;

@@ -1,12 +1,11 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.connect.poc.commit;
+package io.tabular.iceberg.connect.commit;
 
-import static io.tabular.connect.poc.commit.Message.Type.BEGIN_COMMIT;
-import static io.tabular.connect.poc.commit.Message.Type.DATA_FILES;
 import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
 
-import io.tabular.connect.poc.Utilities;
+import io.tabular.iceberg.connect.Utilities;
+import io.tabular.iceberg.connect.commit.Message.Type;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -60,7 +59,7 @@ public class Coordinator extends Channel {
     // send out begin commit
     if (!commitInProgress && System.currentTimeMillis() - startTime >= commitIntervalMs) {
       commitInProgress = true;
-      send(Message.builder().type(BEGIN_COMMIT).build());
+      send(Message.builder().type(Type.BEGIN_COMMIT).build());
       startTime = System.currentTimeMillis();
     }
 
@@ -69,7 +68,7 @@ public class Coordinator extends Channel {
 
   @Override
   protected void receive(Message message) {
-    if (message.getType() == DATA_FILES) {
+    if (message.getType() == Type.DATA_FILES) {
       if (!commitInProgress) {
         throw new IllegalStateException("Received data files when no commit in progress");
       }

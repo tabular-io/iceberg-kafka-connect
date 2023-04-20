@@ -1,11 +1,10 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.connect.poc.commit;
+package io.tabular.iceberg.connect.commit;
 
-import static io.tabular.connect.poc.commit.Message.Type.BEGIN_COMMIT;
-import static io.tabular.connect.poc.commit.Message.Type.DATA_FILES;
 import static java.util.stream.Collectors.toMap;
 
-import io.tabular.connect.poc.IcebergWriter;
+import io.tabular.iceberg.connect.IcebergWriter;
+import io.tabular.iceberg.connect.commit.Message.Type;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -63,11 +62,11 @@ public class Worker extends Channel {
 
   @Override
   protected void receive(Message message) {
-    if (message.getType() == BEGIN_COMMIT) {
+    if (message.getType() == Type.BEGIN_COMMIT) {
       Pair<List<DataFile>, Map<TopicPartition, Long>> commitResult = writer.commit();
       Message filesMessage =
           Message.builder()
-              .type(DATA_FILES)
+              .type(Type.DATA_FILES)
               .dataFiles(commitResult.first())
               .offsets(commitResult.second())
               .assignments(context.assignment())

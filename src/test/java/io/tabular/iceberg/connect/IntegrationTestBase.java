@@ -1,5 +1,5 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.connect.poc;
+package io.tabular.iceberg.connect;
 
 import io.debezium.testing.testcontainers.DebeziumContainer;
 import java.net.URI;

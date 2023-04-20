@@ -1,8 +1,8 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.connect.poc;
+package io.tabular.iceberg.connect;
 
-import io.tabular.connect.poc.commit.Coordinator;
-import io.tabular.connect.poc.commit.Worker;
+import io.tabular.iceberg.connect.commit.Coordinator;
+import io.tabular.iceberg.connect.commit.Worker;
 import java.util.Collection;
 import java.util.Map;
 import lombok.extern.log4j.Log4j;
@@ -14,7 +14,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 
 @Log4j
-public class IcebergSinkConnectorTask extends SinkTask {
+public class IcebergSinkTask extends SinkTask {
 
   private Map<String, String> props;
   private Coordinator coordinator;

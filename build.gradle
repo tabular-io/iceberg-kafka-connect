@@ -4,7 +4,7 @@ plugins {
   id "com.github.johnrengelman.shadow" version "8.1.0"
 }
 
-group "io.tabular.connect"
+group "io.tabular.iceberg.connect"
 version "0.0.1"
 
 repositories {

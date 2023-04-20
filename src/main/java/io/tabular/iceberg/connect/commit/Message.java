@@ -1,5 +1,5 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.connect.poc.commit;
+package io.tabular.iceberg.connect.commit;
 
 import java.io.Serializable;
 import java.util.List;

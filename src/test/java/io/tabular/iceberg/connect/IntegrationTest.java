@@ -1,5 +1,5 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.connect.poc;
+package io.tabular.iceberg.connect;
 
 import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.google.common.collect.Lists;
 import io.debezium.testing.testcontainers.ConnectorConfiguration;
-import io.tabular.connect.poc.custom.TabularEventTransform;
+import io.tabular.iceberg.connect.custom.TabularEventTransform;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
