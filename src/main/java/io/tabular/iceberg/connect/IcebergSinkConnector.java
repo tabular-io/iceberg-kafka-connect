@@ -3,6 +3,7 @@ package io.tabular.iceberg.connect;
 
 import static java.util.stream.Collectors.toList;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
@@ -14,6 +15,8 @@ import org.apache.kafka.connect.sink.SinkConnector;
 public class IcebergSinkConnector extends SinkConnector {
 
   private Map<String, String> props;
+
+  public static final String COORDINATOR_PROP = "iceberg.coordinator";
 
   @Override
   public String version() {
@@ -33,7 +36,19 @@ public class IcebergSinkConnector extends SinkConnector {
 
   @Override
   public List<Map<String, String>> taskConfigs(int maxTasks) {
-    return IntStream.range(0, maxTasks).mapToObj(i -> props).collect(toList());
+    return IntStream.range(0, maxTasks)
+        .mapToObj(
+            i -> {
+              if (i == 0) {
+                // make one task the coordinator
+                Map<String, String> map = new HashMap<>(props);
+                map.put(COORDINATOR_PROP, "true");
+                return map;
+              } else {
+                return props;
+              }
+            })
+        .collect(toList());
   }
 
   @Override
