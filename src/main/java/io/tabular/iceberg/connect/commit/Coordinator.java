@@ -6,11 +6,12 @@ import static java.util.stream.Collectors.toList;
 
 import io.tabular.iceberg.connect.Utilities;
 import io.tabular.iceberg.connect.commit.Message.Type;
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.DataFile;
@@ -18,7 +19,6 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.util.PropertyUtil;
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
@@ -27,28 +27,21 @@ public class Coordinator extends Channel {
 
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.table.commitIntervalMs";
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
-  private static final String COMMIT_GROUP_ID_PROP = "iceberg.commit.group.id";
 
   private final Table table;
   private final List<Message> commitBuffer;
   private final int commitIntervalMs;
   private final Set<String> topics;
-  private final String commitGroupId;
-  private final Admin admin;
   private long startTime;
   private boolean commitInProgress;
 
   public Coordinator(Catalog catalog, TableIdentifier tableIdentifier, Map<String, String> props) {
     super(props);
     this.table = catalog.loadTable(tableIdentifier);
-    this.commitBuffer = new ArrayList<>();
+    this.commitBuffer = new LinkedList<>();
     this.commitIntervalMs =
         PropertyUtil.propertyAsInt(props, COMMIT_INTERVAL_MS_PROP, COMMIT_INTERVAL_MS_DEFAULT);
     this.topics = Utilities.getTopics(props);
-    this.commitGroupId = props.get(COMMIT_GROUP_ID_PROP);
-
-    Map<String, Object> adminCliProps = new HashMap<>(kafkaProps);
-    this.admin = Admin.create(adminCliProps);
   }
 
   public void process() {
@@ -78,7 +71,7 @@ public class Coordinator extends Channel {
   }
 
   private int getTotalPartitionCount() {
-    return admin.describeTopics(topics).topicNameValues().values().stream()
+    return admin().describeTopics(topics).topicNameValues().values().stream()
         .mapToInt(
             value -> {
               try {
@@ -91,6 +84,9 @@ public class Coordinator extends Channel {
   }
 
   private void commitIfComplete() {
+
+    // FIXME!!! handle commit timeout
+
     // TODO: avoid getting total number of partitions so often
     int totalPartitions = getTotalPartitionCount();
     int receivedPartitions =
@@ -104,8 +100,12 @@ public class Coordinator extends Channel {
     }
 
     log.info(format("Commit ready, received results for all %d partitions", receivedPartitions));
+    commit(commitBuffer);
+  }
+
+  private void commit(List<Message> buffer) {
     List<DataFile> dataFiles =
-        commitBuffer.stream()
+        buffer.stream()
             .flatMap(message -> message.getDataFiles().stream())
             .filter(dataFile -> dataFile.recordCount() > 0)
             .collect(toList());
@@ -121,23 +121,27 @@ public class Coordinator extends Channel {
       // the consumer stores the offset that corresponds to the next record to consume,
       // so increment the offset by one
       Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-      commitBuffer.stream()
+      buffer.stream()
           .flatMap(message -> message.getOffsets().entrySet().stream())
           .forEach(
               entry -> offsets.put(entry.getKey(), new OffsetAndMetadata(entry.getValue() + 1)));
-      admin.alterConsumerGroupOffsets(commitGroupId, offsets);
+      offsets.putAll(channelOffsets());
+      admin().alterConsumerGroupOffsets(commitGroupId(), offsets);
       log.info("Kafka offset commit complete");
 
       // TODO: trigger offset commit on workers? won't be saved until flush()
     }
 
-    commitBuffer.clear();
+    buffer.clear();
     commitInProgress = false;
   }
 
-  @Override
-  public void stop() {
-    super.stop();
-    admin.close();
+  @SneakyThrows
+  public void start() {
+    super.start();
+    seekToLastCommit();
+    List<Message> buffer = new LinkedList<>();
+    consumeAvailable(buffer::add);
+    commit(buffer);
   }
 }
