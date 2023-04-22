@@ -1,6 +1,8 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect.commit;
 
+import static java.util.stream.Collectors.toList;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -9,11 +11,13 @@ import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j;
 import org.apache.iceberg.util.PropertyUtil;
 import org.apache.iceberg.util.SerializationUtil;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 
@@ -73,8 +77,22 @@ public abstract class Channel {
         consumerProps, new ByteArrayDeserializer(), new ByteArrayDeserializer());
   }
 
+  @SneakyThrows
   public void start() {
-    consumer.subscribe(List.of(coordinatorTopic));
+    Map<String, Object> adminCliProps = new HashMap<>(kafkaProps);
+    try (Admin admin = Admin.create(adminCliProps)) {
+      List<TopicPartition> partitions =
+          admin
+              .describeTopics(List.of(coordinatorTopic))
+              .topicNameValues()
+              .get(coordinatorTopic)
+              .get()
+              .partitions()
+              .stream()
+              .map(info -> new TopicPartition(coordinatorTopic, info.partition()))
+              .collect(toList());
+      consumer.assign(partitions);
+    }
   }
 
   @SneakyThrows
