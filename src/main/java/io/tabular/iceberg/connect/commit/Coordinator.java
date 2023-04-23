@@ -4,6 +4,8 @@ package io.tabular.iceberg.connect.commit;
 import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.Utilities;
 import io.tabular.iceberg.connect.commit.Message.Type;
 import java.util.LinkedList;
@@ -14,6 +16,7 @@ import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.DataFile;
+import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
@@ -26,6 +29,8 @@ public class Coordinator extends Channel {
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
   private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.table.commitTimeoutMs";
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
+  private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final String CHANNEL_OFFSETS_SNAPSHOT_PROP = "kafka.connect.channel.offsets";
 
   private final Table table;
   private final List<Message> commitBuffer;
@@ -109,6 +114,7 @@ public class Coordinator extends Channel {
     return true;
   }
 
+  @SneakyThrows
   private void commit(List<Message> buffer) {
     List<DataFile> dataFiles =
         buffer.stream()
@@ -118,14 +124,14 @@ public class Coordinator extends Channel {
     if (dataFiles.isEmpty()) {
       log.info("Nothing to commit");
     } else {
+      String offsetsStr = MAPPER.writeValueAsString(channelOffsets());
       table.refresh();
       AppendFiles appendOp = table.newAppend();
+      appendOp.set(CHANNEL_OFFSETS_SNAPSHOT_PROP, offsetsStr);
       dataFiles.forEach(appendOp::appendFile);
       appendOp.commit();
-      log.info("Iceberg commit complete");
 
-      admin().alterConsumerGroupOffsets(commitGroupId(), channelOffsets());
-      log.info("Coordinator offsets committed");
+      log.info("Iceberg commit complete");
     }
 
     buffer.clear();
@@ -135,14 +141,22 @@ public class Coordinator extends Channel {
   @SneakyThrows
   public void start() {
     super.start();
-    seekToLastCommit();
-    List<Message> buffer = new LinkedList<>();
-    consumeAvailable(
-        message -> {
-          if (message.getType() == Type.DATA_FILES) {
-            buffer.add(message);
-          }
-        });
-    commit(buffer);
+    Snapshot snapshot = table.currentSnapshot();
+    if (snapshot != null && snapshot.summary() != null) {
+      String offsetsStr = table.currentSnapshot().summary().get(CHANNEL_OFFSETS_SNAPSHOT_PROP);
+      if (offsetsStr != null) {
+        TypeReference<Map<Integer, Long>> typeRef = new TypeReference<>() {};
+        Map<Integer, Long> channelOffsets = MAPPER.readValue(offsetsStr, typeRef);
+        channelSeekToOffsets(channelOffsets);
+        List<Message> buffer = new LinkedList<>();
+        consumeAvailable(
+            message -> {
+              if (message.getType() == Type.DATA_FILES) {
+                buffer.add(message);
+              }
+            });
+        commit(buffer);
+      }
+    }
   }
 }

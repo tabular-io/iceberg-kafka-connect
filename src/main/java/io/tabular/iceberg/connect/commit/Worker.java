@@ -62,6 +62,8 @@ public class Worker extends Channel {
               .build();
       send(filesMessage);
 
+      // FIXME: if worker goes down before offsets are set, could cause dupes
+
       Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
       writeResult.getOffsets().forEach((k, v) -> offsets.put(k, new OffsetAndMetadata(v)));
       admin().alterConsumerGroupOffsets(commitGroupId(), offsets);

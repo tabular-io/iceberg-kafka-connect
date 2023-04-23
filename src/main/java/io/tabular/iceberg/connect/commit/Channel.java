@@ -13,7 +13,6 @@ import lombok.extern.log4j.Log4j;
 import org.apache.iceberg.util.PropertyUtil;
 import org.apache.iceberg.util.SerializationUtil;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -33,7 +32,7 @@ public abstract class Channel {
   private final KafkaProducer<byte[], byte[]> producer;
   private final KafkaConsumer<byte[], byte[]> consumer;
   private final Admin admin;
-  private final Map<TopicPartition, OffsetAndMetadata> channelOffsets = new HashMap<>();
+  private final Map<Integer, Long> channelOffsets = new HashMap<>();
 
   private static final String COORDINATOR_TOPIC_PROP = "iceberg.coordinator.topic";
   private static final String KAFKA_PROP_PREFIX = "iceberg.kafka.";
@@ -73,15 +72,13 @@ public abstract class Channel {
             messageHandler.accept(message);
             // the consumer stores the offsets that corresponds to the next record to consume,
             // so increment the record offset by one
-            channelOffsets.put(
-                new TopicPartition(record.topic(), record.partition()),
-                new OffsetAndMetadata(record.offset() + 1));
+            channelOffsets.put(record.partition(), record.offset() + 1);
           });
       records = consumer.poll(0);
     }
   }
 
-  protected Map<TopicPartition, OffsetAndMetadata> channelOffsets() {
+  protected Map<Integer, Long> channelOffsets() {
     return channelOffsets;
   }
 
@@ -105,11 +102,9 @@ public abstract class Channel {
   }
 
   @SneakyThrows
-  protected void seekToLastCommit() {
-    ListConsumerGroupOffsetsResult response = admin.listConsumerGroupOffsets(commitGroupId);
-    response.partitionsToOffsetAndMetadata().get().entrySet().stream()
-        .filter(entry -> entry.getKey().topic().equals(coordinatorTopic))
-        .forEach(entry -> consumer.seek(entry.getKey(), entry.getValue()));
+  protected void channelSeekToOffsets(Map<Integer, Long> offsets) {
+    offsets.forEach(
+        (k, v) -> consumer.seek(new TopicPartition(coordinatorTopic, k), new OffsetAndMetadata(v)));
   }
 
   protected Admin admin() {
