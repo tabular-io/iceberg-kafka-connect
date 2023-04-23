@@ -6,7 +6,6 @@ import static java.util.stream.Collectors.toList;
 
 import io.tabular.iceberg.connect.Utilities;
 import io.tabular.iceberg.connect.commit.Message.Type;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -19,8 +18,6 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.util.PropertyUtil;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.TopicPartition;
 
 @Log4j
 public class Coordinator extends Channel {
@@ -127,18 +124,8 @@ public class Coordinator extends Channel {
       appendOp.commit();
       log.info("Iceberg commit complete");
 
-      // the consumer stores the offset that corresponds to the next record to consume,
-      // so increment the offset by one
-      Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-      buffer.stream()
-          .flatMap(message -> message.getOffsets().entrySet().stream())
-          .forEach(
-              entry -> offsets.put(entry.getKey(), new OffsetAndMetadata(entry.getValue() + 1)));
-      offsets.putAll(channelOffsets());
-      admin().alterConsumerGroupOffsets(commitGroupId(), offsets);
-      log.info("Kafka offset commit complete");
-
-      // TODO: trigger offset commit on workers? won't be saved until flush()
+      admin().alterConsumerGroupOffsets(commitGroupId(), channelOffsets());
+      log.info("Coordinator offsets committed");
     }
 
     buffer.clear();

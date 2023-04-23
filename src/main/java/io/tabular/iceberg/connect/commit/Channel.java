@@ -71,6 +71,8 @@ public abstract class Channel {
             Message message = SerializationUtil.deserializeFromBytes(record.value());
             log.info("Received message of type: " + message.getType().name());
             messageHandler.accept(message);
+            // the consumer stores the offsets that corresponds to the next record to consume,
+            // so increment the record offset by one
             channelOffsets.put(
                 new TopicPartition(record.topic(), record.partition()),
                 new OffsetAndMetadata(record.offset() + 1));

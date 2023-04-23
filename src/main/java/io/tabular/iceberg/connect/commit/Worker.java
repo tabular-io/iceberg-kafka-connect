@@ -6,20 +6,20 @@ import static java.util.stream.Collectors.toMap;
 import io.tabular.iceberg.connect.IcebergWriter;
 import io.tabular.iceberg.connect.commit.Message.Type;
 import java.util.Collection;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import lombok.SneakyThrows;
-import org.apache.iceberg.DataFile;
+import lombok.extern.log4j.Log4j;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
-import org.apache.iceberg.util.Pair;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 
+@Log4j
 public class Worker extends Channel {
 
   private final IcebergWriter writer;
@@ -53,15 +53,20 @@ public class Worker extends Channel {
   @Override
   protected void receive(Message message) {
     if (message.getType() == Type.BEGIN_COMMIT) {
-      Pair<List<DataFile>, Map<TopicPartition, Long>> commitResult = writer.commit();
+      IcebergWriter.Result writeResult = writer.complete();
       Message filesMessage =
           Message.builder()
               .type(Type.DATA_FILES)
-              .dataFiles(commitResult.first())
-              .offsets(commitResult.second())
+              .dataFiles(writeResult.getDataFiles())
               .assignments(context.assignment())
               .build();
       send(filesMessage);
+
+      Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+      writeResult.getOffsets().forEach((k, v) -> offsets.put(k, new OffsetAndMetadata(v)));
+      admin().alterConsumerGroupOffsets(commitGroupId(), offsets);
+      log.info("Worker offsets committed");
+      context.requestCommit();
     }
   }
 

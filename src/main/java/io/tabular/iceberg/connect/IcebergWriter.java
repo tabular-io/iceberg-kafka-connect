@@ -9,6 +9,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.Builder;
+import lombok.Getter;
 import lombok.SneakyThrows;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.Table;
@@ -17,7 +19,6 @@ import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.WriteResult;
-import org.apache.iceberg.util.Pair;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 
@@ -26,6 +27,13 @@ public class IcebergWriter implements Closeable {
   private RecordConverter recordConverter;
   private TaskWriter<Record> writer;
   private Map<TopicPartition, Long> offsets;
+
+  @Builder
+  @Getter
+  public static class Result {
+    private List<DataFile> dataFiles;
+    private Map<TopicPartition, Long> offsets;
+  }
 
   public IcebergWriter(Catalog catalog, TableIdentifier tableIdentifier) {
     this.table = catalog.loadTable(tableIdentifier);
@@ -39,8 +47,11 @@ public class IcebergWriter implements Closeable {
 
     sinkRecords.forEach(
         record -> {
+          // the consumer stores the offsets that corresponds to the next record to consume,
+          // so increment the record offset by one
           offsets.put(
-              new TopicPartition(record.topic(), record.kafkaPartition()), record.kafkaOffset());
+              new TopicPartition(record.topic(), record.kafkaPartition()),
+              record.kafkaOffset() + 1);
           try {
             Record row = recordConverter.convert(record.value());
             writer.write(row);
@@ -51,10 +62,10 @@ public class IcebergWriter implements Closeable {
   }
 
   @SneakyThrows
-  public Pair<List<DataFile>, Map<TopicPartition, Long>> commit() {
+  public Result complete() {
     WriteResult writeResult = writer.complete();
-    Pair<List<DataFile>, Map<TopicPartition, Long>> result =
-        Pair.of(Arrays.asList(writeResult.dataFiles()), offsets);
+    Result result =
+        Result.builder().dataFiles(Arrays.asList(writeResult.dataFiles())).offsets(offsets).build();
 
     table.refresh();
     recordConverter = new RecordConverter(table);
