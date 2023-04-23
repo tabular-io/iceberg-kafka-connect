@@ -41,7 +41,7 @@ public class Coordinator extends Channel {
   private boolean commitInProgress;
 
   public Coordinator(Catalog catalog, TableIdentifier tableIdentifier, Map<String, String> props) {
-    super(props);
+    super("coordinator", props);
     this.table = catalog.loadTable(tableIdentifier);
     this.commitBuffer = new LinkedList<>();
     this.commitIntervalMs =

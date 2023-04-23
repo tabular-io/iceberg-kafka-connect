@@ -17,6 +17,9 @@ public class IcebergSinkConnector extends SinkConnector {
   private Map<String, String> props;
 
   public static final String COORDINATOR_PROP = "iceberg.coordinator";
+  // TODO: defined in Channel also
+  private static final String TRANSACTIONAL_SUFFIX_PROP =
+      "iceberg.coordinator.transactional.suffix";
 
   @Override
   public String version() {
@@ -39,14 +42,13 @@ public class IcebergSinkConnector extends SinkConnector {
     return IntStream.range(0, maxTasks)
         .mapToObj(
             i -> {
+              Map<String, String> map = new HashMap<>(props);
+              map.put(TRANSACTIONAL_SUFFIX_PROP, "-txn-" + i);
               if (i == 0) {
                 // make one task the coordinator
-                Map<String, String> map = new HashMap<>(props);
                 map.put(COORDINATOR_PROP, "true");
-                return map;
-              } else {
-                return props;
               }
+              return map;
             })
         .collect(toList());
   }

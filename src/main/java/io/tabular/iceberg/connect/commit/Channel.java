@@ -14,10 +14,12 @@ import org.apache.iceberg.util.PropertyUtil;
 import org.apache.iceberg.util.SerializationUtil;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -29,6 +31,7 @@ public abstract class Channel {
   protected final Map<String, String> kafkaProps;
   private final String coordinatorTopic;
   private final String commitGroupId;
+  private final String transactionalId;
   private final KafkaProducer<byte[], byte[]> producer;
   private final KafkaConsumer<byte[], byte[]> consumer;
   private final Admin admin;
@@ -37,21 +40,37 @@ public abstract class Channel {
   private static final String COORDINATOR_TOPIC_PROP = "iceberg.coordinator.topic";
   private static final String KAFKA_PROP_PREFIX = "iceberg.kafka.";
   private static final String COMMIT_GROUP_ID_PROP = "iceberg.commit.group.id";
+  private static final String TRANSACTIONAL_SUFFIX_PROP =
+      "iceberg.coordinator.transactional.suffix";
 
-  public Channel(Map<String, String> props) {
+  public Channel(String name, Map<String, String> props) {
     this.kafkaProps = PropertyUtil.propertiesWithPrefix(props, KAFKA_PROP_PREFIX);
     this.coordinatorTopic = props.get(COORDINATOR_TOPIC_PROP);
     this.commitGroupId = props.get(COMMIT_GROUP_ID_PROP);
+    this.transactionalId = name + props.get(TRANSACTIONAL_SUFFIX_PROP);
     this.producer = createProducer();
     this.consumer = createConsumer();
     this.admin = createAdmin();
   }
 
   protected void send(Message message) {
+    send(message, Map.of());
+  }
+
+  protected void send(Message message, Map<TopicPartition, OffsetAndMetadata> sourceOffsets) {
     log.info("Sending message of type: " + message.getType().name());
     byte[] data = SerializationUtil.serializeToBytes(message);
-    producer.send(new ProducerRecord<>(coordinatorTopic, data));
-    producer.flush();
+    producer.beginTransaction();
+    try {
+      producer.send(new ProducerRecord<>(coordinatorTopic, data));
+      if (!sourceOffsets.isEmpty()) {
+        producer.sendOffsetsToTransaction(sourceOffsets, new ConsumerGroupMetadata(commitGroupId));
+      }
+      producer.commitTransaction();
+    } catch (Exception e) {
+      producer.abortTransaction();
+      throw e;
+    }
   }
 
   protected abstract void receive(Message message);
@@ -84,13 +103,18 @@ public abstract class Channel {
 
   private KafkaProducer<byte[], byte[]> createProducer() {
     Map<String, Object> producerProps = new HashMap<>(kafkaProps);
-    return new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer());
+    producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+    KafkaProducer<byte[], byte[]> result =
+        new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer());
+    result.initTransactions();
+    return result;
   }
 
   private KafkaConsumer<byte[], byte[]> createConsumer() {
     Map<String, Object> consumerProps = new HashMap<>(kafkaProps);
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+    consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "cg-iceberg-" + UUID.randomUUID());
     return new KafkaConsumer<>(
         consumerProps, new ByteArrayDeserializer(), new ByteArrayDeserializer());

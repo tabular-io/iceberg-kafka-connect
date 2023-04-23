@@ -30,7 +30,7 @@ public class Worker extends Channel {
       TableIdentifier tableIdentifier,
       Map<String, String> props,
       SinkTaskContext context) {
-    super(props);
+    super("worker", props);
     this.writer = new IcebergWriter(catalog, tableIdentifier);
     this.context = context;
   }
@@ -60,14 +60,9 @@ public class Worker extends Channel {
               .dataFiles(writeResult.getDataFiles())
               .assignments(context.assignment())
               .build();
-      send(filesMessage);
-
-      // FIXME: if worker goes down before offsets are set, could cause dupes
-
       Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
       writeResult.getOffsets().forEach((k, v) -> offsets.put(k, new OffsetAndMetadata(v)));
-      admin().alterConsumerGroupOffsets(commitGroupId(), offsets);
-      log.info("Worker offsets committed");
+      send(filesMessage, offsets);
       context.requestCommit();
     }
   }
