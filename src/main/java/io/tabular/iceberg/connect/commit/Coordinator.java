@@ -27,10 +27,13 @@ public class Coordinator extends Channel {
 
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.table.commitIntervalMs";
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
+  private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.table.commitTimeoutMs";
+  private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
 
   private final Table table;
   private final List<Message> commitBuffer;
   private final int commitIntervalMs;
+  private final int commitTimeoutMs;
   private final Set<String> topics;
   private long startTime;
   private boolean commitInProgress;
@@ -41,6 +44,8 @@ public class Coordinator extends Channel {
     this.commitBuffer = new LinkedList<>();
     this.commitIntervalMs =
         PropertyUtil.propertyAsInt(props, COMMIT_INTERVAL_MS_PROP, COMMIT_INTERVAL_MS_DEFAULT);
+    this.commitTimeoutMs =
+        PropertyUtil.propertyAsInt(props, COMMIT_TIMEOUT_MS_PROP, COMMIT_TIMEOUT_MS_DEFAULT);
     this.topics = Utilities.getTopics(props);
   }
 
@@ -66,7 +71,9 @@ public class Coordinator extends Channel {
         throw new IllegalStateException("Received data files when no commit in progress");
       }
       commitBuffer.add(message);
-      commitIfComplete();
+      if (isCommitComplete()) {
+        commit(commitBuffer);
+      }
     }
   }
 
@@ -83,9 +90,11 @@ public class Coordinator extends Channel {
         .sum();
   }
 
-  private void commitIfComplete() {
-
-    // FIXME!!! handle commit timeout
+  private boolean isCommitComplete() {
+    if (System.currentTimeMillis() - startTime > commitTimeoutMs) {
+      // commit whatever we have received
+      return true;
+    }
 
     // TODO: avoid getting total number of partitions so often
     int totalPartitions = getTotalPartitionCount();
@@ -96,11 +105,11 @@ public class Coordinator extends Channel {
           format(
               "Commit not ready, waiting for more results, expected: %d, actual %d",
               totalPartitions, receivedPartitions));
-      return;
+      return false;
     }
 
     log.info(format("Commit ready, received results for all %d partitions", receivedPartitions));
-    commit(commitBuffer);
+    return true;
   }
 
   private void commit(List<Message> buffer) {
@@ -141,7 +150,12 @@ public class Coordinator extends Channel {
     super.start();
     seekToLastCommit();
     List<Message> buffer = new LinkedList<>();
-    consumeAvailable(buffer::add);
+    consumeAvailable(
+        message -> {
+          if (message.getType() == Type.DATA_FILES) {
+            buffer.add(message);
+          }
+        });
     commit(buffer);
   }
 }
