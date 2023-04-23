@@ -9,6 +9,7 @@ import lombok.Getter;
 import org.apache.iceberg.DataFile;
 import org.apache.kafka.common.TopicPartition;
 
+// FIXME!!! support schema evolution (don't use Java/Kryo serialization)
 @Builder
 @Getter
 public class Message implements Serializable {
