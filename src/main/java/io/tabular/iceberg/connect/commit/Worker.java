@@ -14,7 +14,6 @@ import lombok.extern.log4j.Log4j;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
-import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -45,11 +44,10 @@ public class Worker extends Channel {
 
   @SneakyThrows
   public Map<TopicPartition, OffsetAndMetadata> getCommitOffsets() {
-    ListConsumerGroupOffsetsSpec spec = new ListConsumerGroupOffsetsSpec();
-    spec.topicPartitions(context.assignment());
-    ListConsumerGroupOffsetsResult response =
-        admin().listConsumerGroupOffsets(Map.of(commitGroupId(), spec));
-    return response.partitionsToOffsetAndMetadata().get();
+    ListConsumerGroupOffsetsResult response = admin().listConsumerGroupOffsets(commitGroupId());
+    return response.partitionsToOffsetAndMetadata().get().entrySet().stream()
+        .filter(entry -> context.assignment().contains(entry.getKey()))
+        .collect(toMap(Entry::getKey, Entry::getValue));
   }
 
   @Override
