@@ -64,12 +64,18 @@ public class IntegrationTest extends IntegrationTestBase {
 
   @Test
   public void testIcebergSink() throws Exception {
+    // we are starting at latest offsets, so this should be ignored...
+    String ignore1 = format(RECORD_FORMAT, 0, "type1", System.currentTimeMillis());
+    producer.send(new ProducerRecord<>(TEST_TOPIC, ignore1));
+    producer.flush();
+
     // TODO: get bootstrap.servers from worker properties
     ConnectorConfiguration connectorConfig =
         ConnectorConfiguration.create()
             .with("topics", TEST_TOPIC)
             .with("connector.class", IcebergSinkConnector.class.getName())
             .with("tasks.max", 2)
+            .with("consumer.override.auto.offset.reset", "latest")
             .with("key.converter", "org.apache.kafka.connect.json.JsonConverter")
             .with("key.converter.schemas.enable", false)
             .with("value.converter", "org.apache.kafka.connect.json.JsonConverter")
@@ -97,6 +103,7 @@ public class IntegrationTest extends IntegrationTestBase {
     restCatalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA, TEST_SPEC);
 
     kafkaConnect.registerConnector(CONNECTOR_NAME, connectorConfig);
+    kafkaConnect.ensureConnectorRegistered(CONNECTOR_NAME);
 
     runTest();
 
