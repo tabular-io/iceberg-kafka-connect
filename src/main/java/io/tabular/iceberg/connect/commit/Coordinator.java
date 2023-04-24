@@ -149,7 +149,8 @@ public class Coordinator extends Channel {
             if (message.getType() == Type.DATA_FILES) {
               buffer.add(message);
             }
-          });
+          },
+          1000L);
       commit(buffer);
     }
   }
