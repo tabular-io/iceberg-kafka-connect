@@ -86,12 +86,13 @@ public abstract class Channel {
     while (!records.isEmpty()) {
       records.forEach(
           record -> {
-            Message message = SerializationUtil.deserializeFromBytes(record.value());
-            log.info("Received message of type: " + message.getType().name());
-            messageHandler.accept(message);
             // the consumer stores the offsets that corresponds to the next record to consume,
             // so increment the record offset by one
             channelOffsets.put(record.partition(), record.offset() + 1);
+
+            Message message = SerializationUtil.deserializeFromBytes(record.value());
+            log.info("Received message of type: " + message.getType().name());
+            messageHandler.accept(message);
           });
       records = consumer.poll(0L);
     }
