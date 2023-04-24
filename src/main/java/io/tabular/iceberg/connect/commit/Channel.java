@@ -76,13 +76,13 @@ public abstract class Channel {
   protected abstract void receive(Message message);
 
   public void process() {
-    consumeAvailable(this::receive, 0L);
+    consumeAvailable(this::receive);
   }
 
   @SuppressWarnings("deprecation")
-  protected void consumeAvailable(Consumer<Message> messageHandler, long timeout) {
+  protected void consumeAvailable(Consumer<Message> messageHandler) {
     // TODO: we're using the deprecated poll(long) API as it waits for metadata, better options?
-    ConsumerRecords<byte[], byte[]> records = consumer.poll(timeout);
+    ConsumerRecords<byte[], byte[]> records = consumer.poll(0L);
     while (!records.isEmpty()) {
       records.forEach(
           record -> {
@@ -93,7 +93,7 @@ public abstract class Channel {
             // so increment the record offset by one
             channelOffsets.put(record.partition(), record.offset() + 1);
           });
-      records = consumer.poll(timeout);
+      records = consumer.poll(0L);
     }
   }
 

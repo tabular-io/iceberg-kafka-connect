@@ -57,6 +57,7 @@ public class Worker extends Channel {
       Message filesMessage =
           Message.builder()
               .type(Type.DATA_FILES)
+              .commitId(message.getCommitId())
               .dataFiles(writeResult.getDataFiles())
               .assignments(context.assignment())
               .build();

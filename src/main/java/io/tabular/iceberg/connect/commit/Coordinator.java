@@ -12,6 +12,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j;
 import org.apache.iceberg.AppendFiles;
@@ -33,17 +34,16 @@ public class Coordinator extends Channel {
   private static final String CHANNEL_OFFSETS_SNAPSHOT_PROP = "kafka.connect.channel.offsets";
 
   private final Table table;
-  private final List<Message> commitBuffer;
+  private final List<Message> commitBuffer = new LinkedList<>();
   private final int commitIntervalMs;
   private final int commitTimeoutMs;
   private final Set<String> topics;
   private long startTime;
-  private boolean commitInProgress;
+  private UUID currentCommitId;
 
   public Coordinator(Catalog catalog, TableIdentifier tableIdentifier, Map<String, String> props) {
     super("coordinator", props);
     this.table = catalog.loadTable(tableIdentifier);
-    this.commitBuffer = new LinkedList<>();
     this.commitIntervalMs =
         PropertyUtil.propertyAsInt(props, COMMIT_INTERVAL_MS_PROP, COMMIT_INTERVAL_MS_DEFAULT);
     this.commitTimeoutMs =
@@ -57,9 +57,9 @@ public class Coordinator extends Channel {
     }
 
     // send out begin commit
-    if (!commitInProgress && System.currentTimeMillis() - startTime >= commitIntervalMs) {
-      commitInProgress = true;
-      send(Message.builder().type(Type.BEGIN_COMMIT).build());
+    if (currentCommitId == null && System.currentTimeMillis() - startTime >= commitIntervalMs) {
+      currentCommitId = UUID.randomUUID();
+      send(Message.builder().commitId(currentCommitId).type(Type.BEGIN_COMMIT).build());
       startTime = System.currentTimeMillis();
     }
 
@@ -69,11 +69,10 @@ public class Coordinator extends Channel {
   @Override
   protected void receive(Message message) {
     if (message.getType() == Type.DATA_FILES) {
-      if (!commitInProgress) {
-        throw new IllegalStateException("Received data files when no commit in progress");
-      }
       commitBuffer.add(message);
-      if (isCommitComplete()) {
+      if (currentCommitId == null) {
+        log.warn("Received data files when no commit in progress, this can happen during recovery");
+      } else if (isCommitComplete()) {
         commit(commitBuffer);
       }
     }
@@ -98,10 +97,13 @@ public class Coordinator extends Channel {
       return true;
     }
 
-    // TODO: avoid getting total number of partitions so often
+    // TODO: avoid getting total number of partitions so often, use better algorithm
     int totalPartitions = getTotalPartitionCount();
     int receivedPartitions =
-        commitBuffer.stream().mapToInt(message -> message.getAssignments().size()).sum();
+        commitBuffer.stream()
+            .filter(message -> message.getCommitId().equals(currentCommitId))
+            .mapToInt(message -> message.getAssignments().size())
+            .sum();
     if (receivedPartitions < totalPartitions) {
       log.info(
           format(
@@ -135,7 +137,7 @@ public class Coordinator extends Channel {
     }
 
     buffer.clear();
-    commitInProgress = false;
+    currentCommitId = null;
   }
 
   public void start() {
@@ -143,15 +145,6 @@ public class Coordinator extends Channel {
     Map<Integer, Long> channelOffsets = getLastCommittedOffsets();
     if (channelOffsets != null) {
       channelSeekToOffsets(channelOffsets);
-      List<Message> buffer = new LinkedList<>();
-      consumeAvailable(
-          message -> {
-            if (message.getType() == Type.DATA_FILES) {
-              buffer.add(message);
-            }
-          },
-          1000L);
-      commit(buffer);
     }
   }
 

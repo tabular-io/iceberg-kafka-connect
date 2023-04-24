@@ -4,8 +4,10 @@ package io.tabular.iceberg.connect.commit;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NonNull;
 import org.apache.iceberg.DataFile;
 import org.apache.kafka.common.TopicPartition;
 
@@ -18,7 +20,8 @@ public class Message implements Serializable {
     DATA_FILES
   }
 
-  private Type type;
+  @NonNull private UUID commitId;
+  @NonNull private Type type;
   private List<DataFile> dataFiles;
   private Set<TopicPartition> assignments;
 }
