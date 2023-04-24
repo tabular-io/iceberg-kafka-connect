@@ -138,25 +138,37 @@ public class Coordinator extends Channel {
     commitInProgress = false;
   }
 
-  @SneakyThrows
   public void start() {
     super.start();
-    Snapshot snapshot = table.currentSnapshot();
-    if (snapshot != null && snapshot.summary() != null) {
-      String offsetsStr = table.currentSnapshot().summary().get(CHANNEL_OFFSETS_SNAPSHOT_PROP);
-      if (offsetsStr != null) {
-        TypeReference<Map<Integer, Long>> typeRef = new TypeReference<>() {};
-        Map<Integer, Long> channelOffsets = MAPPER.readValue(offsetsStr, typeRef);
-        channelSeekToOffsets(channelOffsets);
-        List<Message> buffer = new LinkedList<>();
-        consumeAvailable(
-            message -> {
-              if (message.getType() == Type.DATA_FILES) {
-                buffer.add(message);
-              }
-            });
-        commit(buffer);
-      }
+    Map<Integer, Long> channelOffsets = getLastCommittedOffsets();
+    if (channelOffsets != null) {
+      channelSeekToOffsets(channelOffsets);
+      List<Message> buffer = new LinkedList<>();
+      consumeAvailable(
+          message -> {
+            if (message.getType() == Type.DATA_FILES) {
+              buffer.add(message);
+            }
+          });
+      commit(buffer);
     }
+  }
+
+  @SneakyThrows
+  private Map<Integer, Long> getLastCommittedOffsets() {
+    // TODO: support branches
+    // TODO: verify offsets for job
+    Snapshot snapshot = table.currentSnapshot();
+    while (snapshot != null) {
+      Map<String, String> summary = snapshot.summary();
+      String value = summary.get(CHANNEL_OFFSETS_SNAPSHOT_PROP);
+      if (value != null) {
+        TypeReference<Map<Integer, Long>> typeRef = new TypeReference<>() {};
+        return MAPPER.readValue(value, typeRef);
+      }
+      Long parentSnapshotId = snapshot.parentId();
+      snapshot = parentSnapshotId != null ? table.snapshot(parentSnapshotId) : null;
+    }
+    return null;
   }
 }
