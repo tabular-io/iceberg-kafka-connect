@@ -1,7 +1,6 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect;
 
-import io.debezium.testing.testcontainers.DebeziumContainer;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +36,7 @@ public class IntegrationTestBase {
 
   protected static Network network;
   protected static KafkaContainer kafka;
-  protected static DebeziumContainer kafkaConnect;
+  protected static KafkaConnectContainer kafkaConnect;
   protected static GenericContainer catalog;
   protected static GenericContainer minio;
 
@@ -47,6 +46,7 @@ public class IntegrationTestBase {
 
   private static final String LOCAL_JARS_DIR = "build/out";
   private static final String BUCKET = "bucket";
+  private static final String KC_PLUGIN_DIR = "/kafka/connect/test";
 
   protected static final String AWS_ACCESS_KEY = "minioadmin";
   protected static final String AWS_SECRET_KEY = "minioadmin";
@@ -81,12 +81,13 @@ public class IntegrationTestBase {
     kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka")).withNetwork(network);
 
     kafkaConnect =
-        new DebeziumContainer(DockerImageName.parse("debezium/connect-base"))
+        new KafkaConnectContainer(DockerImageName.parse("confluentinc/cp-kafka-connect"))
             .withNetwork(network)
-            .withKafka(kafka)
             .dependsOn(catalog, kafka)
-            .withFileSystemBind(LOCAL_JARS_DIR, "/kafka/connect/test")
-            .withEnv("OFFSET_FLUSH_INTERVAL_MS", "500");
+            .withFileSystemBind(LOCAL_JARS_DIR, KC_PLUGIN_DIR)
+            .withEnv("CONNECT_PLUGIN_PATH", KC_PLUGIN_DIR)
+            .withEnv("CONNECT_BOOTSTRAP_SERVERS", kafka.getNetworkAliases().get(0) + ":9092")
+            .withEnv("CONNECT_OFFSET_FLUSH_INTERVAL_MS", "500");
 
     Startables.deepStart(Stream.of(minio, catalog, kafka, kafkaConnect)).join();
 

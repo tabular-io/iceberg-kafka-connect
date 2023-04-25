@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.google.common.collect.Lists;
-import io.debezium.testing.testcontainers.ConnectorConfiguration;
 import io.tabular.iceberg.connect.custom.TabularEventTransform;
 import java.time.Duration;
 import java.util.List;
@@ -70,40 +69,42 @@ public class IntegrationTest extends IntegrationTestBase {
     producer.flush();
 
     // TODO: get bootstrap.servers from worker properties
-    ConnectorConfiguration connectorConfig =
-        ConnectorConfiguration.create()
-            .with("topics", TEST_TOPIC)
-            .with("connector.class", IcebergSinkConnector.class.getName())
-            .with("tasks.max", 2)
-            .with("consumer.override.auto.offset.reset", "latest")
-            .with("key.converter", "org.apache.kafka.connect.json.JsonConverter")
-            .with("key.converter.schemas.enable", false)
-            .with("value.converter", "org.apache.kafka.connect.json.JsonConverter")
-            .with("value.converter.schemas.enable", false)
-            .with("transforms", "tabular")
-            .with("transforms.tabular.type", TabularEventTransform.class.getName())
-            .with("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE))
-            .with("iceberg.commit.group.id", COMMIT_GROUP_ID)
-            .with("iceberg.coordinator.topic", COORDINATOR_TOPIC)
-            .with("iceberg.kafka.bootstrap.servers", kafka.getNetworkAliases().get(0) + ":9092")
-            .with("iceberg.table.commitIntervalMs", 1000)
-            .with("iceberg.catalog", RESTCatalog.class.getName())
-            .with("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
-            .with(
+    KafkaConnectContainer.Config connectorConfig =
+        KafkaConnectContainer.Config.builder()
+            .name(CONNECTOR_NAME)
+            .config("topics", TEST_TOPIC)
+            .config("connector.class", IcebergSinkConnector.class.getName())
+            .config("tasks.max", 2)
+            .config("consumer.override.auto.offset.reset", "latest")
+            .config("key.converter", "org.apache.kafka.connect.json.JsonConverter")
+            .config("key.converter.schemas.enable", false)
+            .config("value.converter", "org.apache.kafka.connect.json.JsonConverter")
+            .config("value.converter.schemas.enable", false)
+            .config("transforms", "tabular")
+            .config("transforms.tabular.type", TabularEventTransform.class.getName())
+            .config("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE))
+            .config("iceberg.commit.group.id", COMMIT_GROUP_ID)
+            .config("iceberg.coordinator.topic", COORDINATOR_TOPIC)
+            .config("iceberg.kafka.bootstrap.servers", kafka.getNetworkAliases().get(0) + ":9092")
+            .config("iceberg.table.commitIntervalMs", 1000)
+            .config("iceberg.catalog", RESTCatalog.class.getName())
+            .config("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
+            .config(
                 "iceberg.catalog." + AwsProperties.HTTP_CLIENT_TYPE,
                 AwsProperties.HTTP_CLIENT_TYPE_APACHE)
-            .with("iceberg.catalog." + AwsProperties.S3FILEIO_ENDPOINT, "http://minio:9000")
-            .with("iceberg.catalog." + AwsProperties.S3FILEIO_ACCESS_KEY_ID, AWS_ACCESS_KEY)
-            .with("iceberg.catalog." + AwsProperties.S3FILEIO_SECRET_ACCESS_KEY, AWS_SECRET_KEY)
-            .with("iceberg.catalog." + AwsProperties.S3FILEIO_PATH_STYLE_ACCESS, true)
-            .with("iceberg.catalog." + AwsProperties.CLIENT_REGION, AWS_REGION);
+            .config("iceberg.catalog." + AwsProperties.S3FILEIO_ENDPOINT, "http://minio:9000")
+            .config("iceberg.catalog." + AwsProperties.S3FILEIO_ACCESS_KEY_ID, AWS_ACCESS_KEY)
+            .config("iceberg.catalog." + AwsProperties.S3FILEIO_SECRET_ACCESS_KEY, AWS_SECRET_KEY)
+            .config("iceberg.catalog." + AwsProperties.S3FILEIO_PATH_STYLE_ACCESS, true)
+            .config("iceberg.catalog." + AwsProperties.CLIENT_REGION, AWS_REGION)
+            .build();
 
     // partitioned table
 
     restCatalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA, TEST_SPEC);
 
-    kafkaConnect.registerConnector(CONNECTOR_NAME, connectorConfig);
-    kafkaConnect.ensureConnectorRegistered(CONNECTOR_NAME);
+    kafkaConnect.registerConnector(connectorConfig);
+    kafkaConnect.ensureConnectorRunning(CONNECTOR_NAME);
 
     runTest();
 

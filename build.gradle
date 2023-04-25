@@ -26,7 +26,6 @@ dependencies {
   testImplementation libs.assertj
   testImplementation libs.awaitility
   testImplementation libs.testcontainers
-  testImplementation libs.testcontainers.debezium
   testImplementation libs.testcontainers.kafka
   testImplementation libs.kafka.clients
   testRuntimeOnly libs.h2

@@ -2,7 +2,6 @@
 assertj-ver = "3.23.1"
 awaitility-ver = "4.2.0"
 aws-ver = "2.20.18"
-debezium-ver = "2.1.4.Final"
 h2-ver = "2.1.214"
 hadoop-ver = "3.3.2"
 iceberg-ver = "1.2.1"
@@ -10,7 +9,6 @@ jackson-ver = "2.14.2"
 junit-ver = "5.9.2"
 kafka-ver = "3.4.0"
 lombok-ver = "1.18.26"
-parquet-ver = '1.12.3'
 slf4j-ver = "2.0.7"
 testcontainers-ver = "1.17.6"
 
@@ -47,7 +45,6 @@ junit-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "jun
 junit-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit-ver" }
 mockito = "org.mockito:mockito-core:4.8.1"
 testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers-ver" }
-testcontainers-debezium = { module = "io.debezium:debezium-testing-testcontainers", version.ref = "debezium-ver" }
 testcontainers-kafka = { module = "org.testcontainers:kafka", version.ref = "testcontainers-ver" }
 
 
