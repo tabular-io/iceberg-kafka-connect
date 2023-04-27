@@ -1,24 +1,20 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect.channel.events;
 
-import static org.apache.iceberg.types.Types.NestedField.optional;
-import static org.apache.iceberg.types.Types.NestedField.required;
+import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
 
+import com.google.common.collect.ImmutableMap;
 import java.io.Serializable;
 import java.util.List;
 import java.util.UUID;
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData.SchemaConstructable;
 import org.apache.avro.util.Utf8;
 import org.apache.iceberg.DataFile;
-import org.apache.iceberg.PartitionData;
 import org.apache.iceberg.StructLike;
 import org.apache.iceberg.avro.AvroSchemaUtil;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.iceberg.types.Types.IntegerType;
-import org.apache.iceberg.types.Types.ListType;
-import org.apache.iceberg.types.Types.StringType;
 import org.apache.iceberg.types.Types.StructType;
 
 public class Event implements StructLike, IndexedRecord, SchemaConstructable, Serializable {
@@ -49,24 +45,42 @@ public class Event implements StructLike, IndexedRecord, SchemaConstructable, Se
     this.assignments = assignments;
 
     StructType dataFileStruct = DataFile.getType(partitionType);
-    StructType eventStruct =
-        StructType.of(
-            required(1, "commit_id", StringType.get()),
-            required(2, "type", IntegerType.get()),
-            optional(3, "data_files", ListType.ofRequired(4, dataFileStruct)),
-            optional(5, "assignments", ListType.ofRequired(6, TopicAndPartition.STRUCT_TYPE)));
-    this.avroSchema =
+    Schema dataFileSchema =
         AvroSchemaUtil.convert(
-            eventStruct,
+            dataFileStruct,
             ImmutableMap.of(
-                eventStruct,
-                Event.class.getName(),
-                TopicAndPartition.STRUCT_TYPE,
-                TopicAndPartition.class.getName(),
-                dataFileStruct,
-                "org.apache.iceberg.GenericDataFile",
-                partitionType,
-                PartitionData.class.getName()));
+                dataFileStruct, "org.apache.iceberg.GenericDataFile",
+                partitionType, "org.apache.iceberg.PartitionData"));
+
+    this.avroSchema =
+        SchemaBuilder.builder()
+            .record(getClass().getName())
+            .fields()
+            .name("commitId")
+            .prop(FIELD_ID_PROP, "1")
+            .type()
+            .stringType()
+            .noDefault()
+            .name("type")
+            .prop(FIELD_ID_PROP, "2")
+            .type()
+            .intType()
+            .noDefault()
+            .name("dataFiles")
+            .prop("field-id", "3")
+            .type()
+            .nullable()
+            .array()
+            .items(dataFileSchema)
+            .noDefault()
+            .name("assignments")
+            .prop("field-id", "4")
+            .type()
+            .nullable()
+            .array()
+            .items(TopicAndPartition.AVRO_SCHEMA)
+            .noDefault()
+            .endRecord();
   }
 
   public UUID getCommitId() {

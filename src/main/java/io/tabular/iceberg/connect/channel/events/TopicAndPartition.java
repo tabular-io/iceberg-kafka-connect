@@ -1,17 +1,14 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect.channel.events;
 
-import static org.apache.iceberg.types.Types.NestedField.required;
+import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
 
 import java.io.Serializable;
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData.SchemaConstructable;
 import org.apache.iceberg.StructLike;
-import org.apache.iceberg.avro.AvroSchemaUtil;
-import org.apache.iceberg.types.Types.IntegerType;
-import org.apache.iceberg.types.Types.StringType;
-import org.apache.iceberg.types.Types.StructType;
 
 public class TopicAndPartition
     implements StructLike, IndexedRecord, SchemaConstructable, Serializable {
@@ -20,11 +17,21 @@ public class TopicAndPartition
   private Integer partition;
   private Schema avroSchema;
 
-  public static final StructType STRUCT_TYPE =
-      StructType.of(
-          required(50, "topic", StringType.get()), required(51, "partition", IntegerType.get()));
   public static final Schema AVRO_SCHEMA =
-      AvroSchemaUtil.convert(STRUCT_TYPE, TopicAndPartition.class.getName());
+      SchemaBuilder.builder()
+          .record(TopicAndPartition.class.getName())
+          .fields()
+          .name("commitId")
+          .prop(FIELD_ID_PROP, "50")
+          .type()
+          .stringType()
+          .noDefault()
+          .name("type")
+          .prop(FIELD_ID_PROP, "51")
+          .type()
+          .intType()
+          .noDefault()
+          .endRecord();
 
   public TopicAndPartition(Schema avroSchema) {
     this.avroSchema = avroSchema;
