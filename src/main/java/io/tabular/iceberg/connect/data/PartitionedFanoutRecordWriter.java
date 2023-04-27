@@ -1,5 +1,5 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.iceberg.connect;
+package io.tabular.iceberg.connect.data;
 
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.PartitionKey;
@@ -12,12 +12,12 @@ import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.io.PartitionedFanoutWriter;
 
-class PartitionedFanoutRecordWriter extends PartitionedFanoutWriter<Record> {
+public class PartitionedFanoutRecordWriter extends PartitionedFanoutWriter<Record> {
 
   private final PartitionKey partitionKey;
   private final InternalRecordWrapper wrapper;
 
-  protected PartitionedFanoutRecordWriter(
+  public PartitionedFanoutRecordWriter(
       PartitionSpec spec,
       FileFormat format,
       FileAppenderFactory<Record> appenderFactory,

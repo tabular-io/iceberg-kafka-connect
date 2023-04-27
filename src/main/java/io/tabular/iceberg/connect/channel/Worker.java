@@ -1,27 +1,29 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.iceberg.connect.commit;
+package io.tabular.iceberg.connect.channel;
 
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
-import io.tabular.iceberg.connect.IcebergWriter;
-import io.tabular.iceberg.connect.commit.Message.Type;
+import io.tabular.iceberg.connect.channel.events.Event;
+import io.tabular.iceberg.connect.channel.events.EventType;
+import io.tabular.iceberg.connect.channel.events.TopicAndPartition;
+import io.tabular.iceberg.connect.data.IcebergWriter;
+import io.tabular.iceberg.connect.data.WriterResult;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import lombok.SneakyThrows;
-import lombok.extern.log4j.Log4j;
+import java.util.concurrent.ExecutionException;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 
-@Log4j
 public class Worker extends Channel {
 
   private final IcebergWriter writer;
@@ -44,34 +46,39 @@ public class Worker extends Channel {
     context.offset(offsets);
   }
 
-  @SneakyThrows
   public Map<TopicPartition, OffsetAndMetadata> getCommitOffsets() {
-    ListConsumerGroupOffsetsResult response = admin().listConsumerGroupOffsets(commitGroupId());
-    return response.partitionsToOffsetAndMetadata().get().entrySet().stream()
-        .filter(entry -> context.assignment().contains(entry.getKey()))
-        .collect(toMap(Entry::getKey, Entry::getValue));
+    try {
+      ListConsumerGroupOffsetsResult response = admin().listConsumerGroupOffsets(commitGroupId());
+      return response.partitionsToOffsetAndMetadata().get().entrySet().stream()
+          .filter(entry -> context.assignment().contains(entry.getKey()))
+          .collect(toMap(Entry::getKey, Entry::getValue));
+    } catch (InterruptedException | ExecutionException e) {
+      throw new ConnectException(e);
+    }
   }
 
   @Override
-  protected void receive(Message message) {
-    if (message.getType() == Type.BEGIN_COMMIT) {
-      IcebergWriter.Result writeResult = writer.complete();
+  protected void receive(Event event) {
+    if (event.getType() == EventType.BEGIN_COMMIT) {
+      WriterResult writeResult = writer.complete();
 
-      List<TopicPartitionData> assignments =
+      List<TopicAndPartition> assignments =
           context.assignment().stream()
-              .map(tp -> new TopicPartitionData(tp.topic(), tp.partition()))
+              .map(tp -> new TopicAndPartition(tp.topic(), tp.partition()))
               .collect(toList());
 
-      Message filesMessage = new Message(writeResult.getPartitionStruct());
-      filesMessage.setCommitId(message.getCommitId());
-      filesMessage.setType(Type.DATA_FILES);
-      filesMessage.setDataFiles(writeResult.getDataFiles());
-      filesMessage.setAssignments(assignments);
+      Event filesEvent =
+          new Event(
+              writeResult.getPartitionStruct(),
+              event.getCommitId(),
+              EventType.DATA_FILES,
+              writeResult.getDataFiles(),
+              assignments);
 
       Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
       writeResult.getOffsets().forEach((k, v) -> offsets.put(k, new OffsetAndMetadata(v)));
 
-      send(filesMessage, offsets);
+      send(filesEvent, offsets);
       context.requestCommit();
     }
   }

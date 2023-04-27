@@ -1,17 +1,17 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.iceberg.connect.commit;
+package io.tabular.iceberg.connect.channel;
 
 import static java.util.stream.Collectors.toList;
 
+import io.tabular.iceberg.connect.channel.events.Event;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
-import lombok.SneakyThrows;
-import lombok.extern.log4j.Log4j;
 import org.apache.iceberg.avro.AvroEncoderUtil;
 import org.apache.iceberg.util.PropertyUtil;
 import org.apache.kafka.clients.admin.Admin;
@@ -26,9 +26,12 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.log4j.Logger;
 
-@Log4j
 public abstract class Channel {
+
+  private static final Logger LOG = Logger.getLogger(Channel.class);
 
   protected final Map<String, String> kafkaProps;
   private final String coordinatorTopic;
@@ -55,16 +58,16 @@ public abstract class Channel {
     this.admin = createAdmin();
   }
 
-  protected void send(Message message) {
-    send(message, Map.of());
+  protected void send(Event event) {
+    send(event, Map.of());
   }
 
-  protected void send(Message message, Map<TopicPartition, OffsetAndMetadata> sourceOffsets) {
-    log.info("Sending message of type: " + message.getType().name());
+  protected void send(Event event, Map<TopicPartition, OffsetAndMetadata> sourceOffsets) {
+    LOG.info("Sending event of type: " + event.getType().name());
 
     byte[] data;
     try {
-      data = AvroEncoderUtil.encode(message, message.getAvroSchema());
+      data = AvroEncoderUtil.encode(event, event.getSchema());
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
@@ -82,14 +85,14 @@ public abstract class Channel {
     }
   }
 
-  protected abstract void receive(Message message);
+  protected abstract void receive(Event event);
 
   public void process() {
     consumeAvailable(this::receive);
   }
 
   @SuppressWarnings("deprecation")
-  protected void consumeAvailable(Consumer<Message> messageHandler) {
+  protected void consumeAvailable(Consumer<Event> eventHandler) {
     // TODO: we're using the deprecated poll(long) API as it waits for metadata, better options?
     ConsumerRecords<byte[], byte[]> records = consumer.poll(0L);
     while (!records.isEmpty()) {
@@ -99,15 +102,15 @@ public abstract class Channel {
             // so increment the record offset by one
             channelOffsets.put(record.partition(), record.offset() + 1);
 
-            Message message;
+            Event event;
             try {
-              message = AvroEncoderUtil.decode(record.value());
+              event = AvroEncoderUtil.decode(record.value());
             } catch (IOException e) {
               throw new UncheckedIOException(e);
             }
 
-            log.info("Received message of type: " + message.getType().name());
-            messageHandler.accept(message);
+            LOG.info("Received event of type: " + event.getType().name());
+            eventHandler.accept(event);
           });
       records = consumer.poll(0L);
     }
@@ -141,7 +144,6 @@ public abstract class Channel {
     return Admin.create(adminCliProps);
   }
 
-  @SneakyThrows
   protected void channelSeekToOffsets(Map<Integer, Long> offsets) {
     offsets.forEach(
         (k, v) -> consumer.seek(new TopicPartition(coordinatorTopic, k), new OffsetAndMetadata(v)));
@@ -155,7 +157,6 @@ public abstract class Channel {
     return commitGroupId;
   }
 
-  @SneakyThrows
   public void start() {
     Map<String, Object> adminCliProps = new HashMap<>(kafkaProps);
     try (Admin admin = Admin.create(adminCliProps)) {
@@ -170,12 +171,13 @@ public abstract class Channel {
               .map(info -> new TopicPartition(coordinatorTopic, info.partition()))
               .collect(toList());
       consumer.assign(partitions);
+    } catch (InterruptedException | ExecutionException e) {
+      throw new ConnectException(e);
     }
   }
 
-  @SneakyThrows
   public void stop() {
-    log.info("Channel stopping");
+    LOG.info("Channel stopping");
     producer.close();
     consumer.close();
     admin.close();

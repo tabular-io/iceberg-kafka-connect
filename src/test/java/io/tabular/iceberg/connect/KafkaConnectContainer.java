@@ -3,20 +3,17 @@ package io.tabular.iceberg.connect;
 
 import static java.lang.String.format;
 
+import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Map;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NonNull;
-import lombok.Singular;
-import lombok.SneakyThrows;
-import lombok.extern.jackson.Jacksonized;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.HttpWaitStrategy;
 import org.testcontainers.shaded.com.fasterxml.jackson.databind.JsonNode;
@@ -30,15 +27,27 @@ public class KafkaConnectContainer extends GenericContainer<KafkaConnectContaine
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final int PORT = 8083;
 
-  @Jacksonized
-  @Builder
-  @Getter
   public static class Config {
 
-    @NonNull private String name;
+    private String name;
+    private Map<String, Object> config = new HashMap<>();
 
-    @Singular("config")
-    private Map<String, Object> config;
+    public Config(String name) {
+      this.name = name;
+    }
+
+    public String getName() {
+      return name;
+    }
+
+    public Map<String, Object> getConfig() {
+      return config;
+    }
+
+    public Config config(String key, Object value) {
+      config.put(key, value);
+      return this;
+    }
   }
 
   public KafkaConnectContainer(DockerImageName dockerImageName) {
@@ -63,23 +72,29 @@ public class KafkaConnectContainer extends GenericContainer<KafkaConnectContaine
             .withStartupTimeout(Duration.ofSeconds(30)));
   }
 
-  @SneakyThrows
   public void registerConnector(Config config) {
-    URI uri = new URI(format("http://localhost:%d/connectors", getMappedPort(PORT)));
-    String body = MAPPER.writeValueAsString(config);
-    HttpRequest request =
-        HttpRequest.newBuilder()
-            .uri(uri)
-            .header("Content-Type", "application/json")
-            .POST(BodyPublishers.ofString(body))
-            .build();
-    HTTP.send(request, BodyHandlers.discarding());
+    try {
+      URI uri = new URI(format("http://localhost:%d/connectors", getMappedPort(PORT)));
+      String body = MAPPER.writeValueAsString(config);
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(uri)
+              .header("Content-Type", "application/json")
+              .POST(BodyPublishers.ofString(body))
+              .build();
+      HTTP.send(request, BodyHandlers.discarding());
+    } catch (IOException | URISyntaxException | InterruptedException e) {
+      throw new RuntimeException(e);
+    }
   }
 
-  @SneakyThrows
   public void ensureConnectorRunning(String name) {
-    URI uri =
-        new URI(format("http://localhost:%d/connectors/%s/status", getMappedPort(PORT), name));
+    URI uri;
+    try {
+      uri = new URI(format("http://localhost:%d/connectors/%s/status", getMappedPort(PORT), name));
+    } catch (URISyntaxException e) {
+      throw new RuntimeException(e);
+    }
     HttpRequest request = HttpRequest.newBuilder().uri(uri).build();
     Awaitility.await()
         .atMost(Duration.ofSeconds(30))

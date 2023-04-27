@@ -1,11 +1,10 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.iceberg.connect.commit;
+package io.tabular.iceberg.connect.channel.events;
 
 import static org.apache.iceberg.types.Types.NestedField.required;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import io.tabular.iceberg.connect.commit.Message.Type;
 import java.lang.reflect.Constructor;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -20,35 +19,34 @@ import org.apache.iceberg.types.Types.StringType;
 import org.apache.iceberg.types.Types.StructType;
 import org.junit.jupiter.api.Test;
 
-public class MessageTest {
+public class EventTest {
 
   @Test
   public void testBeginCommitSerialization() throws Exception {
-    Message message = new Message(StructType.of());
-    message.setCommitId(UUID.randomUUID());
-    message.setType(Type.BEGIN_COMMIT);
+    Event event = new Event(StructType.of(), UUID.randomUUID(), EventType.BEGIN_COMMIT);
 
-    byte[] data = AvroEncoderUtil.encode(message, message.getAvroSchema());
-    Message result = AvroEncoderUtil.decode(data);
+    byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
+    Event result = AvroEncoderUtil.decode(data);
 
-    assertEquals(message.getCommitId(), result.getCommitId());
-    assertEquals(message.getType(), result.getType());
+    assertEquals(event.getCommitId(), result.getCommitId());
+    assertEquals(event.getType(), result.getType());
   }
 
   @Test
   public void testDataFilesSerialization() throws Exception {
-    Message message = new Message(StructType.of());
-    message.setCommitId(UUID.randomUUID());
-    message.setType(Type.DATA_FILES);
-    message.setDataFiles(List.of(createDataFile(), createDataFile()));
-    message.setAssignments(
-        List.of(new TopicPartitionData("topic", 1), new TopicPartitionData("topic", 2)));
+    Event event =
+        new Event(
+            StructType.of(),
+            UUID.randomUUID(),
+            EventType.DATA_FILES,
+            List.of(createDataFile(), createDataFile()),
+            List.of(new TopicAndPartition("topic", 1), new TopicAndPartition("topic", 2)));
 
-    byte[] data = AvroEncoderUtil.encode(message, message.getAvroSchema());
-    Message result = AvroEncoderUtil.decode(data);
+    byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
+    Event result = AvroEncoderUtil.decode(data);
 
-    assertEquals(message.getCommitId(), result.getCommitId());
-    assertEquals(message.getType(), result.getType());
+    assertEquals(event.getCommitId(), result.getCommitId());
+    assertEquals(event.getType(), result.getType());
     assertThat(result.getDataFiles()).hasSize(2);
     assertThat(result.getDataFiles()).allMatch(f -> f.specId() == 1);
     assertThat(result.getAssignments()).hasSize(2);

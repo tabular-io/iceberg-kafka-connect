@@ -1,10 +1,9 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.iceberg.connect.commit;
+package io.tabular.iceberg.connect.channel.events;
 
 import static org.apache.iceberg.types.Types.NestedField.required;
 
 import java.io.Serializable;
-import lombok.Getter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData.SchemaConstructable;
@@ -14,8 +13,7 @@ import org.apache.iceberg.types.Types.IntegerType;
 import org.apache.iceberg.types.Types.StringType;
 import org.apache.iceberg.types.Types.StructType;
 
-@Getter
-public class TopicPartitionData
+public class TopicAndPartition
     implements StructLike, IndexedRecord, SchemaConstructable, Serializable {
 
   private String topic;
@@ -26,16 +24,24 @@ public class TopicPartitionData
       StructType.of(
           required(50, "topic", StringType.get()), required(51, "partition", IntegerType.get()));
   public static final Schema AVRO_SCHEMA =
-      AvroSchemaUtil.convert(STRUCT_TYPE, TopicPartitionData.class.getName());
+      AvroSchemaUtil.convert(STRUCT_TYPE, TopicAndPartition.class.getName());
 
-  public TopicPartitionData(Schema avroSchema) {
+  public TopicAndPartition(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }
 
-  public TopicPartitionData(String topic, int partition) {
+  public TopicAndPartition(String topic, int partition) {
     this.topic = topic;
     this.partition = partition;
     this.avroSchema = AVRO_SCHEMA;
+  }
+
+  public String getTopic() {
+    return topic;
+  }
+
+  public Integer getPartition() {
+    return partition;
   }
 
   @Override

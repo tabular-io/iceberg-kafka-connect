@@ -1,13 +1,16 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect;
 
+import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
-import lombok.SneakyThrows;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.aws.AwsProperties;
 import org.apache.iceberg.aws.s3.S3FileIO;
@@ -98,10 +101,13 @@ public class IntegrationTestBase {
   }
 
   @AfterAll
-  @SneakyThrows
   public static void teardownAll() {
     kafkaConnect.close();
-    restCatalog.close();
+    try {
+      restCatalog.close();
+    } catch (IOException e) {
+      // NO-OP
+    }
     producer.close();
     kafka.close();
     catalog.close();
@@ -110,7 +116,6 @@ public class IntegrationTestBase {
     network.close();
   }
 
-  @SneakyThrows
   protected void createTopic(String topicName, int partitions) {
     try (AdminClient adminClient =
         AdminClient.create(
@@ -119,28 +124,34 @@ public class IntegrationTestBase {
           .createTopics(List.of(new NewTopic(topicName, partitions, (short) 1)))
           .all()
           .get(10, TimeUnit.SECONDS);
+    } catch (InterruptedException | ExecutionException | TimeoutException e) {
+      throw new RuntimeException(e);
     }
   }
 
-  @SneakyThrows
   protected void deleteTopic(String topicName) {
     try (AdminClient adminClient =
         AdminClient.create(
             Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
       adminClient.deleteTopics(List.of(topicName)).all().get(10, TimeUnit.SECONDS);
+    } catch (InterruptedException | ExecutionException | TimeoutException e) {
+      throw new RuntimeException(e);
     }
   }
 
-  @SneakyThrows
   private static S3Client initLocalS3Client() {
-    return S3Client.builder()
-        .endpointOverride(new URI("http://localhost:" + minio.getMappedPort(9000)))
-        .region(Region.of(AWS_REGION))
-        .forcePathStyle(true)
-        .credentialsProvider(
-            StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(AWS_ACCESS_KEY, AWS_SECRET_KEY)))
-        .build();
+    try {
+      return S3Client.builder()
+          .endpointOverride(new URI("http://localhost:" + minio.getMappedPort(9000)))
+          .region(Region.of(AWS_REGION))
+          .forcePathStyle(true)
+          .credentialsProvider(
+              StaticCredentialsProvider.create(
+                  AwsBasicCredentials.create(AWS_ACCESS_KEY, AWS_SECRET_KEY)))
+          .build();
+    } catch (URISyntaxException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private static RESTCatalog initLocalCatalog() {

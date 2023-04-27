@@ -3,11 +3,11 @@ package io.tabular.iceberg.connect;
 
 import static io.tabular.iceberg.connect.IcebergSinkConnector.COORDINATOR_PROP;
 
-import io.tabular.iceberg.connect.commit.Coordinator;
-import io.tabular.iceberg.connect.commit.Worker;
+import io.tabular.iceberg.connect.channel.Coordinator;
+import io.tabular.iceberg.connect.channel.Worker;
+import io.tabular.iceberg.connect.data.Utilities;
 import java.util.Collection;
 import java.util.Map;
-import lombok.extern.log4j.Log4j;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.util.PropertyUtil;
@@ -15,9 +15,11 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.log4j.Logger;
 
-@Log4j
 public class IcebergSinkTask extends SinkTask {
+
+  private static final Logger LOG = Logger.getLogger(IcebergSinkTask.class);
 
   private Map<String, String> props;
   private Coordinator coordinator;
@@ -41,11 +43,11 @@ public class IcebergSinkTask extends SinkTask {
     TableIdentifier tableIdentifier = TableIdentifier.parse(props.get(TABLE_PROP));
 
     if (PropertyUtil.propertyAsBoolean(props, COORDINATOR_PROP, false)) {
-      log.info("Worker elected leader, starting commit coordinator");
+      LOG.info("Worker elected leader, starting commit coordinator");
       coordinator = new Coordinator(catalog, tableIdentifier, props);
       coordinator.start();
     }
-    log.info("Starting commit worker");
+    LOG.info("Starting commit worker");
     worker = new Worker(catalog, tableIdentifier, props, context);
     worker.syncCommitOffsets();
     worker.start();

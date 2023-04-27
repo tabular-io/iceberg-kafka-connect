@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.google.common.collect.Lists;
-import io.tabular.iceberg.connect.custom.TabularEventTransform;
+import io.tabular.iceberg.connect.transform.TabularEventTransform;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -70,8 +70,7 @@ public class IntegrationTest extends IntegrationTestBase {
 
     // TODO: get bootstrap.servers from worker properties
     KafkaConnectContainer.Config connectorConfig =
-        KafkaConnectContainer.Config.builder()
-            .name(CONNECTOR_NAME)
+        new KafkaConnectContainer.Config(CONNECTOR_NAME)
             .config("topics", TEST_TOPIC)
             .config("connector.class", IcebergSinkConnector.class.getName())
             .config("tasks.max", 2)
@@ -96,8 +95,7 @@ public class IntegrationTest extends IntegrationTestBase {
             .config("iceberg.catalog." + AwsProperties.S3FILEIO_ACCESS_KEY_ID, AWS_ACCESS_KEY)
             .config("iceberg.catalog." + AwsProperties.S3FILEIO_SECRET_ACCESS_KEY, AWS_SECRET_KEY)
             .config("iceberg.catalog." + AwsProperties.S3FILEIO_PATH_STYLE_ACCESS, true)
-            .config("iceberg.catalog." + AwsProperties.CLIENT_REGION, AWS_REGION)
-            .build();
+            .config("iceberg.catalog." + AwsProperties.CLIENT_REGION, AWS_REGION);
 
     // partitioned table
 

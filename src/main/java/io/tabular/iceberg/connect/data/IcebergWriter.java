@@ -1,5 +1,5 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.iceberg.connect;
+package io.tabular.iceberg.connect.data;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -7,19 +7,13 @@ import java.io.UncheckedIOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.SneakyThrows;
-import org.apache.iceberg.DataFile;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.WriteResult;
-import org.apache.iceberg.types.Types.StructType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 
@@ -28,14 +22,6 @@ public class IcebergWriter implements Closeable {
   private RecordConverter recordConverter;
   private TaskWriter<Record> writer;
   private Map<TopicPartition, Long> offsets;
-
-  @Builder
-  @Getter
-  public static class Result {
-    private List<DataFile> dataFiles;
-    private StructType partitionStruct;
-    private Map<TopicPartition, Long> offsets;
-  }
 
   public IcebergWriter(Catalog catalog, TableIdentifier tableIdentifier) {
     this.table = catalog.loadTable(tableIdentifier);
@@ -63,15 +49,17 @@ public class IcebergWriter implements Closeable {
         });
   }
 
-  @SneakyThrows
-  public Result complete() {
-    WriteResult writeResult = writer.complete();
-    Result result =
-        Result.builder()
-            .dataFiles(Arrays.asList(writeResult.dataFiles()))
-            .partitionStruct(table.spec().partitionType())
-            .offsets(offsets)
-            .build();
+  public WriterResult complete() {
+    WriteResult writeResult;
+    try {
+      writeResult = writer.complete();
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+
+    WriterResult result =
+        new WriterResult(
+            Arrays.asList(writeResult.dataFiles()), table.spec().partitionType(), offsets);
 
     table.refresh();
     recordConverter = new RecordConverter(table);
@@ -82,8 +70,11 @@ public class IcebergWriter implements Closeable {
   }
 
   @Override
-  @SneakyThrows
   public void close() {
-    writer.close();
+    try {
+      writer.close();
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
   }
 }

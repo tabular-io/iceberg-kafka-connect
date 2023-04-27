@@ -1,9 +1,11 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.iceberg.connect;
+package io.tabular.iceberg.connect.data;
 
 import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -19,7 +21,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import lombok.SneakyThrows;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.common.DynMethods;
@@ -61,16 +62,19 @@ public class RecordConverter {
             .build(jsonConverter);
   }
 
-  @SneakyThrows
   public Record convert(Object data) {
-    if (data instanceof org.apache.kafka.common.protocol.types.Struct || data instanceof Map) {
-      return convertStructValue(data, tableSchema);
-    } else if (data instanceof String) {
-      Map<?, ?> map = MAPPER.readValue((String) data, Map.class);
-      return convertStructValue(map, tableSchema);
-    } else if (data instanceof byte[]) {
-      Map<?, ?> map = MAPPER.readValue((byte[]) data, Map.class);
-      return convertStructValue(map, tableSchema);
+    try {
+      if (data instanceof org.apache.kafka.common.protocol.types.Struct || data instanceof Map) {
+        return convertStructValue(data, tableSchema);
+      } else if (data instanceof String) {
+        Map<?, ?> map = MAPPER.readValue((String) data, Map.class);
+        return convertStructValue(map, tableSchema);
+      } else if (data instanceof byte[]) {
+        Map<?, ?> map = MAPPER.readValue((byte[]) data, Map.class);
+        return convertStructValue(map, tableSchema);
+      }
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
     }
     throw new IllegalArgumentException("Cannot convert type: " + data.getClass().getName());
   }
@@ -240,17 +244,20 @@ public class RecordConverter {
     throw new IllegalArgumentException("Cannot convert to boolean: " + value.getClass().getName());
   }
 
-  @SneakyThrows
   protected String convertString(Object value) {
-    if (value instanceof String) {
-      return (String) value;
-    } else if (value instanceof Number || value instanceof Boolean) {
-      return value.toString();
-    } else if (value instanceof Map || value instanceof List) {
-      return MAPPER.writeValueAsString(value);
-    } else if (value instanceof Struct) {
-      Struct struct = (Struct) value;
-      return convertToJson.invoke(struct.schema(), struct);
+    try {
+      if (value instanceof String) {
+        return (String) value;
+      } else if (value instanceof Number || value instanceof Boolean) {
+        return value.toString();
+      } else if (value instanceof Map || value instanceof List) {
+        return MAPPER.writeValueAsString(value);
+      } else if (value instanceof Struct) {
+        Struct struct = (Struct) value;
+        return convertToJson.invoke(struct.schema(), struct);
+      }
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
     }
     throw new IllegalArgumentException("Cannot convert to string: " + value.getClass().getName());
   }

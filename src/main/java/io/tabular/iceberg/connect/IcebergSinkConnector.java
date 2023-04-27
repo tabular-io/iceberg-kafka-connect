@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
-import lombok.SneakyThrows;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -27,7 +26,6 @@ public class IcebergSinkConnector extends SinkConnector {
   }
 
   @Override
-  @SneakyThrows
   public void start(Map<String, String> props) {
     this.props = props;
   }

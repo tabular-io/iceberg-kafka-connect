@@ -1,17 +1,13 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.iceberg.connect;
+package io.tabular.iceberg.connect.data;
 
 import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT;
 import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT_DEFAULT;
 import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES;
 import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT;
 
-import java.util.Arrays;
 import java.util.Map;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.FileFormat;
@@ -27,15 +23,8 @@ import org.apache.iceberg.util.PropertyUtil;
 
 public class Utilities {
 
-  private static final String TOPICS_PROP = "topics";
   private static final String CATALOG_PROP = "iceberg.catalog";
   private static final String CATALOG_PROP_PREFIX = "iceberg.catalog.";
-
-  public static SortedSet<String> getTopics(Map<String, String> props) {
-    return Arrays.stream(props.get(TOPICS_PROP).split(","))
-        .map(String::trim)
-        .collect(Collectors.toCollection(TreeSet::new));
-  }
 
   public static Catalog loadCatalog(Map<String, String> props) {
     String catalogImpl = props.get(CATALOG_PROP);

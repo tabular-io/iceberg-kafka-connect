@@ -1,5 +1,5 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.iceberg.connect.commit;
+package io.tabular.iceberg.connect.channel.events;
 
 import static org.apache.iceberg.types.Types.NestedField.optional;
 import static org.apache.iceberg.types.Types.NestedField.required;
@@ -7,8 +7,6 @@ import static org.apache.iceberg.types.Types.NestedField.required;
 import java.io.Serializable;
 import java.util.List;
 import java.util.UUID;
-import lombok.Getter;
-import lombok.Setter;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData.SchemaConstructable;
@@ -18,49 +16,73 @@ import org.apache.iceberg.PartitionData;
 import org.apache.iceberg.StructLike;
 import org.apache.iceberg.avro.AvroSchemaUtil;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.types.Types.IntegerType;
 import org.apache.iceberg.types.Types.ListType;
 import org.apache.iceberg.types.Types.StringType;
 import org.apache.iceberg.types.Types.StructType;
 
-@Getter
-@Setter
-public class Message implements StructLike, IndexedRecord, SchemaConstructable, Serializable {
-
-  public enum Type {
-    BEGIN_COMMIT,
-    DATA_FILES
-  }
+public class Event implements StructLike, IndexedRecord, SchemaConstructable, Serializable {
 
   private UUID commitId;
-  private Type type;
+  private EventType type;
   private List<DataFile> dataFiles;
-  private List<TopicPartitionData> assignments;
+  private List<TopicAndPartition> assignments;
   private Schema avroSchema;
 
-  public Message(Schema avroSchema) {
+  public Event(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }
 
-  public Message(StructType partitionType) {
-    StructType dataFileType = DataFile.getType(partitionType);
-    StructType messageType =
+  public Event(StructType partitionType, UUID commitId, EventType type) {
+    this(partitionType, commitId, type, null, null);
+  }
+
+  public Event(
+      StructType partitionType,
+      UUID commitId,
+      EventType type,
+      List<DataFile> dataFiles,
+      List<TopicAndPartition> assignments) {
+    this.commitId = commitId;
+    this.type = type;
+    this.dataFiles = dataFiles;
+    this.assignments = assignments;
+
+    StructType dataFileStruct = DataFile.getType(partitionType);
+    StructType eventStruct =
         StructType.of(
             required(1, "commit_id", StringType.get()),
-            required(2, "type", StringType.get()),
-            optional(3, "data_files", ListType.ofRequired(4, dataFileType)),
-            optional(5, "assignments", ListType.ofRequired(6, TopicPartitionData.STRUCT_TYPE)));
+            required(2, "type", IntegerType.get()),
+            optional(3, "data_files", ListType.ofRequired(4, dataFileStruct)),
+            optional(5, "assignments", ListType.ofRequired(6, TopicAndPartition.STRUCT_TYPE)));
     this.avroSchema =
         AvroSchemaUtil.convert(
-            messageType,
+            eventStruct,
             ImmutableMap.of(
-                messageType,
-                Message.class.getName(),
-                TopicPartitionData.STRUCT_TYPE,
-                TopicPartitionData.class.getName(),
-                dataFileType,
+                eventStruct,
+                Event.class.getName(),
+                TopicAndPartition.STRUCT_TYPE,
+                TopicAndPartition.class.getName(),
+                dataFileStruct,
                 "org.apache.iceberg.GenericDataFile",
                 partitionType,
                 PartitionData.class.getName()));
+  }
+
+  public UUID getCommitId() {
+    return commitId;
+  }
+
+  public EventType getType() {
+    return type;
+  }
+
+  public List<DataFile> getDataFiles() {
+    return dataFiles;
+  }
+
+  public List<TopicAndPartition> getAssignments() {
+    return assignments;
   }
 
   @Override
@@ -76,13 +98,13 @@ public class Message implements StructLike, IndexedRecord, SchemaConstructable, 
         this.commitId = v == null ? null : UUID.fromString(((Utf8) v).toString());
         return;
       case 1:
-        this.type = v == null ? null : Type.valueOf(((Utf8) v).toString());
+        this.type = v == null ? null : EventType.values()[(Integer) v];
         return;
       case 2:
         this.dataFiles = (List<DataFile>) v;
         return;
       case 3:
-        this.assignments = (List<TopicPartitionData>) v;
+        this.assignments = (List<TopicAndPartition>) v;
         return;
       default:
         // ignore the object, it must be from a newer version of the format
@@ -100,7 +122,7 @@ public class Message implements StructLike, IndexedRecord, SchemaConstructable, 
       case 0:
         return commitId == null ? null : commitId.toString();
       case 1:
-        return type == null ? null : type.name();
+        return type == null ? null : type.getId();
       case 2:
         return dataFiles;
       case 3:

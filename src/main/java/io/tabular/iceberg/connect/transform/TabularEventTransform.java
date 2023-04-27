@@ -1,5 +1,5 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.iceberg.connect.custom;
+package io.tabular.iceberg.connect.transform;
 
 import java.util.HashMap;
 import java.util.Map;

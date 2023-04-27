@@ -1,20 +1,23 @@
 // Copyright 2023 Tabular Technologies Inc.
-package io.tabular.iceberg.connect.commit;
+package io.tabular.iceberg.connect.channel;
 
 import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.tabular.iceberg.connect.Utilities;
-import io.tabular.iceberg.connect.commit.Message.Type;
+import io.tabular.iceberg.connect.channel.events.Event;
+import io.tabular.iceberg.connect.channel.events.EventType;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
-import lombok.SneakyThrows;
-import lombok.extern.log4j.Log4j;
+import java.util.stream.Collectors;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.Snapshot;
@@ -22,9 +25,11 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.util.PropertyUtil;
+import org.apache.log4j.Logger;
 
-@Log4j
 public class Coordinator extends Channel {
+
+  private static final Logger LOG = Logger.getLogger(Coordinator.class);
 
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.table.commitIntervalMs";
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
@@ -32,9 +37,10 @@ public class Coordinator extends Channel {
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String CHANNEL_OFFSETS_SNAPSHOT_PROP = "kafka.connect.channel.offsets";
+  private static final String TOPICS_PROP = "topics";
 
   private final Table table;
-  private final List<Message> commitBuffer = new LinkedList<>();
+  private final List<Event> commitBuffer = new LinkedList<>();
   private final int commitIntervalMs;
   private final int commitTimeoutMs;
   private final Set<String> topics;
@@ -48,7 +54,10 @@ public class Coordinator extends Channel {
         PropertyUtil.propertyAsInt(props, COMMIT_INTERVAL_MS_PROP, COMMIT_INTERVAL_MS_DEFAULT);
     this.commitTimeoutMs =
         PropertyUtil.propertyAsInt(props, COMMIT_TIMEOUT_MS_PROP, COMMIT_TIMEOUT_MS_DEFAULT);
-    this.topics = Utilities.getTopics(props);
+    this.topics =
+        Arrays.stream(props.get(TOPICS_PROP).split(","))
+            .map(String::trim)
+            .collect(Collectors.toCollection(TreeSet::new));
   }
 
   public void process() {
@@ -59,10 +68,9 @@ public class Coordinator extends Channel {
     // send out begin commit
     if (currentCommitId == null && System.currentTimeMillis() - startTime >= commitIntervalMs) {
       currentCommitId = UUID.randomUUID();
-      Message message = new Message(table.spec().partitionType());
-      message.setCommitId(currentCommitId);
-      message.setType(Type.BEGIN_COMMIT);
-      send(message);
+      Event event =
+          new Event(table.spec().partitionType(), currentCommitId, EventType.BEGIN_COMMIT);
+      send(event);
       startTime = System.currentTimeMillis();
     }
 
@@ -70,11 +78,11 @@ public class Coordinator extends Channel {
   }
 
   @Override
-  protected void receive(Message message) {
-    if (message.getType() == Type.DATA_FILES) {
-      commitBuffer.add(message);
+  protected void receive(Event event) {
+    if (event.getType() == EventType.DATA_FILES) {
+      commitBuffer.add(event);
       if (currentCommitId == null) {
-        log.warn("Received data files when no commit in progress, this can happen during recovery");
+        LOG.warn("Received data files when no commit in progress, this can happen during recovery");
       } else if (isCommitComplete()) {
         commit(commitBuffer);
       }
@@ -104,39 +112,43 @@ public class Coordinator extends Channel {
     int totalPartitions = getTotalPartitionCount();
     int receivedPartitions =
         commitBuffer.stream()
-            .filter(message -> message.getCommitId().equals(currentCommitId))
-            .mapToInt(message -> message.getAssignments().size())
+            .filter(event -> event.getCommitId().equals(currentCommitId))
+            .mapToInt(event -> event.getAssignments().size())
             .sum();
     if (receivedPartitions < totalPartitions) {
-      log.info(
+      LOG.info(
           format(
               "Commit not ready, waiting for more results, expected: %d, actual %d",
               totalPartitions, receivedPartitions));
       return false;
     }
 
-    log.info(format("Commit ready, received results for all %d partitions", receivedPartitions));
+    LOG.info(format("Commit ready, received results for all %d partitions", receivedPartitions));
     return true;
   }
 
-  @SneakyThrows
-  private void commit(List<Message> buffer) {
+  private void commit(List<Event> buffer) {
     List<DataFile> dataFiles =
         buffer.stream()
-            .flatMap(message -> message.getDataFiles().stream())
+            .flatMap(event -> event.getDataFiles().stream())
             .filter(dataFile -> dataFile.recordCount() > 0)
             .collect(toList());
     if (dataFiles.isEmpty()) {
-      log.info("Nothing to commit");
+      LOG.info("Nothing to commit");
     } else {
-      String offsetsStr = MAPPER.writeValueAsString(channelOffsets());
+      String offsetsStr;
+      try {
+        offsetsStr = MAPPER.writeValueAsString(channelOffsets());
+      } catch (IOException e) {
+        throw new UncheckedIOException(e);
+      }
       table.refresh();
       AppendFiles appendOp = table.newAppend();
       appendOp.set(CHANNEL_OFFSETS_SNAPSHOT_PROP, offsetsStr);
       dataFiles.forEach(appendOp::appendFile);
       appendOp.commit();
 
-      log.info("Iceberg commit complete");
+      LOG.info("Iceberg commit complete");
     }
 
     buffer.clear();
@@ -151,7 +163,6 @@ public class Coordinator extends Channel {
     }
   }
 
-  @SneakyThrows
   private Map<Integer, Long> getLastCommittedOffsets() {
     // TODO: support branches
     // TODO: verify offsets for job
@@ -161,7 +172,11 @@ public class Coordinator extends Channel {
       String value = summary.get(CHANNEL_OFFSETS_SNAPSHOT_PROP);
       if (value != null) {
         TypeReference<Map<Integer, Long>> typeRef = new TypeReference<>() {};
-        return MAPPER.readValue(value, typeRef);
+        try {
+          return MAPPER.readValue(value, typeRef);
+        } catch (IOException e) {
+          throw new UncheckedIOException(e);
+        }
       }
       Long parentSnapshotId = snapshot.parentId();
       snapshot = parentSnapshotId != null ? table.snapshot(parentSnapshotId) : null;
