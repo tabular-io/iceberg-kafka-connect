@@ -3,6 +3,8 @@ package io.tabular.iceberg.connect.commit;
 
 import static java.util.stream.Collectors.toList;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,8 +12,8 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j;
+import org.apache.iceberg.avro.AvroEncoderUtil;
 import org.apache.iceberg.util.PropertyUtil;
-import org.apache.iceberg.util.SerializationUtil;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -59,7 +61,14 @@ public abstract class Channel {
 
   protected void send(Message message, Map<TopicPartition, OffsetAndMetadata> sourceOffsets) {
     log.info("Sending message of type: " + message.getType().name());
-    byte[] data = SerializationUtil.serializeToBytes(message);
+
+    byte[] data;
+    try {
+      data = AvroEncoderUtil.encode(message, message.getAvroSchema());
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+
     producer.beginTransaction();
     try {
       producer.send(new ProducerRecord<>(coordinatorTopic, data));
@@ -90,7 +99,13 @@ public abstract class Channel {
             // so increment the record offset by one
             channelOffsets.put(record.partition(), record.offset() + 1);
 
-            Message message = SerializationUtil.deserializeFromBytes(record.value());
+            Message message;
+            try {
+              message = AvroEncoderUtil.decode(record.value());
+            } catch (IOException e) {
+              throw new UncheckedIOException(e);
+            }
+
             log.info("Received message of type: " + message.getType().name());
             messageHandler.accept(message);
           });

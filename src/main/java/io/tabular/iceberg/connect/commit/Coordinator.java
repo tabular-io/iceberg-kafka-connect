@@ -59,7 +59,10 @@ public class Coordinator extends Channel {
     // send out begin commit
     if (currentCommitId == null && System.currentTimeMillis() - startTime >= commitIntervalMs) {
       currentCommitId = UUID.randomUUID();
-      send(Message.builder().commitId(currentCommitId).type(Type.BEGIN_COMMIT).build());
+      Message message = new Message(table.spec().partitionType());
+      message.setCommitId(currentCommitId);
+      message.setType(Type.BEGIN_COMMIT);
+      send(message);
       startTime = System.currentTimeMillis();
     }
 

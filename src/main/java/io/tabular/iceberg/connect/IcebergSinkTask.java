@@ -80,7 +80,9 @@ public class IcebergSinkTask extends SinkTask {
   }
 
   private void coordinate() {
-    worker.process();
+    if (worker != null) {
+      worker.process();
+    }
     if (coordinator != null) {
       coordinator.process();
     }
@@ -88,7 +90,9 @@ public class IcebergSinkTask extends SinkTask {
 
   @Override
   public void stop() {
-    worker.stop();
+    if (worker != null) {
+      worker.stop();
+    }
     if (coordinator != null) {
       coordinator.stop();
     }

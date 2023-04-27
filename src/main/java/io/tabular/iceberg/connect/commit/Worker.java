@@ -54,15 +54,16 @@ public class Worker extends Channel {
   protected void receive(Message message) {
     if (message.getType() == Type.BEGIN_COMMIT) {
       IcebergWriter.Result writeResult = writer.complete();
-      Message filesMessage =
-          Message.builder()
-              .type(Type.DATA_FILES)
-              .commitId(message.getCommitId())
-              .dataFiles(writeResult.getDataFiles())
-              .assignments(context.assignment())
-              .build();
+
+      Message filesMessage = new Message(writeResult.getPartitionStruct());
+      filesMessage.setCommitId(message.getCommitId());
+      filesMessage.setType(Type.DATA_FILES);
+      filesMessage.setDataFiles(writeResult.getDataFiles());
+      filesMessage.setAssignments(context.assignment());
+
       Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
       writeResult.getOffsets().forEach((k, v) -> offsets.put(k, new OffsetAndMetadata(v)));
+
       send(filesMessage, offsets);
       context.requestCommit();
     }

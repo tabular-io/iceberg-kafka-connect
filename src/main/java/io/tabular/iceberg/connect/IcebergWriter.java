@@ -19,6 +19,7 @@ import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.WriteResult;
+import org.apache.iceberg.types.Types.StructType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 
@@ -32,6 +33,7 @@ public class IcebergWriter implements Closeable {
   @Getter
   public static class Result {
     private List<DataFile> dataFiles;
+    private StructType partitionStruct;
     private Map<TopicPartition, Long> offsets;
   }
 
@@ -65,7 +67,11 @@ public class IcebergWriter implements Closeable {
   public Result complete() {
     WriteResult writeResult = writer.complete();
     Result result =
-        Result.builder().dataFiles(Arrays.asList(writeResult.dataFiles())).offsets(offsets).build();
+        Result.builder()
+            .dataFiles(Arrays.asList(writeResult.dataFiles()))
+            .partitionStruct(table.spec().partitionType())
+            .offsets(offsets)
+            .build();
 
     table.refresh();
     recordConverter = new RecordConverter(table);
