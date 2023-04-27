@@ -1,12 +1,14 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect.commit;
 
+import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
 import io.tabular.iceberg.connect.IcebergWriter;
 import io.tabular.iceberg.connect.commit.Message.Type;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import lombok.SneakyThrows;
@@ -55,11 +57,16 @@ public class Worker extends Channel {
     if (message.getType() == Type.BEGIN_COMMIT) {
       IcebergWriter.Result writeResult = writer.complete();
 
+      List<TopicPartitionData> assignments =
+          context.assignment().stream()
+              .map(tp -> new TopicPartitionData(tp.topic(), tp.partition()))
+              .collect(toList());
+
       Message filesMessage = new Message(writeResult.getPartitionStruct());
       filesMessage.setCommitId(message.getCommitId());
       filesMessage.setType(Type.DATA_FILES);
       filesMessage.setDataFiles(writeResult.getDataFiles());
-      filesMessage.setAssignments(context.assignment());
+      filesMessage.setAssignments(assignments);
 
       Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
       writeResult.getOffsets().forEach((k, v) -> offsets.put(k, new OffsetAndMetadata(v)));

@@ -1,13 +1,11 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect.commit;
 
-import static java.util.stream.Collectors.toSet;
 import static org.apache.iceberg.types.Types.NestedField.optional;
 import static org.apache.iceberg.types.Types.NestedField.required;
 
 import java.io.Serializable;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
@@ -23,7 +21,6 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Types.ListType;
 import org.apache.iceberg.types.Types.StringType;
 import org.apache.iceberg.types.Types.StructType;
-import org.apache.kafka.common.TopicPartition;
 
 @Getter
 @Setter
@@ -37,7 +34,7 @@ public class Message implements StructLike, IndexedRecord, SchemaConstructable, 
   private UUID commitId;
   private Type type;
   private List<DataFile> dataFiles;
-  private Set<TopicPartition> assignments;
+  private List<TopicPartitionData> assignments;
   private Schema avroSchema;
 
   public Message(Schema avroSchema) {
@@ -51,15 +48,19 @@ public class Message implements StructLike, IndexedRecord, SchemaConstructable, 
             required(1, "commit_id", StringType.get()),
             required(2, "type", StringType.get()),
             optional(3, "data_files", ListType.ofRequired(4, dataFileType)),
-            optional(5, "assignments", ListType.ofRequired(6, StringType.get())));
-
+            optional(5, "assignments", ListType.ofRequired(6, TopicPartitionData.STRUCT_TYPE)));
     this.avroSchema =
         AvroSchemaUtil.convert(
             messageType,
             ImmutableMap.of(
-                messageType, Message.class.getName(),
-                dataFileType, "org.apache.iceberg.GenericDataFile",
-                partitionType, PartitionData.class.getName()));
+                messageType,
+                Message.class.getName(),
+                TopicPartitionData.STRUCT_TYPE,
+                TopicPartitionData.class.getName(),
+                dataFileType,
+                "org.apache.iceberg.GenericDataFile",
+                partitionType,
+                PartitionData.class.getName()));
   }
 
   @Override
@@ -81,17 +82,7 @@ public class Message implements StructLike, IndexedRecord, SchemaConstructable, 
         this.dataFiles = (List<DataFile>) v;
         return;
       case 3:
-        this.assignments =
-            v == null
-                ? null
-                : ((List<Utf8>) v)
-                    .stream()
-                        .map(
-                            s -> {
-                              String[] parts = s.toString().split(":", 2);
-                              return new TopicPartition(parts[0], Integer.parseInt(parts[1]));
-                            })
-                        .collect(toSet());
+        this.assignments = (List<TopicPartitionData>) v;
         return;
       default:
         // ignore the object, it must be from a newer version of the format
@@ -113,9 +104,7 @@ public class Message implements StructLike, IndexedRecord, SchemaConstructable, 
       case 2:
         return dataFiles;
       case 3:
-        return assignments == null
-            ? null
-            : assignments.stream().map(tp -> tp.topic() + ":" + tp.partition()).collect(toSet());
+        return assignments;
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
     }

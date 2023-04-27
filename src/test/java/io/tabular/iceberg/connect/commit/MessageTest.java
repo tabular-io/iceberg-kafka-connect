@@ -10,7 +10,6 @@ import java.lang.reflect.Constructor;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.FileFormat;
@@ -19,7 +18,6 @@ import org.apache.iceberg.PartitionData;
 import org.apache.iceberg.avro.AvroEncoderUtil;
 import org.apache.iceberg.types.Types.StringType;
 import org.apache.iceberg.types.Types.StructType;
-import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 
 public class MessageTest {
@@ -43,7 +41,8 @@ public class MessageTest {
     message.setCommitId(UUID.randomUUID());
     message.setType(Type.DATA_FILES);
     message.setDataFiles(List.of(createDataFile(), createDataFile()));
-    message.setAssignments(Set.of(new TopicPartition("topic", 1), new TopicPartition("topic", 2)));
+    message.setAssignments(
+        List.of(new TopicPartitionData("topic", 1), new TopicPartitionData("topic", 2)));
 
     byte[] data = AvroEncoderUtil.encode(message, message.getAvroSchema());
     Message result = AvroEncoderUtil.decode(data);
@@ -53,7 +52,7 @@ public class MessageTest {
     assertThat(result.getDataFiles()).hasSize(2);
     assertThat(result.getDataFiles()).allMatch(f -> f.specId() == 1);
     assertThat(result.getAssignments()).hasSize(2);
-    assertThat(result.getAssignments()).allMatch(tp -> tp.topic().equals("topic"));
+    assertThat(result.getAssignments()).allMatch(tp -> tp.getTopic().equals("topic"));
   }
 
   private DataFile createDataFile() throws Exception {
