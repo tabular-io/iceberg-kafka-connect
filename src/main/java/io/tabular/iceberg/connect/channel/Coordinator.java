@@ -171,7 +171,7 @@ public class Coordinator extends Channel {
       Map<String, String> summary = snapshot.summary();
       String value = summary.get(CHANNEL_OFFSETS_SNAPSHOT_PROP);
       if (value != null) {
-        TypeReference<Map<Integer, Long>> typeRef = new TypeReference<>() {};
+        TypeReference<Map<Integer, Long>> typeRef = new TypeReference<Map<Integer, Long>>() {};
         try {
           return MAPPER.readValue(value, typeRef);
         } catch (IOException e) {

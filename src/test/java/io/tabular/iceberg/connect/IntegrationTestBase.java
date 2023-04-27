@@ -1,11 +1,11 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -119,9 +119,10 @@ public class IntegrationTestBase {
   protected void createTopic(String topicName, int partitions) {
     try (AdminClient adminClient =
         AdminClient.create(
-            Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
+            ImmutableMap.of(
+                AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
       adminClient
-          .createTopics(List.of(new NewTopic(topicName, partitions, (short) 1)))
+          .createTopics(ImmutableList.of(new NewTopic(topicName, partitions, (short) 1)))
           .all()
           .get(10, TimeUnit.SECONDS);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
@@ -132,8 +133,9 @@ public class IntegrationTestBase {
   protected void deleteTopic(String topicName) {
     try (AdminClient adminClient =
         AdminClient.create(
-            Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
-      adminClient.deleteTopics(List.of(topicName)).all().get(10, TimeUnit.SECONDS);
+            ImmutableMap.of(
+                AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
+      adminClient.deleteTopics(ImmutableList.of(topicName)).all().get(10, TimeUnit.SECONDS);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
       throw new RuntimeException(e);
     }
@@ -159,27 +161,21 @@ public class IntegrationTestBase {
     RESTCatalog result = new RESTCatalog();
     result.initialize(
         "local",
-        Map.of(
-            CatalogProperties.URI,
-            localCatalogUri,
-            CatalogProperties.FILE_IO_IMPL,
-            S3FileIO.class.getName(),
-            AwsProperties.HTTP_CLIENT_TYPE,
-            AwsProperties.HTTP_CLIENT_TYPE_APACHE,
-            AwsProperties.S3FILEIO_ENDPOINT,
-            "http://localhost:" + minio.getMappedPort(9000),
-            AwsProperties.S3FILEIO_ACCESS_KEY_ID,
-            AWS_ACCESS_KEY,
-            AwsProperties.S3FILEIO_SECRET_ACCESS_KEY,
-            AWS_SECRET_KEY,
-            AwsProperties.S3FILEIO_PATH_STYLE_ACCESS,
-            "true"));
+        ImmutableMap.<String, String>builder()
+            .put(CatalogProperties.URI, localCatalogUri)
+            .put(CatalogProperties.FILE_IO_IMPL, S3FileIO.class.getName())
+            .put(AwsProperties.HTTP_CLIENT_TYPE, AwsProperties.HTTP_CLIENT_TYPE_APACHE)
+            .put(AwsProperties.S3FILEIO_ENDPOINT, "http://localhost:" + minio.getMappedPort(9000))
+            .put(AwsProperties.S3FILEIO_ACCESS_KEY_ID, AWS_ACCESS_KEY)
+            .put(AwsProperties.S3FILEIO_SECRET_ACCESS_KEY, AWS_SECRET_KEY)
+            .put(AwsProperties.S3FILEIO_PATH_STYLE_ACCESS, "true")
+            .build());
     return result;
   }
 
   private static KafkaProducer<String, String> initLocalProducer() {
     return new KafkaProducer<>(
-        Map.of(
+        ImmutableMap.of(
             ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
             kafka.getBootstrapServers(),
             ProducerConfig.CLIENT_ID_CONFIG,

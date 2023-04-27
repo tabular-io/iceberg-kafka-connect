@@ -1,6 +1,6 @@
 plugins {
   id "java"
-  id "com.diffplug.spotless" version "6.18.0"
+  id "com.diffplug.spotless" version "6.13.0"
   id "com.github.johnrengelman.shadow" version "8.1.0"
 }
 
@@ -20,18 +20,18 @@ dependencies {
 
   testImplementation libs.junit.api
   testRuntimeOnly libs.junit.engine
+
   testImplementation libs.mockito
   testImplementation libs.assertj
   testImplementation libs.awaitility
   testImplementation libs.testcontainers
   testImplementation libs.testcontainers.kafka
   testImplementation libs.kafka.clients
-  testRuntimeOnly libs.h2
+  testImplementation libs.http.client
 }
 
-compileJava {
-  options.release.set(11) // KC and Debezium images use java 11
-}
+sourceCompatibility = '1.8'
+targetCompatibility = '1.8'
 
 // build the jar first so it can be installed into kafka connect
 test.dependsOn(shadowJar)
@@ -58,7 +58,8 @@ shadowJar.finalizedBy copyShadowJar
 spotless {
   java {
     target "src/**/*.java"
-    googleJavaFormat()
+    googleJavaFormat("1.7")
+    removeUnusedImports()
     licenseHeaderFile "$rootDir/LICENSE.txt"
   }
 }

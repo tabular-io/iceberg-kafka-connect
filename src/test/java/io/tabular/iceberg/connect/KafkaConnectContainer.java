@@ -4,16 +4,15 @@ package io.tabular.iceberg.connect;
 import static java.lang.String.format;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpRequest.BodyPublishers;
-import java.net.http.HttpResponse;
-import java.net.http.HttpResponse.BodyHandlers;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.hc.client5.http.classic.HttpClient;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.core5.http.HttpStatus;
+import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.HttpWaitStrategy;
 import org.testcontainers.shaded.com.fasterxml.jackson.databind.JsonNode;
@@ -23,7 +22,7 @@ import org.testcontainers.utility.DockerImageName;
 
 public class KafkaConnectContainer extends GenericContainer<KafkaConnectContainer> {
 
-  private static final HttpClient HTTP = HttpClient.newHttpClient();
+  private static final HttpClient HTTP = HttpClients.createDefault();
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final int PORT = 8083;
 
@@ -74,38 +73,32 @@ public class KafkaConnectContainer extends GenericContainer<KafkaConnectContaine
 
   public void registerConnector(Config config) {
     try {
-      URI uri = new URI(format("http://localhost:%d/connectors", getMappedPort(PORT)));
+      HttpPost request =
+          new HttpPost(format("http://localhost:%d/connectors", getMappedPort(PORT)));
       String body = MAPPER.writeValueAsString(config);
-      HttpRequest request =
-          HttpRequest.newBuilder()
-              .uri(uri)
-              .header("Content-Type", "application/json")
-              .POST(BodyPublishers.ofString(body))
-              .build();
-      HTTP.send(request, BodyHandlers.discarding());
-    } catch (IOException | URISyntaxException | InterruptedException e) {
+      request.setHeader("Content-Type", "application/json");
+      request.setEntity(new StringEntity(body));
+      HTTP.execute(request, response -> null);
+    } catch (IOException e) {
       throw new RuntimeException(e);
     }
   }
 
   public void ensureConnectorRunning(String name) {
-    URI uri;
-    try {
-      uri = new URI(format("http://localhost:%d/connectors/%s/status", getMappedPort(PORT), name));
-    } catch (URISyntaxException e) {
-      throw new RuntimeException(e);
-    }
-    HttpRequest request = HttpRequest.newBuilder().uri(uri).build();
+    HttpGet request =
+        new HttpGet(format("http://localhost:%d/connectors/%s/status", getMappedPort(PORT), name));
     Awaitility.await()
         .atMost(Duration.ofSeconds(30))
         .until(
-            () -> {
-              HttpResponse<String> response = HTTP.send(request, BodyHandlers.ofString());
-              if (response.statusCode() == 200) {
-                JsonNode root = MAPPER.readTree(response.body());
-                return "RUNNING".equals(root.get("connector").get("state").asText());
-              }
-              return false;
-            });
+            () ->
+                HTTP.execute(
+                    request,
+                    response -> {
+                      if (response.getCode() == HttpStatus.SC_OK) {
+                        JsonNode root = MAPPER.readTree(response.getEntity().getContent());
+                        return "RUNNING".equals(root.get("connector").get("state").asText());
+                      }
+                      return false;
+                    }));
   }
 }

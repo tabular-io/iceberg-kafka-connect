@@ -3,6 +3,8 @@ package io.tabular.iceberg.connect.channel;
 
 import static java.util.stream.Collectors.toList;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import io.tabular.iceberg.connect.channel.events.Event;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -59,7 +61,7 @@ public abstract class Channel {
   }
 
   protected void send(Event event) {
-    send(event, Map.of());
+    send(event, ImmutableMap.of());
   }
 
   protected void send(Event event, Map<TopicPartition, OffsetAndMetadata> sourceOffsets) {
@@ -161,13 +163,8 @@ public abstract class Channel {
     Map<String, Object> adminCliProps = new HashMap<>(kafkaProps);
     try (Admin admin = Admin.create(adminCliProps)) {
       List<TopicPartition> partitions =
-          admin
-              .describeTopics(List.of(coordinatorTopic))
-              .topicNameValues()
-              .get(coordinatorTopic)
-              .get()
-              .partitions()
-              .stream()
+          admin.describeTopics(ImmutableList.of(coordinatorTopic)).topicNameValues()
+              .get(coordinatorTopic).get().partitions().stream()
               .map(info -> new TopicPartition(coordinatorTopic, info.partition()))
               .collect(toList());
       consumer.assign(partitions);

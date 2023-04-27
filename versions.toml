@@ -2,7 +2,7 @@
 assertj-ver = "3.23.1"
 awaitility-ver = "4.2.0"
 aws-ver = "2.20.18"
-h2-ver = "2.1.214"
+http-client-ver = "5.2.1"
 hadoop-ver = "3.3.2"
 iceberg-ver = "1.2.1"
 jackson-ver = "2.14.2"
@@ -36,7 +36,7 @@ jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", ver
 # test dependencies
 assertj = { module = "org.assertj:assertj-core", version.ref = "assertj-ver" }
 awaitility = { module = "org.awaitility:awaitility", version.ref = "awaitility-ver" }
-h2 = { module = "com.h2database:h2", version.ref = "h2-ver" }
+http-client = { module =  "org.apache.httpcomponents.client5:httpclient5", version.ref = "http-client-ver" }
 junit-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit-ver" }
 junit-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit-ver" }
 mockito = "org.mockito:mockito-core:4.8.1"
