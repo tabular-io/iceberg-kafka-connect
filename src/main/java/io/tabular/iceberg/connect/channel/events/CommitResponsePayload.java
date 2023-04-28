@@ -5,28 +5,33 @@ import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
 
 import com.google.common.collect.ImmutableMap;
 import java.util.List;
+import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
+import org.apache.avro.util.Utf8;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.avro.AvroSchemaUtil;
 import org.apache.iceberg.types.Types.StructType;
 
-public class DataPayload implements Payload {
+public class CommitResponsePayload implements Payload {
 
+  private UUID commitId;
   private TableName tableName;
   private List<DataFile> dataFiles;
   private List<TopicAndPartition> assignments;
   private Schema avroSchema;
 
-  public DataPayload(Schema avroSchema) {
+  public CommitResponsePayload(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }
 
-  public DataPayload(
+  public CommitResponsePayload(
       StructType partitionType,
+      UUID commitId,
       TableName tableName,
       List<DataFile> dataFiles,
       List<TopicAndPartition> assignments) {
+    this.commitId = commitId;
     this.tableName = tableName;
     this.dataFiles = dataFiles;
     this.assignments = assignments;
@@ -44,25 +49,34 @@ public class DataPayload implements Payload {
             .nullable()
             .record(getClass().getName())
             .fields()
+            .name("commitId")
+            .prop(FIELD_ID_PROP, "60")
+            .type()
+            .stringType()
+            .noDefault()
             .name("tableName")
-            .prop(FIELD_ID_PROP, "90")
+            .prop(FIELD_ID_PROP, "61")
             .type(TableName.AVRO_SCHEMA)
             .noDefault()
             .name("dataFiles")
-            .prop(FIELD_ID_PROP, "91")
+            .prop(FIELD_ID_PROP, "62")
             .type()
             .nullable()
             .array()
             .items(dataFileSchema)
             .noDefault()
             .name("assignments")
-            .prop(FIELD_ID_PROP, "92")
+            .prop(FIELD_ID_PROP, "63")
             .type()
             .nullable()
             .array()
             .items(TopicAndPartition.AVRO_SCHEMA)
             .noDefault()
             .endRecord();
+  }
+
+  public UUID getCommitId() {
+    return commitId;
   }
 
   public TableName getTableName() {
@@ -87,12 +101,15 @@ public class DataPayload implements Payload {
   public void put(int i, Object v) {
     switch (i) {
       case 0:
-        this.tableName = (TableName) v;
+        this.commitId = v == null ? null : UUID.fromString(((Utf8) v).toString());
         return;
       case 1:
-        this.dataFiles = (List<DataFile>) v;
+        this.tableName = (TableName) v;
         return;
       case 2:
+        this.dataFiles = (List<DataFile>) v;
+        return;
+      case 3:
         this.assignments = (List<TopicAndPartition>) v;
         return;
       default:
@@ -109,10 +126,12 @@ public class DataPayload implements Payload {
   public Object get(int i) {
     switch (i) {
       case 0:
-        return tableName;
+        return commitId == null ? null : commitId.toString();
       case 1:
-        return dataFiles;
+        return tableName;
       case 2:
+        return dataFiles;
+      case 3:
         return assignments;
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
@@ -126,6 +145,6 @@ public class DataPayload implements Payload {
 
   @Override
   public int size() {
-    return 3;
+    return 4;
   }
 }

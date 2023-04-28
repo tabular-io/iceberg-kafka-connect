@@ -11,8 +11,8 @@ import org.apache.avro.util.Utf8;
 public class Event implements Element {
 
   private UUID id;
-  private UUID commitId;
   private EventType type;
+  private Long timestamp;
   private Payload payload;
   private Schema avroSchema;
 
@@ -20,18 +20,11 @@ public class Event implements Element {
     this.avroSchema = avroSchema;
   }
 
-  public Event(UUID commitId, EventType type) {
-    this(commitId, type, null);
-  }
-
-  public Event(UUID commitId, EventType type, Payload payload) {
+  public Event(EventType type, Payload payload) {
     this.id = UUID.randomUUID();
-    this.commitId = commitId;
     this.type = type;
+    this.timestamp = System.currentTimeMillis();
     this.payload = payload;
-
-    Schema payloadSchema =
-        payload == null ? SchemaBuilder.builder().nullType() : payload.getSchema();
 
     this.avroSchema =
         SchemaBuilder.builder()
@@ -42,19 +35,19 @@ public class Event implements Element {
             .type()
             .stringType()
             .noDefault()
-            .name("commitId")
-            .prop(FIELD_ID_PROP, "2")
-            .type()
-            .stringType()
-            .noDefault()
             .name("type")
-            .prop(FIELD_ID_PROP, "3")
+            .prop(FIELD_ID_PROP, "2")
             .type()
             .intType()
             .noDefault()
+            .name("timestamp")
+            .prop(FIELD_ID_PROP, "3")
+            .type()
+            .longType()
+            .noDefault()
             .name("payload")
             .prop(FIELD_ID_PROP, "4")
-            .type(payloadSchema)
+            .type(payload.getSchema())
             .noDefault()
             .endRecord();
   }
@@ -63,12 +56,12 @@ public class Event implements Element {
     return id;
   }
 
-  public UUID getCommitId() {
-    return commitId;
-  }
-
   public EventType getType() {
     return type;
+  }
+
+  public Long getTimestamp() {
+    return timestamp;
   }
 
   public Payload getPayload() {
@@ -87,10 +80,10 @@ public class Event implements Element {
         this.id = v == null ? null : UUID.fromString(((Utf8) v).toString());
         return;
       case 1:
-        this.commitId = v == null ? null : UUID.fromString(((Utf8) v).toString());
+        this.type = v == null ? null : EventType.values()[(Integer) v];
         return;
       case 2:
-        this.type = v == null ? null : EventType.values()[(Integer) v];
+        this.timestamp = (Long) v;
         return;
       case 3:
         this.payload = (Payload) v;
@@ -111,9 +104,9 @@ public class Event implements Element {
       case 0:
         return id == null ? null : id.toString();
       case 1:
-        return commitId == null ? null : commitId.toString();
-      case 2:
         return type == null ? null : type.getId();
+      case 2:
+        return timestamp;
       case 3:
         return payload;
       default:

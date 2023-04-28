@@ -6,7 +6,8 @@ import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.tabular.iceberg.connect.channel.events.DataPayload;
+import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
+import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.channel.events.EventType;
 import java.io.IOException;
@@ -69,7 +70,7 @@ public class Coordinator extends Channel {
     // send out begin commit
     if (currentCommitId == null && System.currentTimeMillis() - startTime >= commitIntervalMs) {
       currentCommitId = UUID.randomUUID();
-      Event event = new Event(currentCommitId, EventType.BEGIN_COMMIT);
+      Event event = new Event(EventType.COMMIT_REQUEST, new CommitRequestPayload(currentCommitId));
       send(event);
       startTime = System.currentTimeMillis();
     }
@@ -79,10 +80,11 @@ public class Coordinator extends Channel {
 
   @Override
   protected void receive(Event event) {
-    if (event.getType() == EventType.WRITE_RESULT) {
+    if (event.getType() == EventType.COMMIT_RESPONSE) {
       commitBuffer.add(event);
       if (currentCommitId == null) {
-        LOG.warn("Received data files when no commit in progress, this can happen during recovery");
+        LOG.warn(
+            "Received commit response when no commit in progress, this can happen during recovery");
       } else if (isCommitComplete()) {
         commit(commitBuffer);
       }
@@ -112,25 +114,26 @@ public class Coordinator extends Channel {
     int totalPartitions = getTotalPartitionCount();
     int receivedPartitions =
         commitBuffer.stream()
-            .filter(event -> event.getCommitId().equals(currentCommitId))
-            .mapToInt(event -> ((DataPayload) event.getPayload()).getAssignments().size())
+            .map(event -> (CommitResponsePayload) event.getPayload())
+            .filter(payload -> payload.getCommitId().equals(currentCommitId))
+            .mapToInt(payload -> payload.getAssignments().size())
             .sum();
     if (receivedPartitions < totalPartitions) {
       LOG.info(
           format(
-              "Commit not ready, waiting for more results, expected: %d, actual %d",
+              "Commit not ready, waiting for more responses, expected: %d, actual %d",
               totalPartitions, receivedPartitions));
       return false;
     }
 
-    LOG.info(format("Commit ready, received results for all %d partitions", receivedPartitions));
+    LOG.info(format("Commit ready, received responses for all %d partitions", receivedPartitions));
     return true;
   }
 
   private void commit(List<Event> buffer) {
     List<DataFile> dataFiles =
         buffer.stream()
-            .flatMap(event -> ((DataPayload) event.getPayload()).getDataFiles().stream())
+            .flatMap(event -> ((CommitResponsePayload) event.getPayload()).getDataFiles().stream())
             .filter(dataFile -> dataFile.recordCount() > 0)
             .collect(toList());
     if (dataFiles.isEmpty()) {

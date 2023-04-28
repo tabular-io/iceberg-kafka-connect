@@ -4,7 +4,8 @@ package io.tabular.iceberg.connect.channel;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
-import io.tabular.iceberg.connect.channel.events.DataPayload;
+import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
+import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.channel.events.EventType;
 import io.tabular.iceberg.connect.channel.events.TableName;
@@ -16,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
@@ -61,7 +63,7 @@ public class Worker extends Channel {
 
   @Override
   protected void receive(Event event) {
-    if (event.getType() == EventType.BEGIN_COMMIT) {
+    if (event.getType() == EventType.COMMIT_REQUEST) {
       WriterResult writeResult = writer.complete();
 
       List<TopicAndPartition> assignments =
@@ -69,12 +71,14 @@ public class Worker extends Channel {
               .map(tp -> new TopicAndPartition(tp.topic(), tp.partition()))
               .collect(toList());
 
+      UUID commitId = ((CommitRequestPayload) event.getPayload()).getCommitId();
+
       Event filesEvent =
           new Event(
-              event.getCommitId(),
-              EventType.WRITE_RESULT,
-              new DataPayload(
+              EventType.COMMIT_RESPONSE,
+              new CommitResponsePayload(
                   writeResult.getPartitionStruct(),
+                  commitId,
                   TableName.of(writeResult.getTableIdentifier()),
                   writeResult.getDataFiles(),
                   assignments));

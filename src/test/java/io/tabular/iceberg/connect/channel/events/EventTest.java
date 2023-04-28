@@ -23,24 +23,27 @@ import org.junit.jupiter.api.Test;
 public class EventTest {
 
   @Test
-  public void testBeginCommitSerialization() throws Exception {
-    Event event = new Event(UUID.randomUUID(), EventType.BEGIN_COMMIT);
+  public void testCommitRequestSerialization() throws Exception {
+    UUID commitId = UUID.randomUUID();
+    Event event = new Event(EventType.COMMIT_REQUEST, new CommitRequestPayload(commitId));
 
     byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
     Event result = AvroEncoderUtil.decode(data);
 
-    assertEquals(event.getCommitId(), result.getCommitId());
     assertEquals(event.getType(), result.getType());
+    CommitRequestPayload payload = (CommitRequestPayload) result.getPayload();
+    assertEquals(commitId, payload.getCommitId());
   }
 
   @Test
-  public void testDataFilesSerialization() throws Exception {
+  public void testCommitResponseSerialization() throws Exception {
+    UUID commitId = UUID.randomUUID();
     Event event =
         new Event(
-            UUID.randomUUID(),
-            EventType.WRITE_RESULT,
-            new DataPayload(
+            EventType.COMMIT_RESPONSE,
+            new CommitResponsePayload(
                 StructType.of(),
+                commitId,
                 new TableName(ImmutableList.of("db"), "tbl"),
                 ImmutableList.of(createDataFile(), createDataFile()),
                 ImmutableList.of(
@@ -49,9 +52,9 @@ public class EventTest {
     byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
     Event result = AvroEncoderUtil.decode(data);
 
-    assertEquals(event.getCommitId(), result.getCommitId());
     assertEquals(event.getType(), result.getType());
-    DataPayload payload = (DataPayload) result.getPayload();
+    CommitResponsePayload payload = (CommitResponsePayload) result.getPayload();
+    assertEquals(commitId, payload.getCommitId());
     assertThat(payload.getDataFiles()).hasSize(2);
     assertThat(payload.getDataFiles()).allMatch(f -> f.specId() == 1);
     assertThat(payload.getAssignments()).hasSize(2);

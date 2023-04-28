@@ -3,48 +3,39 @@ package io.tabular.iceberg.connect.channel.events;
 
 import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
 
+import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
+import org.apache.avro.util.Utf8;
 
-public class TopicAndPartition implements Element {
+public class CommitRequestPayload implements Payload {
 
-  private String topic;
-  private Integer partition;
+  private UUID commitId;
   private Schema avroSchema;
 
   public static final Schema AVRO_SCHEMA =
       SchemaBuilder.builder()
           .nullable()
-          .record(TopicAndPartition.class.getName())
+          .record(CommitRequestPayload.class.getName())
           .fields()
-          .name("topic")
-          .prop(FIELD_ID_PROP, "20")
+          .name("commitId")
+          .prop(FIELD_ID_PROP, "80")
           .type()
           .stringType()
           .noDefault()
-          .name("partition")
-          .prop(FIELD_ID_PROP, "21")
-          .type()
-          .intType()
-          .noDefault()
           .endRecord();
 
-  public TopicAndPartition(Schema avroSchema) {
+  public CommitRequestPayload(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }
 
-  public TopicAndPartition(String topic, int partition) {
-    this.topic = topic;
-    this.partition = partition;
+  public CommitRequestPayload(UUID commitId) {
+    this.commitId = commitId;
     this.avroSchema = AVRO_SCHEMA;
   }
 
-  public String getTopic() {
-    return topic;
-  }
-
-  public Integer getPartition() {
-    return partition;
+  public UUID getCommitId() {
+    return commitId;
   }
 
   @Override
@@ -56,10 +47,7 @@ public class TopicAndPartition implements Element {
   public void put(int i, Object v) {
     switch (i) {
       case 0:
-        this.topic = v == null ? null : v.toString();
-        return;
-      case 1:
-        this.partition = (Integer) v;
+        this.commitId = v == null ? null : UUID.fromString(((Utf8) v).toString());
         return;
       default:
         // ignore the object, it must be from a newer version of the format
@@ -75,9 +63,7 @@ public class TopicAndPartition implements Element {
   public Object get(int i) {
     switch (i) {
       case 0:
-        return topic;
-      case 1:
-        return partition;
+        return commitId == null ? null : commitId.toString();
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
     }
@@ -90,6 +76,6 @@ public class TopicAndPartition implements Element {
 
   @Override
   public int size() {
-    return 2;
+    return 1;
   }
 }
