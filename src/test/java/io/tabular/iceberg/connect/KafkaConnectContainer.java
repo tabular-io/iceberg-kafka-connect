@@ -3,9 +3,14 @@ package io.tabular.iceberg.connect;
 
 import static java.lang.String.format;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
@@ -15,8 +20,6 @@ import org.apache.hc.core5.http.HttpStatus;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.HttpWaitStrategy;
-import org.testcontainers.shaded.com.fasterxml.jackson.databind.JsonNode;
-import org.testcontainers.shaded.com.fasterxml.jackson.databind.ObjectMapper;
 import org.testcontainers.shaded.org.awaitility.Awaitility;
 import org.testcontainers.utility.DockerImageName;
 
@@ -96,7 +99,12 @@ public class KafkaConnectContainer extends GenericContainer<KafkaConnectContaine
                     response -> {
                       if (response.getCode() == HttpStatus.SC_OK) {
                         JsonNode root = MAPPER.readTree(response.getEntity().getContent());
-                        return "RUNNING".equals(root.get("connector").get("state").asText());
+                        String connectorState = root.get("connector").get("state").asText();
+                        ArrayNode taskNodes = (ArrayNode) root.get("tasks");
+                        List<String> taskStates = new ArrayList<>();
+                        taskNodes.forEach(node -> taskStates.add(node.get("state").asText()));
+                        return "RUNNING".equals(connectorState)
+                            && taskStates.stream().allMatch("RUNNING"::equals);
                       }
                       return false;
                     }));
