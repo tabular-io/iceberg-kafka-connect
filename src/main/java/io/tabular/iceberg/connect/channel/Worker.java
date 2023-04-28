@@ -4,8 +4,10 @@ package io.tabular.iceberg.connect.channel;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
+import io.tabular.iceberg.connect.channel.events.DataPayload;
 import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.channel.events.EventType;
+import io.tabular.iceberg.connect.channel.events.TableName;
 import io.tabular.iceberg.connect.channel.events.TopicAndPartition;
 import io.tabular.iceberg.connect.data.IcebergWriter;
 import io.tabular.iceberg.connect.data.WriterResult;
@@ -69,11 +71,13 @@ public class Worker extends Channel {
 
       Event filesEvent =
           new Event(
-              writeResult.getPartitionStruct(),
               event.getCommitId(),
-              EventType.DATA_FILES,
-              writeResult.getDataFiles(),
-              assignments);
+              EventType.WRITE_RESULT,
+              new DataPayload(
+                  writeResult.getPartitionStruct(),
+                  TableName.of(writeResult.getTableIdentifier()),
+                  writeResult.getDataFiles(),
+                  assignments));
 
       Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
       writeResult.getOffsets().forEach((k, v) -> offsets.put(k, new OffsetAndMetadata(v)));

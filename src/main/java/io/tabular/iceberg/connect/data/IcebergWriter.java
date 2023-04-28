@@ -19,12 +19,14 @@ import org.apache.kafka.connect.sink.SinkRecord;
 
 public class IcebergWriter implements Closeable {
   private final Table table;
+  private final TableIdentifier tableIdentifier;
   private RecordConverter recordConverter;
   private TaskWriter<Record> writer;
   private Map<TopicPartition, Long> offsets;
 
   public IcebergWriter(Catalog catalog, TableIdentifier tableIdentifier) {
     this.table = catalog.loadTable(tableIdentifier);
+    this.tableIdentifier = tableIdentifier;
     this.recordConverter = new RecordConverter(table);
     this.writer = Utilities.createTableWriter(table);
     this.offsets = new HashMap<>();
@@ -59,7 +61,10 @@ public class IcebergWriter implements Closeable {
 
     WriterResult result =
         new WriterResult(
-            Arrays.asList(writeResult.dataFiles()), table.spec().partitionType(), offsets);
+            tableIdentifier,
+            Arrays.asList(writeResult.dataFiles()),
+            table.spec().partitionType(),
+            offsets);
 
     table.refresh();
     recordConverter = new RecordConverter(table);

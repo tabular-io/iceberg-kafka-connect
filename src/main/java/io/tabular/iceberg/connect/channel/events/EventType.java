@@ -3,7 +3,7 @@ package io.tabular.iceberg.connect.channel.events;
 
 public enum EventType {
   BEGIN_COMMIT(0),
-  DATA_FILES(1);
+  WRITE_RESULT(1);
 
   private final int id;
 

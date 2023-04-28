@@ -3,54 +3,33 @@ package io.tabular.iceberg.connect.channel.events;
 
 import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
 
-import com.google.common.collect.ImmutableMap;
-import java.io.Serializable;
-import java.util.List;
 import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.avro.specific.SpecificData.SchemaConstructable;
 import org.apache.avro.util.Utf8;
-import org.apache.iceberg.DataFile;
-import org.apache.iceberg.StructLike;
-import org.apache.iceberg.avro.AvroSchemaUtil;
-import org.apache.iceberg.types.Types.StructType;
 
-public class Event implements StructLike, IndexedRecord, SchemaConstructable, Serializable {
+public class Event implements Element {
 
   private UUID commitId;
   private EventType type;
-  private List<DataFile> dataFiles;
-  private List<TopicAndPartition> assignments;
+  private Payload payload;
   private Schema avroSchema;
 
   public Event(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }
 
-  public Event(StructType partitionType, UUID commitId, EventType type) {
-    this(partitionType, commitId, type, null, null);
+  public Event(UUID commitId, EventType type) {
+    this(commitId, type, null);
   }
 
-  public Event(
-      StructType partitionType,
-      UUID commitId,
-      EventType type,
-      List<DataFile> dataFiles,
-      List<TopicAndPartition> assignments) {
+  public Event(UUID commitId, EventType type, Payload payload) {
     this.commitId = commitId;
     this.type = type;
-    this.dataFiles = dataFiles;
-    this.assignments = assignments;
+    this.payload = payload;
 
-    StructType dataFileStruct = DataFile.getType(partitionType);
-    Schema dataFileSchema =
-        AvroSchemaUtil.convert(
-            dataFileStruct,
-            ImmutableMap.of(
-                dataFileStruct, "org.apache.iceberg.GenericDataFile",
-                partitionType, "org.apache.iceberg.PartitionData"));
+    Schema payloadSchema =
+        payload == null ? SchemaBuilder.builder().nullType() : payload.getSchema();
 
     this.avroSchema =
         SchemaBuilder.builder()
@@ -66,19 +45,9 @@ public class Event implements StructLike, IndexedRecord, SchemaConstructable, Se
             .type()
             .intType()
             .noDefault()
-            .name("dataFiles")
-            .prop("field-id", "3")
-            .type()
-            .nullable()
-            .array()
-            .items(dataFileSchema)
-            .noDefault()
-            .name("assignments")
-            .prop("field-id", "4")
-            .type()
-            .nullable()
-            .array()
-            .items(TopicAndPartition.AVRO_SCHEMA)
+            .name("payload")
+            .prop(FIELD_ID_PROP, "3")
+            .type(payloadSchema)
             .noDefault()
             .endRecord();
   }
@@ -91,12 +60,8 @@ public class Event implements StructLike, IndexedRecord, SchemaConstructable, Se
     return type;
   }
 
-  public List<DataFile> getDataFiles() {
-    return dataFiles;
-  }
-
-  public List<TopicAndPartition> getAssignments() {
-    return assignments;
+  public Payload getPayload() {
+    return payload;
   }
 
   @Override
@@ -105,7 +70,6 @@ public class Event implements StructLike, IndexedRecord, SchemaConstructable, Se
   }
 
   @Override
-  @SuppressWarnings("unchecked")
   public void put(int i, Object v) {
     switch (i) {
       case 0:
@@ -115,10 +79,7 @@ public class Event implements StructLike, IndexedRecord, SchemaConstructable, Se
         this.type = v == null ? null : EventType.values()[(Integer) v];
         return;
       case 2:
-        this.dataFiles = (List<DataFile>) v;
-        return;
-      case 3:
-        this.assignments = (List<TopicAndPartition>) v;
+        this.payload = (Payload) v;
         return;
       default:
         // ignore the object, it must be from a newer version of the format
@@ -138,9 +99,7 @@ public class Event implements StructLike, IndexedRecord, SchemaConstructable, Se
       case 1:
         return type == null ? null : type.getId();
       case 2:
-        return dataFiles;
-      case 3:
-        return assignments;
+        return payload;
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
     }
@@ -153,6 +112,6 @@ public class Event implements StructLike, IndexedRecord, SchemaConstructable, Se
 
   @Override
   public int size() {
-    return 4;
+    return 3;
   }
 }

@@ -3,15 +3,10 @@ package io.tabular.iceberg.connect.channel.events;
 
 import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
 
-import java.io.Serializable;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.avro.specific.SpecificData.SchemaConstructable;
-import org.apache.iceberg.StructLike;
 
-public class TopicAndPartition
-    implements StructLike, IndexedRecord, SchemaConstructable, Serializable {
+public class TopicAndPartition implements Element {
 
   private String topic;
   private Integer partition;
@@ -21,13 +16,13 @@ public class TopicAndPartition
       SchemaBuilder.builder()
           .record(TopicAndPartition.class.getName())
           .fields()
-          .name("commitId")
-          .prop(FIELD_ID_PROP, "50")
+          .name("topic")
+          .prop(FIELD_ID_PROP, "30")
           .type()
           .stringType()
           .noDefault()
-          .name("type")
-          .prop(FIELD_ID_PROP, "51")
+          .name("partition")
+          .prop(FIELD_ID_PROP, "31")
           .type()
           .intType()
           .noDefault()

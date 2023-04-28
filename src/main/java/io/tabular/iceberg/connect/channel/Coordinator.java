@@ -6,6 +6,7 @@ import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tabular.iceberg.connect.channel.events.DataPayload;
 import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.channel.events.EventType;
 import java.io.IOException;
@@ -68,8 +69,7 @@ public class Coordinator extends Channel {
     // send out begin commit
     if (currentCommitId == null && System.currentTimeMillis() - startTime >= commitIntervalMs) {
       currentCommitId = UUID.randomUUID();
-      Event event =
-          new Event(table.spec().partitionType(), currentCommitId, EventType.BEGIN_COMMIT);
+      Event event = new Event(currentCommitId, EventType.BEGIN_COMMIT);
       send(event);
       startTime = System.currentTimeMillis();
     }
@@ -79,7 +79,7 @@ public class Coordinator extends Channel {
 
   @Override
   protected void receive(Event event) {
-    if (event.getType() == EventType.DATA_FILES) {
+    if (event.getType() == EventType.WRITE_RESULT) {
       commitBuffer.add(event);
       if (currentCommitId == null) {
         LOG.warn("Received data files when no commit in progress, this can happen during recovery");
@@ -113,7 +113,7 @@ public class Coordinator extends Channel {
     int receivedPartitions =
         commitBuffer.stream()
             .filter(event -> event.getCommitId().equals(currentCommitId))
-            .mapToInt(event -> event.getAssignments().size())
+            .mapToInt(event -> ((DataPayload) event.getPayload()).getAssignments().size())
             .sum();
     if (receivedPartitions < totalPartitions) {
       LOG.info(
@@ -130,7 +130,7 @@ public class Coordinator extends Channel {
   private void commit(List<Event> buffer) {
     List<DataFile> dataFiles =
         buffer.stream()
-            .flatMap(event -> event.getDataFiles().stream())
+            .flatMap(event -> ((DataPayload) event.getPayload()).getDataFiles().stream())
             .filter(dataFile -> dataFile.recordCount() > 0)
             .collect(toList());
     if (dataFiles.isEmpty()) {

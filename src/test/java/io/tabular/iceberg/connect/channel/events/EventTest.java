@@ -24,7 +24,7 @@ public class EventTest {
 
   @Test
   public void testBeginCommitSerialization() throws Exception {
-    Event event = new Event(StructType.of(), UUID.randomUUID(), EventType.BEGIN_COMMIT);
+    Event event = new Event(UUID.randomUUID(), EventType.BEGIN_COMMIT);
 
     byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
     Event result = AvroEncoderUtil.decode(data);
@@ -37,21 +37,25 @@ public class EventTest {
   public void testDataFilesSerialization() throws Exception {
     Event event =
         new Event(
-            StructType.of(),
             UUID.randomUUID(),
-            EventType.DATA_FILES,
-            ImmutableList.of(createDataFile(), createDataFile()),
-            ImmutableList.of(new TopicAndPartition("topic", 1), new TopicAndPartition("topic", 2)));
+            EventType.WRITE_RESULT,
+            new DataPayload(
+                StructType.of(),
+                new TableName(ImmutableList.of("db"), "tbl"),
+                ImmutableList.of(createDataFile(), createDataFile()),
+                ImmutableList.of(
+                    new TopicAndPartition("topic", 1), new TopicAndPartition("topic", 2))));
 
     byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
     Event result = AvroEncoderUtil.decode(data);
 
     assertEquals(event.getCommitId(), result.getCommitId());
     assertEquals(event.getType(), result.getType());
-    assertThat(result.getDataFiles()).hasSize(2);
-    assertThat(result.getDataFiles()).allMatch(f -> f.specId() == 1);
-    assertThat(result.getAssignments()).hasSize(2);
-    assertThat(result.getAssignments()).allMatch(tp -> tp.getTopic().equals("topic"));
+    DataPayload payload = (DataPayload) result.getPayload();
+    assertThat(payload.getDataFiles()).hasSize(2);
+    assertThat(payload.getDataFiles()).allMatch(f -> f.specId() == 1);
+    assertThat(payload.getAssignments()).hasSize(2);
+    assertThat(payload.getAssignments()).allMatch(tp -> tp.getTopic().equals("topic"));
   }
 
   private DataFile createDataFile() throws Exception {
