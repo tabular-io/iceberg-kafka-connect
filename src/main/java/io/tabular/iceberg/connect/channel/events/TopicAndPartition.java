@@ -14,6 +14,7 @@ public class TopicAndPartition implements Element {
 
   public static final Schema AVRO_SCHEMA =
       SchemaBuilder.builder()
+          .nullable()
           .record(TopicAndPartition.class.getName())
           .fields()
           .name("topic")

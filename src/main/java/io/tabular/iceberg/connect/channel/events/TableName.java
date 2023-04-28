@@ -20,6 +20,7 @@ public class TableName implements Element {
 
   public static final Schema AVRO_SCHEMA =
       SchemaBuilder.builder()
+          .nullable()
           .record(TableName.class.getName())
           .fields()
           .name("namespace")
