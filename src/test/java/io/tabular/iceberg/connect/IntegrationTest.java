@@ -31,7 +31,7 @@ public class IntegrationTest extends IntegrationTestBase {
   private static final String CONNECTOR_NAME = "test_connector";
   private static final String TEST_TOPIC = "test-topic";
   private static final String COMMIT_GROUP_ID = "commit-cg";
-  private static final String COORDINATOR_TOPIC = "coordinator-topic";
+  private static final String CONTROL_TOPIC = "control-topic";
   private static final String TEST_DB = "default";
   private static final String TEST_TABLE = "foobar";
   private static final TableIdentifier TABLE_IDENTIFIER = TableIdentifier.of(TEST_DB, TEST_TABLE);
@@ -48,7 +48,7 @@ public class IntegrationTest extends IntegrationTestBase {
 
   @BeforeEach
   public void setup() {
-    createTopic(COORDINATOR_TOPIC, 1);
+    createTopic(CONTROL_TOPIC, 1);
     createTopic(TEST_TOPIC, 2);
     restCatalog.createNamespace(Namespace.of(TEST_DB));
   }
@@ -56,7 +56,7 @@ public class IntegrationTest extends IntegrationTestBase {
   @AfterEach
   public void teardown() {
     deleteTopic(TEST_TOPIC);
-    deleteTopic(COORDINATOR_TOPIC);
+    deleteTopic(CONTROL_TOPIC);
     restCatalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE));
     restCatalog.dropNamespace(Namespace.of(TEST_DB));
   }
@@ -83,7 +83,7 @@ public class IntegrationTest extends IntegrationTestBase {
             .config("transforms.tabular.type", TabularEventTransform.class.getName())
             .config("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE))
             .config("iceberg.commit.group.id", COMMIT_GROUP_ID)
-            .config("iceberg.coordinator.topic", COORDINATOR_TOPIC)
+            .config("iceberg.control.topic", CONTROL_TOPIC)
             .config("iceberg.kafka.bootstrap.servers", kafka.getNetworkAliases().get(0) + ":9092")
             .config("iceberg.table.commitIntervalMs", 1000)
             .config("iceberg.catalog", RESTCatalog.class.getName())

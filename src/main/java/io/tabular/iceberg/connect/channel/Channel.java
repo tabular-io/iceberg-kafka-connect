@@ -36,7 +36,7 @@ public abstract class Channel {
   private static final Logger LOG = Logger.getLogger(Channel.class);
 
   protected final Map<String, String> kafkaProps;
-  private final String coordinatorTopic;
+  private final String controlTopic;
   private final String commitGroupId;
   private final String transactionalId;
   private final KafkaProducer<byte[], byte[]> producer;
@@ -44,7 +44,7 @@ public abstract class Channel {
   private final Admin admin;
   private final Map<Integer, Long> channelOffsets = new HashMap<>();
 
-  private static final String COORDINATOR_TOPIC_PROP = "iceberg.coordinator.topic";
+  private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
   private static final String KAFKA_PROP_PREFIX = "iceberg.kafka.";
   private static final String COMMIT_GROUP_ID_PROP = "iceberg.commit.group.id";
   private static final String TRANSACTIONAL_SUFFIX_PROP =
@@ -52,7 +52,7 @@ public abstract class Channel {
 
   public Channel(String name, Map<String, String> props) {
     this.kafkaProps = PropertyUtil.propertiesWithPrefix(props, KAFKA_PROP_PREFIX);
-    this.coordinatorTopic = props.get(COORDINATOR_TOPIC_PROP);
+    this.controlTopic = props.get(CONTROL_TOPIC_PROP);
     this.commitGroupId = props.get(COMMIT_GROUP_ID_PROP);
     this.transactionalId = name + props.get(TRANSACTIONAL_SUFFIX_PROP);
     this.producer = createProducer();
@@ -76,7 +76,7 @@ public abstract class Channel {
 
     producer.beginTransaction();
     try {
-      producer.send(new ProducerRecord<>(coordinatorTopic, data));
+      producer.send(new ProducerRecord<>(controlTopic, data));
       if (!sourceOffsets.isEmpty()) {
         producer.sendOffsetsToTransaction(sourceOffsets, new ConsumerGroupMetadata(commitGroupId));
       }
@@ -148,7 +148,7 @@ public abstract class Channel {
 
   protected void channelSeekToOffsets(Map<Integer, Long> offsets) {
     offsets.forEach(
-        (k, v) -> consumer.seek(new TopicPartition(coordinatorTopic, k), new OffsetAndMetadata(v)));
+        (k, v) -> consumer.seek(new TopicPartition(controlTopic, k), new OffsetAndMetadata(v)));
   }
 
   protected Admin admin() {
@@ -163,9 +163,9 @@ public abstract class Channel {
     Map<String, Object> adminProps = new HashMap<>(kafkaProps);
     try (Admin admin = Admin.create(adminProps)) {
       List<TopicPartition> partitions =
-          admin.describeTopics(ImmutableList.of(coordinatorTopic)).topicNameValues()
-              .get(coordinatorTopic).get().partitions().stream()
-              .map(info -> new TopicPartition(coordinatorTopic, info.partition()))
+          admin.describeTopics(ImmutableList.of(controlTopic)).topicNameValues().get(controlTopic)
+              .get().partitions().stream()
+              .map(info -> new TopicPartition(controlTopic, info.partition()))
               .collect(toList());
       consumer.assign(partitions);
     } catch (InterruptedException | ExecutionException e) {

@@ -43,7 +43,7 @@ public class IcebergSinkTask extends SinkTask {
     TableIdentifier tableIdentifier = TableIdentifier.parse(props.get(TABLE_PROP));
 
     if (PropertyUtil.propertyAsBoolean(props, COORDINATOR_PROP, false)) {
-      LOG.info("Worker elected leader, starting commit coordinator");
+      LOG.info("Task elected leader, starting commit coordinator");
       coordinator = new Coordinator(catalog, tableIdentifier, props);
       coordinator.start();
     }
