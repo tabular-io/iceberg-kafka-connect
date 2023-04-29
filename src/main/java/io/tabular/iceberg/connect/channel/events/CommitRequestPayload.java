@@ -17,7 +17,7 @@ public class CommitRequestPayload implements Payload {
           .record(CommitRequestPayload.class.getName())
           .fields()
           .name("commitId")
-          .prop(FIELD_ID_PROP, "80")
+          .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
           .type(UUID_SCHEMA)
           .noDefault()
           .endRecord();
