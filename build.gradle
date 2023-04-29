@@ -16,6 +16,7 @@ dependencies {
   implementation libs.bundles.aws
   implementation libs.bundles.jackson
   implementation libs.hadoop.common
+  implementation libs.avro
   compileOnly libs.bundles.kafka.connect
 
   testImplementation libs.junit.api

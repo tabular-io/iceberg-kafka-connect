@@ -14,7 +14,6 @@ public class TopicAndPartition implements Element {
 
   public static final Schema AVRO_SCHEMA =
       SchemaBuilder.builder()
-          .nullable()
           .record(TopicAndPartition.class.getName())
           .fields()
           .name("topic")
@@ -67,11 +66,6 @@ public class TopicAndPartition implements Element {
   }
 
   @Override
-  public <T> void set(int pos, T value) {
-    put(pos, value);
-  }
-
-  @Override
   public Object get(int i) {
     switch (i) {
       case 0:
@@ -81,15 +75,5 @@ public class TopicAndPartition implements Element {
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
     }
-  }
-
-  @Override
-  public <T> T get(int pos, Class<T> javaClass) {
-    return javaClass.cast(get(pos));
-  }
-
-  @Override
-  public int size() {
-    return 2;
   }
 }

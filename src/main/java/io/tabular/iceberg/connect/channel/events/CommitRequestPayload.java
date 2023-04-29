@@ -6,7 +6,6 @@ import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
 import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
-import org.apache.avro.util.Utf8;
 
 public class CommitRequestPayload implements Payload {
 
@@ -15,13 +14,11 @@ public class CommitRequestPayload implements Payload {
 
   public static final Schema AVRO_SCHEMA =
       SchemaBuilder.builder()
-          .nullable()
           .record(CommitRequestPayload.class.getName())
           .fields()
           .name("commitId")
           .prop(FIELD_ID_PROP, "80")
-          .type()
-          .stringType()
+          .type(UUID_SCHEMA)
           .noDefault()
           .endRecord();
 
@@ -47,7 +44,7 @@ public class CommitRequestPayload implements Payload {
   public void put(int i, Object v) {
     switch (i) {
       case 0:
-        this.commitId = v == null ? null : UUID.fromString(((Utf8) v).toString());
+        this.commitId = (UUID) v;
         return;
       default:
         // ignore the object, it must be from a newer version of the format
@@ -55,27 +52,12 @@ public class CommitRequestPayload implements Payload {
   }
 
   @Override
-  public <T> void set(int pos, T value) {
-    put(pos, value);
-  }
-
-  @Override
   public Object get(int i) {
     switch (i) {
       case 0:
-        return commitId == null ? null : commitId.toString();
+        return commitId;
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
     }
-  }
-
-  @Override
-  public <T> T get(int pos, Class<T> javaClass) {
-    return javaClass.cast(get(pos));
-  }
-
-  @Override
-  public int size() {
-    return 1;
   }
 }

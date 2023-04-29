@@ -6,7 +6,6 @@ import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
 import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
-import org.apache.avro.util.Utf8;
 
 public class Event implements Element {
 
@@ -32,8 +31,7 @@ public class Event implements Element {
             .fields()
             .name("id")
             .prop(FIELD_ID_PROP, "1")
-            .type()
-            .stringType()
+            .type(UUID_SCHEMA)
             .noDefault()
             .name("type")
             .prop(FIELD_ID_PROP, "2")
@@ -77,7 +75,7 @@ public class Event implements Element {
   public void put(int i, Object v) {
     switch (i) {
       case 0:
-        this.id = v == null ? null : UUID.fromString(((Utf8) v).toString());
+        this.id = (UUID) v;
         return;
       case 1:
         this.type = v == null ? null : EventType.values()[(Integer) v];
@@ -94,15 +92,10 @@ public class Event implements Element {
   }
 
   @Override
-  public <T> void set(int pos, T value) {
-    put(pos, value);
-  }
-
-  @Override
   public Object get(int i) {
     switch (i) {
       case 0:
-        return id == null ? null : id.toString();
+        return id;
       case 1:
         return type == null ? null : type.getId();
       case 2:
@@ -112,15 +105,5 @@ public class Event implements Element {
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
     }
-  }
-
-  @Override
-  public <T> T get(int pos, Class<T> javaClass) {
-    return javaClass.cast(get(pos));
-  }
-
-  @Override
-  public int size() {
-    return 4;
   }
 }

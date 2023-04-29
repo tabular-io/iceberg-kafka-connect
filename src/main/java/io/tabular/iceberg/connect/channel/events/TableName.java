@@ -20,7 +20,6 @@ public class TableName implements Element {
 
   public static final Schema AVRO_SCHEMA =
       SchemaBuilder.builder()
-          .nullable()
           .record(TableName.class.getName())
           .fields()
           .name("namespace")
@@ -79,11 +78,6 @@ public class TableName implements Element {
   }
 
   @Override
-  public <T> void set(int pos, T value) {
-    put(pos, value);
-  }
-
-  @Override
   public Object get(int i) {
     switch (i) {
       case 0:
@@ -93,15 +87,5 @@ public class TableName implements Element {
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
     }
-  }
-
-  @Override
-  public <T> T get(int pos, Class<T> javaClass) {
-    return javaClass.cast(get(pos));
-  }
-
-  @Override
-  public int size() {
-    return 2;
   }
 }

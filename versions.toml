@@ -1,5 +1,6 @@
 [versions]
 assertj-ver = "3.23.1"
+avro-ver = "1.11.1"
 awaitility-ver = "4.2.0"
 aws-ver = "2.20.18"
 http-client-ver = "5.2.1"
@@ -12,6 +13,7 @@ testcontainers-ver = "1.17.6"
 
 
 [libraries]
+avro = { module = "org.apache.avro:avro", version.ref = "avro-ver" }
 aws-dynamodb = { module = "software.amazon.awssdk:dynamodb", version.ref = "aws-ver" }
 aws-glue = { module = "software.amazon.awssdk:glue", version.ref = "aws-ver" }
 aws-kms = { module = "software.amazon.awssdk:kms", version.ref = "aws-ver" }
