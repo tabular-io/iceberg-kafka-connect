@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.DataFile;
@@ -97,7 +98,7 @@ public class Coordinator extends Channel {
             value -> {
               try {
                 return value.get().partitions().size();
-              } catch (Exception e) {
+              } catch (InterruptedException | ExecutionException e) {
                 throw new RuntimeException(e);
               }
             })

@@ -15,7 +15,7 @@ import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.aws.AwsProperties;
 import org.apache.iceberg.aws.s3.S3FileIO;
 import org.apache.iceberg.rest.RESTCatalog;
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -46,6 +46,7 @@ public class IntegrationTestBase {
   protected static S3Client s3;
   protected static RESTCatalog restCatalog;
   protected static KafkaProducer<String, String> producer;
+  protected static Admin admin;
 
   private static final String LOCAL_JARS_DIR = "build/out";
   private static final String BUCKET = "bucket";
@@ -98,6 +99,7 @@ public class IntegrationTestBase {
     s3.createBucket(req -> req.bucket(BUCKET));
     restCatalog = initLocalCatalog();
     producer = initLocalProducer();
+    admin = initLocalAdmin();
   }
 
   @AfterAll
@@ -109,6 +111,7 @@ public class IntegrationTestBase {
       // NO-OP
     }
     producer.close();
+    admin.close();
     kafka.close();
     catalog.close();
     s3.close();
@@ -117,11 +120,8 @@ public class IntegrationTestBase {
   }
 
   protected void createTopic(String topicName, int partitions) {
-    try (AdminClient adminClient =
-        AdminClient.create(
-            ImmutableMap.of(
-                AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
-      adminClient
+    try {
+      admin
           .createTopics(ImmutableList.of(new NewTopic(topicName, partitions, (short) 1)))
           .all()
           .get(10, TimeUnit.SECONDS);
@@ -131,11 +131,8 @@ public class IntegrationTestBase {
   }
 
   protected void deleteTopic(String topicName) {
-    try (AdminClient adminClient =
-        AdminClient.create(
-            ImmutableMap.of(
-                AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
-      adminClient.deleteTopics(ImmutableList.of(topicName)).all().get(10, TimeUnit.SECONDS);
+    try {
+      admin.deleteTopics(ImmutableList.of(topicName)).all().get(10, TimeUnit.SECONDS);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
       throw new RuntimeException(e);
     }
@@ -182,5 +179,10 @@ public class IntegrationTestBase {
             UUID.randomUUID().toString()),
         new StringSerializer(),
         new StringSerializer());
+  }
+
+  private static Admin initLocalAdmin() {
+    return Admin.create(
+        ImmutableMap.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
   }
 }

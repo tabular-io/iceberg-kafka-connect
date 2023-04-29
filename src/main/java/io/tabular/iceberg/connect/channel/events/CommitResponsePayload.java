@@ -3,13 +3,13 @@ package io.tabular.iceberg.connect.channel.events;
 
 import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
 
-import com.google.common.collect.ImmutableMap;
 import java.util.List;
 import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.avro.AvroSchemaUtil;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Types.StructType;
 
 public class CommitResponsePayload implements Payload {

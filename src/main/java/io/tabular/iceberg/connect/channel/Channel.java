@@ -3,8 +3,6 @@ package io.tabular.iceberg.connect.channel;
 
 import static java.util.stream.Collectors.toList;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import io.tabular.iceberg.connect.channel.events.Event;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -15,6 +13,8 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import org.apache.iceberg.avro.AvroEncoderUtil;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.util.PropertyUtil;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -142,8 +142,8 @@ public abstract class Channel {
   }
 
   private Admin createAdmin() {
-    Map<String, Object> adminCliProps = new HashMap<>(kafkaProps);
-    return Admin.create(adminCliProps);
+    Map<String, Object> adminProps = new HashMap<>(kafkaProps);
+    return Admin.create(adminProps);
   }
 
   protected void channelSeekToOffsets(Map<Integer, Long> offsets) {
@@ -160,8 +160,8 @@ public abstract class Channel {
   }
 
   public void start() {
-    Map<String, Object> adminCliProps = new HashMap<>(kafkaProps);
-    try (Admin admin = Admin.create(adminCliProps)) {
+    Map<String, Object> adminProps = new HashMap<>(kafkaProps);
+    try (Admin admin = Admin.create(adminProps)) {
       List<TopicPartition> partitions =
           admin.describeTopics(ImmutableList.of(coordinatorTopic)).topicNameValues()
               .get(coordinatorTopic).get().partitions().stream()

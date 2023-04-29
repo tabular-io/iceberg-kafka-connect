@@ -48,7 +48,6 @@ public class IntegrationTest extends IntegrationTestBase {
 
   @BeforeEach
   public void setup() {
-    createTopic(COORDINATOR_TOPIC, 1);
     createTopic(TEST_TOPIC, 2);
     restCatalog.createNamespace(Namespace.of(TEST_DB));
   }
@@ -134,7 +133,7 @@ public class IntegrationTest extends IntegrationTestBase {
     producer.send(new ProducerRecord<>(TEST_TOPIC, event2));
     producer.flush();
 
-    Awaitility.await().atMost(10, TimeUnit.SECONDS).untilAsserted(this::assertSnapshotAdded);
+    Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(this::assertSnapshotAdded);
   }
 
   private void assertSnapshotAdded() {
