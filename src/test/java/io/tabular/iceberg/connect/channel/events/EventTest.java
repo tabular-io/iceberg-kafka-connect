@@ -47,7 +47,8 @@ public class EventTest {
                 new TableName(ImmutableList.of("db"), "tbl"),
                 ImmutableList.of(createDataFile(), createDataFile()),
                 ImmutableList.of(
-                    new TopicAndPartition("topic", 1), new TopicAndPartition("topic", 2))));
+                    new TopicPartitionOffset("topic", 1, 1L),
+                    new TopicPartitionOffset("topic", 2, null))));
 
     byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
     Event result = AvroEncoderUtil.decode(data);

@@ -9,7 +9,7 @@ import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.channel.events.EventType;
 import io.tabular.iceberg.connect.channel.events.TableName;
-import io.tabular.iceberg.connect.channel.events.TopicAndPartition;
+import io.tabular.iceberg.connect.channel.events.TopicPartitionOffset;
 import io.tabular.iceberg.connect.data.IcebergWriter;
 import io.tabular.iceberg.connect.data.WriterResult;
 import java.util.Collection;
@@ -66,9 +66,16 @@ public class Worker extends Channel {
     if (event.getType() == EventType.COMMIT_REQUEST) {
       WriterResult writeResult = writer.complete();
 
-      List<TopicAndPartition> assignments =
+      // include all assigned topic partitions even if no messages were read
+      // from a partition, as the coordinator will use that to determine
+      // when all data for a commit has been received
+      List<TopicPartitionOffset> assignments =
           context.assignment().stream()
-              .map(tp -> new TopicAndPartition(tp.topic(), tp.partition()))
+              .map(
+                  tp -> {
+                    Long offset = writeResult.getOffsets().get(tp);
+                    return new TopicPartitionOffset(tp.topic(), tp.partition(), offset);
+                  })
               .collect(toList());
 
       UUID commitId = ((CommitRequestPayload) event.getPayload()).getCommitId();

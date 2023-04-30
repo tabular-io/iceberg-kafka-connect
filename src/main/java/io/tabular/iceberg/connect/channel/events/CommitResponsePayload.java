@@ -17,7 +17,7 @@ public class CommitResponsePayload implements Payload {
   private UUID commitId;
   private TableName tableName;
   private List<DataFile> dataFiles;
-  private List<TopicAndPartition> assignments;
+  private List<TopicPartitionOffset> assignments;
   private Schema avroSchema;
 
   public CommitResponsePayload(Schema avroSchema) {
@@ -29,7 +29,7 @@ public class CommitResponsePayload implements Payload {
       UUID commitId,
       TableName tableName,
       List<DataFile> dataFiles,
-      List<TopicAndPartition> assignments) {
+      List<TopicPartitionOffset> assignments) {
     this.commitId = commitId;
     this.tableName = tableName;
     this.dataFiles = dataFiles;
@@ -67,7 +67,7 @@ public class CommitResponsePayload implements Payload {
             .type()
             .nullable()
             .array()
-            .items(TopicAndPartition.AVRO_SCHEMA)
+            .items(TopicPartitionOffset.AVRO_SCHEMA)
             .noDefault()
             .endRecord();
   }
@@ -84,7 +84,7 @@ public class CommitResponsePayload implements Payload {
     return dataFiles;
   }
 
-  public List<TopicAndPartition> getAssignments() {
+  public List<TopicPartitionOffset> getAssignments() {
     return assignments;
   }
 
@@ -107,7 +107,7 @@ public class CommitResponsePayload implements Payload {
         this.dataFiles = (List<DataFile>) v;
         return;
       case 3:
-        this.assignments = (List<TopicAndPartition>) v;
+        this.assignments = (List<TopicPartitionOffset>) v;
         return;
       default:
         // ignore the object, it must be from a newer version of the format
