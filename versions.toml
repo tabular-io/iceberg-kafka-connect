@@ -9,7 +9,8 @@ iceberg-ver = "1.2.1"
 jackson-ver = "2.14.2"
 junit-ver = "5.9.2"
 kafka-ver = "3.4.0"
-testcontainers-ver = "1.17.6"
+slf4j-ver = "1.7.36"
+testcontainers-ver = "1.18.0"
 
 
 [libraries]
@@ -34,6 +35,7 @@ kafka-connect-json = { module = "org.apache.kafka:connect-json", version.ref = "
 kafka-connect-transforms = { module = "org.apache.kafka:connect-transforms", version.ref = "kafka-ver" }
 jackson-core = { module = "com.fasterxml.jackson.core:jackson-core", version.ref = "jackson-ver" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson-ver" }
+slf4j = { module = "org.slf4j:slf4j-api", version.ref = "slf4j-ver" }
 
 # test dependencies
 assertj = { module = "org.assertj:assertj-core", version.ref = "assertj-ver" }
@@ -50,4 +52,4 @@ testcontainers-kafka = { module = "org.testcontainers:kafka", version.ref = "tes
 aws = ["aws-dynamodb", "aws-glue", "aws-kms", "aws-s3", "aws-sts"]
 iceberg = ["iceberg-api", "iceberg-aws", "iceberg-common", "iceberg-core", "iceberg-data", "iceberg-guava", "iceberg-orc", "iceberg-parquet"]
 jackson = ["jackson-core", "jackson-databind"]
-kafka-connect = ["kafka-connect-api", "kafka-connect-json", "kafka-connect-transforms"]
+kafka-connect = ["kafka-clients", "kafka-connect-api", "kafka-connect-json", "kafka-connect-transforms"]

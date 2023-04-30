@@ -5,7 +5,6 @@ import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.google.common.collect.Lists;
 import io.tabular.iceberg.connect.transform.TabularEventTransform;
 import java.time.Duration;
 import java.util.List;
@@ -18,6 +17,7 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.aws.AwsProperties;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.iceberg.types.Types;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -50,15 +50,15 @@ public class IntegrationTest extends IntegrationTestBase {
   public void setup() {
     createTopic(CONTROL_TOPIC, 1);
     createTopic(TEST_TOPIC, 2);
-    restCatalog.createNamespace(Namespace.of(TEST_DB));
+    catalog.createNamespace(Namespace.of(TEST_DB));
   }
 
   @AfterEach
   public void teardown() {
     deleteTopic(TEST_TOPIC);
     deleteTopic(CONTROL_TOPIC);
-    restCatalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE));
-    restCatalog.dropNamespace(Namespace.of(TEST_DB));
+    catalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE));
+    catalog.dropNamespace(Namespace.of(TEST_DB));
   }
 
   @Test
@@ -88,18 +88,18 @@ public class IntegrationTest extends IntegrationTestBase {
             .config("iceberg.table.commitIntervalMs", 1000)
             .config("iceberg.catalog", RESTCatalog.class.getName())
             .config("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
-            .config(
-                "iceberg.catalog." + AwsProperties.HTTP_CLIENT_TYPE,
-                AwsProperties.HTTP_CLIENT_TYPE_APACHE)
             .config("iceberg.catalog." + AwsProperties.S3FILEIO_ENDPOINT, "http://minio:9000")
             .config("iceberg.catalog." + AwsProperties.S3FILEIO_ACCESS_KEY_ID, AWS_ACCESS_KEY)
             .config("iceberg.catalog." + AwsProperties.S3FILEIO_SECRET_ACCESS_KEY, AWS_SECRET_KEY)
             .config("iceberg.catalog." + AwsProperties.S3FILEIO_PATH_STYLE_ACCESS, true)
-            .config("iceberg.catalog." + AwsProperties.CLIENT_REGION, AWS_REGION);
+            .config("iceberg.catalog." + AwsProperties.CLIENT_REGION, AWS_REGION)
+            .config(
+                "iceberg.catalog." + AwsProperties.HTTP_CLIENT_TYPE,
+                AwsProperties.HTTP_CLIENT_TYPE_APACHE);
 
     // partitioned table
 
-    restCatalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA, TEST_SPEC);
+    catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA, TEST_SPEC);
 
     kafkaConnect.registerConnector(connectorConfig);
     kafkaConnect.ensureConnectorRunning(CONNECTOR_NAME);
@@ -113,8 +113,8 @@ public class IntegrationTest extends IntegrationTestBase {
 
     // unpartitioned table
 
-    restCatalog.dropTable(TABLE_IDENTIFIER);
-    restCatalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA);
+    catalog.dropTable(TABLE_IDENTIFIER);
+    catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA);
     Thread.sleep(1000); // wait for the table refresh in the writer
 
     runTest();
@@ -138,12 +138,12 @@ public class IntegrationTest extends IntegrationTestBase {
   }
 
   private void assertSnapshotAdded() {
-    Table table = restCatalog.loadTable(TABLE_IDENTIFIER);
+    Table table = catalog.loadTable(TABLE_IDENTIFIER);
     assertThat(table.snapshots()).hasSize(1);
   }
 
   private List<DataFile> getDataFiles() {
-    Table table = restCatalog.loadTable(TABLE_IDENTIFIER);
+    Table table = catalog.loadTable(TABLE_IDENTIFIER);
     return Lists.newArrayList(table.currentSnapshot().addedDataFiles(table.io()));
   }
 }

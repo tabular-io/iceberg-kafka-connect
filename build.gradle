@@ -15,9 +15,9 @@ dependencies {
   implementation libs.bundles.iceberg
   implementation libs.bundles.aws
   implementation libs.bundles.jackson
-  implementation libs.hadoop.common
   implementation libs.avro
   compileOnly libs.bundles.kafka.connect
+  runtimeOnly libs.hadoop.common // REST catalog needs this when loading the FileIO
 
   testImplementation libs.junit.api
   testRuntimeOnly libs.junit.engine
@@ -27,7 +27,6 @@ dependencies {
   testImplementation libs.awaitility
   testImplementation libs.testcontainers
   testImplementation libs.testcontainers.kafka
-  testImplementation libs.kafka.clients
   testImplementation libs.http.client
 }
 

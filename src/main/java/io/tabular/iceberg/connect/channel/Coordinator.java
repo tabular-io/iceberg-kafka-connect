@@ -1,7 +1,6 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect.channel;
 
-import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -28,11 +27,12 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.util.PropertyUtil;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Coordinator extends Channel {
 
-  private static final Logger LOG = Logger.getLogger(Coordinator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(Coordinator.class);
 
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.table.commitIntervalMs";
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
@@ -121,13 +121,13 @@ public class Coordinator extends Channel {
             .sum();
     if (receivedPartitions < totalPartitions) {
       LOG.info(
-          format(
-              "Commit not ready, waiting for more responses, expected: %d, actual %d",
-              totalPartitions, receivedPartitions));
+          "Commit not ready, waiting for more responses, expected: {}, actual {}",
+          totalPartitions,
+          receivedPartitions);
       return false;
     }
 
-    LOG.info(format("Commit ready, received responses for all %d partitions", receivedPartitions));
+    LOG.info("Commit ready, received responses for all {} partitions", receivedPartitions);
     return true;
   }
 

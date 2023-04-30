@@ -15,11 +15,12 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class IcebergSinkTask extends SinkTask {
 
-  private static final Logger LOG = Logger.getLogger(IcebergSinkTask.class);
+  private static final Logger LOG = LoggerFactory.getLogger(IcebergSinkTask.class);
 
   private Map<String, String> props;
   private Coordinator coordinator;

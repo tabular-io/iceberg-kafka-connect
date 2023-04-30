@@ -29,11 +29,12 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public abstract class Channel {
 
-  private static final Logger LOG = Logger.getLogger(Channel.class);
+  private static final Logger LOG = LoggerFactory.getLogger(Channel.class);
 
   protected final Map<String, String> kafkaProps;
   private final String controlTopic;
@@ -65,7 +66,7 @@ public abstract class Channel {
   }
 
   protected void send(Event event, Map<TopicPartition, OffsetAndMetadata> sourceOffsets) {
-    LOG.info("Sending event of type: " + event.getType().name());
+    LOG.info("Sending event of type: {}", event.getType().name());
 
     byte[] data;
     try {
@@ -111,7 +112,7 @@ public abstract class Channel {
               throw new UncheckedIOException(e);
             }
 
-            LOG.info("Received event of type: " + event.getType().name());
+            LOG.info("Received event of type: {}", event.getType().name());
             eventHandler.accept(event);
           });
       records = consumer.poll(0L);

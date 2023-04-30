@@ -1,8 +1,7 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -14,6 +13,8 @@ import java.util.stream.Stream;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.aws.AwsProperties;
 import org.apache.iceberg.aws.s3.S3FileIO;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -40,11 +41,11 @@ public class IntegrationTestBase {
   protected static Network network;
   protected static KafkaContainer kafka;
   protected static KafkaConnectContainer kafkaConnect;
-  protected static GenericContainer catalog;
+  protected static GenericContainer restCatalog;
   protected static GenericContainer minio;
 
   protected static S3Client s3;
-  protected static RESTCatalog restCatalog;
+  protected static RESTCatalog catalog;
   protected static KafkaProducer<String, String> producer;
   protected static Admin admin;
 
@@ -56,20 +57,25 @@ public class IntegrationTestBase {
   protected static final String AWS_SECRET_KEY = "minioadmin";
   protected static final String AWS_REGION = "us-east-1";
 
+  private static final String MINIO_IMAGE = "minio/minio";
+  private static final String KAFKA_IMAGE = "confluentinc/cp-kafka:7.3.3";
+  private static final String CONNECT_IMAGE = "confluentinc/cp-kafka-connect:7.3.3";
+  private static final String REST_CATALOG_IMAGE = "tabulario/iceberg-rest:0.4.0";
+
   @BeforeAll
   public static void setupAll() {
     network = Network.newNetwork();
 
     minio =
-        new GenericContainer(DockerImageName.parse("minio/minio"))
+        new GenericContainer(DockerImageName.parse(MINIO_IMAGE))
             .withNetwork(network)
             .withNetworkAliases("minio")
             .withExposedPorts(9000)
             .withCommand("server /data")
             .waitingFor(new HttpWaitStrategy().forPort(9000).forPath("/minio/health/ready"));
 
-    catalog =
-        new GenericContainer(DockerImageName.parse("tabulario/iceberg-rest"))
+    restCatalog =
+        new GenericContainer(DockerImageName.parse(REST_CATALOG_IMAGE))
             .withNetwork(network)
             .withNetworkAliases("iceberg")
             .dependsOn(minio)
@@ -82,22 +88,22 @@ public class IntegrationTestBase {
             .withEnv("CATALOG_S3_PATH__STYLE__ACCESS", "true")
             .withEnv("AWS_REGION", AWS_REGION);
 
-    kafka = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka")).withNetwork(network);
+    kafka = new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE)).withNetwork(network);
 
     kafkaConnect =
-        new KafkaConnectContainer(DockerImageName.parse("confluentinc/cp-kafka-connect"))
+        new KafkaConnectContainer(DockerImageName.parse(CONNECT_IMAGE))
             .withNetwork(network)
-            .dependsOn(catalog, kafka)
+            .dependsOn(restCatalog, kafka)
             .withFileSystemBind(LOCAL_JARS_DIR, KC_PLUGIN_DIR)
             .withEnv("CONNECT_PLUGIN_PATH", KC_PLUGIN_DIR)
             .withEnv("CONNECT_BOOTSTRAP_SERVERS", kafka.getNetworkAliases().get(0) + ":9092")
             .withEnv("CONNECT_OFFSET_FLUSH_INTERVAL_MS", "500");
 
-    Startables.deepStart(Stream.of(minio, catalog, kafka, kafkaConnect)).join();
+    Startables.deepStart(Stream.of(minio, restCatalog, kafka, kafkaConnect)).join();
 
     s3 = initLocalS3Client();
     s3.createBucket(req -> req.bucket(BUCKET));
-    restCatalog = initLocalCatalog();
+    catalog = initLocalCatalog();
     producer = initLocalProducer();
     admin = initLocalAdmin();
   }
@@ -106,14 +112,16 @@ public class IntegrationTestBase {
   public static void teardownAll() {
     kafkaConnect.close();
     try {
-      restCatalog.close();
+      if (catalog instanceof Closeable) {
+        ((Closeable) catalog).close();
+      }
     } catch (IOException e) {
       // NO-OP
     }
     producer.close();
     admin.close();
     kafka.close();
-    catalog.close();
+    restCatalog.close();
     s3.close();
     minio.close();
     network.close();
@@ -154,18 +162,18 @@ public class IntegrationTestBase {
   }
 
   private static RESTCatalog initLocalCatalog() {
-    String localCatalogUri = "http://localhost:" + catalog.getMappedPort(8181);
+    String localCatalogUri = "http://localhost:" + restCatalog.getMappedPort(8181);
     RESTCatalog result = new RESTCatalog();
     result.initialize(
         "local",
         ImmutableMap.<String, String>builder()
             .put(CatalogProperties.URI, localCatalogUri)
             .put(CatalogProperties.FILE_IO_IMPL, S3FileIO.class.getName())
-            .put(AwsProperties.HTTP_CLIENT_TYPE, AwsProperties.HTTP_CLIENT_TYPE_APACHE)
             .put(AwsProperties.S3FILEIO_ENDPOINT, "http://localhost:" + minio.getMappedPort(9000))
             .put(AwsProperties.S3FILEIO_ACCESS_KEY_ID, AWS_ACCESS_KEY)
             .put(AwsProperties.S3FILEIO_SECRET_ACCESS_KEY, AWS_SECRET_KEY)
             .put(AwsProperties.S3FILEIO_PATH_STYLE_ACCESS, "true")
+            .put(AwsProperties.HTTP_CLIENT_TYPE, AwsProperties.HTTP_CLIENT_TYPE_APACHE)
             .build());
     return result;
   }

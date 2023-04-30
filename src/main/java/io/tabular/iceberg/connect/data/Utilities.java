@@ -8,7 +8,6 @@ import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES_DE
 
 import java.util.Map;
 import java.util.UUID;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.Table;
@@ -20,8 +19,12 @@ import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.UnpartitionedWriter;
 import org.apache.iceberg.util.PropertyUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Utilities {
+
+  private static final Logger LOG = LoggerFactory.getLogger(Utilities.class.getName());
 
   private static final String CATALOG_PROP = "iceberg.catalog";
   private static final String CATALOG_PROP_PREFIX = "iceberg.catalog.";
@@ -30,7 +33,20 @@ public class Utilities {
     String catalogImpl = props.get(CATALOG_PROP);
     Map<String, String> catalogProps =
         PropertyUtil.propertiesWithPrefix(props, CATALOG_PROP_PREFIX);
-    return CatalogUtil.loadCatalog(catalogImpl, "iceberg", catalogProps, new Configuration());
+    return CatalogUtil.loadCatalog(catalogImpl, "iceberg", catalogProps, getHadoopConfig());
+  }
+
+  private static Object getHadoopConfig() {
+    try {
+      Class<?> clazz = Class.forName("org.apache.hadoop.conf.Configuration");
+      return clazz.newInstance();
+    } catch (ClassNotFoundException e) {
+      LOG.info("Hadoop not found on classpath, not creating Hadoop config");
+    } catch (InstantiationException | IllegalAccessException e) {
+      LOG.warn(
+          "Hadoop found on classpath but could not create config, proceeding without config", e);
+    }
+    return null;
   }
 
   public static TaskWriter<Record> createTableWriter(Table table) {

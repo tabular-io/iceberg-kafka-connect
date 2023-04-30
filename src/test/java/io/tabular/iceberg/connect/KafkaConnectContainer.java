@@ -31,8 +31,8 @@ public class KafkaConnectContainer extends GenericContainer<KafkaConnectContaine
 
   public static class Config {
 
-    private String name;
-    private Map<String, Object> config = new HashMap<>();
+    private final String name;
+    private final Map<String, Object> config = new HashMap<>();
 
     public Config(String name) {
       this.name = name;
