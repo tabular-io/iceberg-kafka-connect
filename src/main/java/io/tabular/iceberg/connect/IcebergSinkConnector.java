@@ -1,6 +1,7 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect;
 
+import static io.tabular.iceberg.connect.IcebergSinkConfig.INTERNAL_TRANSACTIONAL_SUFFIX_PROP;
 import static java.util.stream.Collectors.toList;
 
 import java.util.HashMap;
@@ -14,10 +15,6 @@ import org.apache.kafka.connect.sink.SinkConnector;
 public class IcebergSinkConnector extends SinkConnector {
 
   private Map<String, String> props;
-
-  // TODO: the following are all defined in Channel also...
-  private static final String TRANSACTIONAL_SUFFIX_PROP =
-      "iceberg.coordinator.transactional.suffix";
 
   @Override
   public String version() {
@@ -40,7 +37,7 @@ public class IcebergSinkConnector extends SinkConnector {
         .mapToObj(
             i -> {
               Map<String, String> map = new HashMap<>(props);
-              map.put(TRANSACTIONAL_SUFFIX_PROP, "-txn-" + i);
+              map.put(INTERNAL_TRANSACTIONAL_SUFFIX_PROP, "-txn-" + i);
               return map;
             })
         .collect(toList());
@@ -51,6 +48,6 @@ public class IcebergSinkConnector extends SinkConnector {
 
   @Override
   public ConfigDef config() {
-    return new ConfigDef();
+    return IcebergSinkConfig.newConfigDef();
   }
 }

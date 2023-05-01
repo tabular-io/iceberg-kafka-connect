@@ -4,6 +4,7 @@ package io.tabular.iceberg.connect.channel;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
+import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.channel.events.Event;
@@ -32,15 +33,17 @@ public class Worker extends Channel {
 
   private final IcebergWriter writer;
   private final SinkTaskContext context;
+  private final String controlGroupId;
 
   public Worker(
       Catalog catalog,
       TableIdentifier tableIdentifier,
-      Map<String, String> props,
+      IcebergSinkConfig config,
       SinkTaskContext context) {
-    super("worker", props);
+    super("worker", config);
     this.writer = new IcebergWriter(catalog, tableIdentifier);
     this.context = context;
+    this.controlGroupId = config.getControlGroupId();
   }
 
   public void syncCommitOffsets() {
@@ -52,7 +55,7 @@ public class Worker extends Channel {
 
   public Map<TopicPartition, OffsetAndMetadata> getCommitOffsets() {
     try {
-      ListConsumerGroupOffsetsResult response = admin().listConsumerGroupOffsets(commitGroupId());
+      ListConsumerGroupOffsetsResult response = admin().listConsumerGroupOffsets(controlGroupId);
       return response.partitionsToOffsetAndMetadata().get().entrySet().stream()
           .filter(entry -> context.assignment().contains(entry.getKey()))
           .collect(toMap(Entry::getKey, Entry::getValue));

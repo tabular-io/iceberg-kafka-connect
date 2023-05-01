@@ -6,7 +6,7 @@ import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT_DEFAULT;
 import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES;
 import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT;
 
-import java.util.Map;
+import io.tabular.iceberg.connect.IcebergSinkConfig;
 import java.util.UUID;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.FileFormat;
@@ -26,14 +26,9 @@ public class Utilities {
 
   private static final Logger LOG = LoggerFactory.getLogger(Utilities.class.getName());
 
-  private static final String CATALOG_PROP = "iceberg.catalog";
-  private static final String CATALOG_PROP_PREFIX = "iceberg.catalog.";
-
-  public static Catalog loadCatalog(Map<String, String> props) {
-    String catalogImpl = props.get(CATALOG_PROP);
-    Map<String, String> catalogProps =
-        PropertyUtil.propertiesWithPrefix(props, CATALOG_PROP_PREFIX);
-    return CatalogUtil.loadCatalog(catalogImpl, "iceberg", catalogProps, getHadoopConfig());
+  public static Catalog loadCatalog(IcebergSinkConfig config) {
+    return CatalogUtil.loadCatalog(
+        config.getCatalogImpl(), "iceberg", config.getCatalogProps(), getHadoopConfig());
   }
 
   private static Object getHadoopConfig() {

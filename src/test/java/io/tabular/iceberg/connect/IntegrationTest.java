@@ -30,7 +30,7 @@ public class IntegrationTest extends IntegrationTestBase {
 
   private static final String CONNECTOR_NAME = "test_connector";
   private static final String TEST_TOPIC = "test-topic";
-  private static final String COMMIT_GROUP_ID = "commit-cg";
+  private static final String CONTROL_GROUP_ID = "control-cg";
   private static final String CONTROL_TOPIC = "control-topic";
   private static final String TEST_DB = "default";
   private static final String TEST_TABLE = "foobar";
@@ -82,7 +82,7 @@ public class IntegrationTest extends IntegrationTestBase {
             .config("transforms", "tabular")
             .config("transforms.tabular.type", TabularEventTransform.class.getName())
             .config("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE))
-            .config("iceberg.commit.group.id", COMMIT_GROUP_ID)
+            .config("iceberg.control.group.id", CONTROL_GROUP_ID)
             .config("iceberg.control.topic", CONTROL_TOPIC)
             .config("iceberg.kafka.bootstrap.servers", kafka.getNetworkAliases().get(0) + ":9092")
             .config("iceberg.table.commitIntervalMs", 1000)

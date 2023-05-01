@@ -5,42 +5,33 @@ import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.channel.events.EventType;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
-import org.apache.iceberg.util.PropertyUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class Coordinator extends Channel {
 
   private static final Logger LOG = LoggerFactory.getLogger(Coordinator.class);
-
-  private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.table.commitIntervalMs";
-  private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
-  private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.table.commitTimeoutMs";
-  private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static final String CHANNEL_OFFSETS_SNAPSHOT_PROP = "kafka.connect.channel.offsets";
-  private static final String TOPICS_PROP = "topics";
+  private static final String CONTROL_OFFSETS_SNAPSHOT_PROP = "kafka.connect.control.offsets";
 
   private final Table table;
   private final List<Event> commitBuffer = new LinkedList<>();
@@ -50,17 +41,12 @@ public class Coordinator extends Channel {
   private long startTime;
   private UUID currentCommitId;
 
-  public Coordinator(Catalog catalog, TableIdentifier tableIdentifier, Map<String, String> props) {
-    super("coordinator", props);
+  public Coordinator(Catalog catalog, TableIdentifier tableIdentifier, IcebergSinkConfig config) {
+    super("coordinator", config);
     this.table = catalog.loadTable(tableIdentifier);
-    this.commitIntervalMs =
-        PropertyUtil.propertyAsInt(props, COMMIT_INTERVAL_MS_PROP, COMMIT_INTERVAL_MS_DEFAULT);
-    this.commitTimeoutMs =
-        PropertyUtil.propertyAsInt(props, COMMIT_TIMEOUT_MS_PROP, COMMIT_TIMEOUT_MS_DEFAULT);
-    this.topics =
-        Arrays.stream(props.get(TOPICS_PROP).split(","))
-            .map(String::trim)
-            .collect(Collectors.toCollection(TreeSet::new));
+    this.commitIntervalMs = config.getCommitIntervalMs();
+    this.commitTimeoutMs = config.getCommitTimeoutMs();
+    this.topics = config.getTopics();
   }
 
   public void process() {
@@ -148,7 +134,7 @@ public class Coordinator extends Channel {
       }
       table.refresh();
       AppendFiles appendOp = table.newAppend();
-      appendOp.set(CHANNEL_OFFSETS_SNAPSHOT_PROP, offsetsStr);
+      appendOp.set(CONTROL_OFFSETS_SNAPSHOT_PROP, offsetsStr);
       dataFiles.forEach(appendOp::appendFile);
       appendOp.commit();
 
@@ -173,7 +159,7 @@ public class Coordinator extends Channel {
     Snapshot snapshot = table.currentSnapshot();
     while (snapshot != null) {
       Map<String, String> summary = snapshot.summary();
-      String value = summary.get(CHANNEL_OFFSETS_SNAPSHOT_PROP);
+      String value = summary.get(CONTROL_OFFSETS_SNAPSHOT_PROP);
       if (value != null) {
         TypeReference<Map<Integer, Long>> typeRef = new TypeReference<Map<Integer, Long>>() {};
         try {

@@ -1,16 +1,11 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect;
 
-import static java.util.stream.Collectors.toCollection;
-
 import io.tabular.iceberg.connect.channel.Coordinator;
 import io.tabular.iceberg.connect.channel.Worker;
 import io.tabular.iceberg.connect.data.Utilities;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -23,13 +18,10 @@ import org.slf4j.LoggerFactory;
 public class IcebergSinkTask extends SinkTask {
 
   private static final Logger LOG = LoggerFactory.getLogger(IcebergSinkTask.class);
-  private static final String TOPICS_PROP = "topics";
 
-  private Map<String, String> props;
+  private IcebergSinkConfig config;
   private Coordinator coordinator;
   private Worker worker;
-
-  private static final String TABLE_PROP = "iceberg.table";
 
   @Override
   public String version() {
@@ -38,21 +30,21 @@ public class IcebergSinkTask extends SinkTask {
 
   @Override
   public void start(Map<String, String> props) {
-    this.props = props;
+    this.config = new IcebergSinkConfig(props);
   }
 
   @Override
   public void open(Collection<TopicPartition> partitions) {
-    Catalog catalog = Utilities.loadCatalog(props);
-    TableIdentifier tableIdentifier = TableIdentifier.parse(props.get(TABLE_PROP));
+    Catalog catalog = Utilities.loadCatalog(config);
+    TableIdentifier tableIdentifier = config.getTable();
 
     if (isLeader(partitions)) {
       LOG.info("Task elected leader, starting commit coordinator");
-      coordinator = new Coordinator(catalog, tableIdentifier, props);
+      coordinator = new Coordinator(catalog, tableIdentifier, config);
       coordinator.start();
     }
     LOG.info("Starting commit worker");
-    worker = new Worker(catalog, tableIdentifier, props, context);
+    worker = new Worker(catalog, tableIdentifier, config, context);
     worker.syncCommitOffsets();
     worker.start();
   }
@@ -60,16 +52,10 @@ public class IcebergSinkTask extends SinkTask {
   private boolean isLeader(Collection<TopicPartition> partitions) {
     // there should only be one worker assigned partition 0 of the first
     // topic, so elect that one the leader
-    String firstTopic = getTopics(props).first();
+    String firstTopic = config.getTopics().first();
     return partitions.stream()
         .filter(tp -> tp.topic().equals(firstTopic))
         .anyMatch(tp -> tp.partition() == 0);
-  }
-
-  public static SortedSet<String> getTopics(Map<String, String> props) {
-    return Arrays.stream(props.get(TOPICS_PROP).split(","))
-        .map(String::trim)
-        .collect(toCollection(TreeSet::new));
   }
 
   @Override

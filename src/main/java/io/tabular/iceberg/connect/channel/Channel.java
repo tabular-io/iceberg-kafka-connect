@@ -3,6 +3,7 @@ package io.tabular.iceberg.connect.channel;
 
 import static java.util.stream.Collectors.toList;
 
+import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.channel.events.Event;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -15,7 +16,6 @@ import java.util.function.Consumer;
 import org.apache.iceberg.avro.AvroEncoderUtil;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.iceberg.util.PropertyUtil;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -38,24 +38,18 @@ public abstract class Channel {
 
   protected final Map<String, String> kafkaProps;
   private final String controlTopic;
-  private final String commitGroupId;
+  private final String controlGroupId;
   private final String transactionalId;
   private final KafkaProducer<byte[], byte[]> producer;
   private final KafkaConsumer<byte[], byte[]> consumer;
   private final Admin admin;
   private final Map<Integer, Long> channelOffsets = new HashMap<>();
 
-  private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
-  private static final String KAFKA_PROP_PREFIX = "iceberg.kafka.";
-  private static final String COMMIT_GROUP_ID_PROP = "iceberg.commit.group.id";
-  private static final String TRANSACTIONAL_SUFFIX_PROP =
-      "iceberg.coordinator.transactional.suffix";
-
-  public Channel(String name, Map<String, String> props) {
-    this.kafkaProps = PropertyUtil.propertiesWithPrefix(props, KAFKA_PROP_PREFIX);
-    this.controlTopic = props.get(CONTROL_TOPIC_PROP);
-    this.commitGroupId = props.get(COMMIT_GROUP_ID_PROP);
-    this.transactionalId = name + props.get(TRANSACTIONAL_SUFFIX_PROP);
+  public Channel(String name, IcebergSinkConfig config) {
+    this.kafkaProps = config.getKafkaProps();
+    this.controlTopic = config.getControlTopic();
+    this.controlGroupId = config.getControlGroupId();
+    this.transactionalId = name + config.getTransactionalSuffix();
     this.producer = createProducer();
     this.consumer = createConsumer();
     this.admin = createAdmin();
@@ -80,7 +74,7 @@ public abstract class Channel {
       producer.send(new ProducerRecord<>(controlTopic, data));
       if (!sourceOffsets.isEmpty()) {
         // TODO: this doesn't fence zombies
-        producer.sendOffsetsToTransaction(sourceOffsets, new ConsumerGroupMetadata(commitGroupId));
+        producer.sendOffsetsToTransaction(sourceOffsets, new ConsumerGroupMetadata(controlGroupId));
       }
       producer.commitTransaction();
     } catch (Exception e) {
@@ -155,10 +149,6 @@ public abstract class Channel {
 
   protected Admin admin() {
     return admin;
-  }
-
-  protected String commitGroupId() {
-    return commitGroupId;
   }
 
   public void start() {
