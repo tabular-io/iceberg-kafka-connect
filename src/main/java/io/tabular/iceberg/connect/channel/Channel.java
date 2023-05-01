@@ -79,6 +79,7 @@ public abstract class Channel {
     try {
       producer.send(new ProducerRecord<>(controlTopic, data));
       if (!sourceOffsets.isEmpty()) {
+        // TODO: this doesn't fence zombies
         producer.sendOffsetsToTransaction(sourceOffsets, new ConsumerGroupMetadata(commitGroupId));
       }
       producer.commitTransaction();
