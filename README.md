@@ -16,7 +16,7 @@ bin/kafka-topics  \
   --command-config tabular-dev.props \
   --bootstrap-server ${CONNECT_BOOTSTRAP_SERVERS} \
   --create \
-  --topic sink-control-tabular-events \
+  --topic control-tabular-events \
   --partitions 1
 ```
 
@@ -45,8 +45,8 @@ curl http://localhost:8083/connectors \
     "transforms": "tabular",
     "transforms.tabular.type": "io.tabular.iceberg.connect.transform.TabularEventTransform",
     "iceberg.table": "bck.tabular_events_kc",
-    "iceberg.commit.group.id": "cg-sink-offsets-tabular-events",
-    "iceberg.control.topic": "sink-control-tabular-events",
+    "iceberg.control.group.id": "cg-control-tabular-events",
+    "iceberg.control.topic": "control-tabular-events",
     "iceberg.kafka.bootstrap.servers": "${CONNECT_BOOTSTRAP_SERVERS}",
     "iceberg.kafka.security.protocol": "${CONNECT_SECURITY_PROTOCOL}",
     "iceberg.kafka.sasl.mechanism": "${CONNECT_SASL_MECHANISM}",
