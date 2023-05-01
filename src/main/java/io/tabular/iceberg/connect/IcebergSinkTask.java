@@ -1,16 +1,18 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect;
 
-import static io.tabular.iceberg.connect.IcebergSinkConnector.COORDINATOR_PROP;
+import static java.util.stream.Collectors.toCollection;
 
 import io.tabular.iceberg.connect.channel.Coordinator;
 import io.tabular.iceberg.connect.channel.Worker;
 import io.tabular.iceberg.connect.data.Utilities;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
-import org.apache.iceberg.util.PropertyUtil;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -21,6 +23,7 @@ import org.slf4j.LoggerFactory;
 public class IcebergSinkTask extends SinkTask {
 
   private static final Logger LOG = LoggerFactory.getLogger(IcebergSinkTask.class);
+  private static final String TOPICS_PROP = "topics";
 
   private Map<String, String> props;
   private Coordinator coordinator;
@@ -43,7 +46,7 @@ public class IcebergSinkTask extends SinkTask {
     Catalog catalog = Utilities.loadCatalog(props);
     TableIdentifier tableIdentifier = TableIdentifier.parse(props.get(TABLE_PROP));
 
-    if (PropertyUtil.propertyAsBoolean(props, COORDINATOR_PROP, false)) {
+    if (isLeader(partitions)) {
       LOG.info("Task elected leader, starting commit coordinator");
       coordinator = new Coordinator(catalog, tableIdentifier, props);
       coordinator.start();
@@ -52,6 +55,21 @@ public class IcebergSinkTask extends SinkTask {
     worker = new Worker(catalog, tableIdentifier, props, context);
     worker.syncCommitOffsets();
     worker.start();
+  }
+
+  private boolean isLeader(Collection<TopicPartition> partitions) {
+    // there should only be one worker assigned partition 0 of the first
+    // topic, so elect that one the leader
+    String firstTopic = getTopics(props).first();
+    return partitions.stream()
+        .filter(tp -> tp.topic().equals(firstTopic))
+        .anyMatch(tp -> tp.partition() == 0);
+  }
+
+  public static SortedSet<String> getTopics(Map<String, String> props) {
+    return Arrays.stream(props.get(TOPICS_PROP).split(","))
+        .map(String::trim)
+        .collect(toCollection(TreeSet::new));
   }
 
   @Override
