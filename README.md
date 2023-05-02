@@ -34,6 +34,7 @@ curl http://localhost:8083/connectors \
     "consumer.override.auto.offset.reset": "latest",
     "transforms": "tabular",
     "transforms.tabular.type": "io.tabular.iceberg.connect.transform.TabularEventTransform",
+    "topic.auto.create": "true",
     "iceberg.table": "bck.tabular_events_kc",
     "iceberg.control.group.id": "cg-control-tabular-events",
     "iceberg.control.topic": "control-tabular-events",
