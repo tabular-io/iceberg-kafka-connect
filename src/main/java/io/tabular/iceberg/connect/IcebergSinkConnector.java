@@ -41,11 +41,14 @@ public class IcebergSinkConnector extends SinkConnector {
   }
 
   private void createControlTopicIfNeeded(IcebergSinkConfig config) {
-    // TODO: move admin functions to new class
+    // TODO: move admin functions to new class?
     Map<String, Object> adminProps = new HashMap<>(config.getKafkaProps());
     try (Admin admin = Admin.create(adminProps)) {
-      // TODO: partitions/replication setting
-      NewTopic newTopic = new NewTopic(config.getControlTopic(), 1, (short) 1);
+      NewTopic newTopic =
+          new NewTopic(
+              config.getControlTopic(),
+              config.getControlTopicPartitions(),
+              config.getControlTopicReplication());
       admin.createTopics(ImmutableList.of(newTopic)).all().get();
       LOG.info("Created control topic: {}", config.getControlTopic());
     } catch (ExecutionException e) {

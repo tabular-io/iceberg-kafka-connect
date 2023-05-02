@@ -25,6 +25,8 @@ public class IcebergSinkConfig {
   private static final String CATALOG_IMPL_PROP = "iceberg.catalog";
   private static final String TABLE_PROP = "iceberg.table";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
+  private static final String CONTROL_TOPIC_PARTITIONS_PROP = "iceberg.control.topic.partitions";
+  private static final String CONTROL_TOPIC_REPLICATION_PROP = "iceberg.control.topic.replication";
   private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group.id";
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.table.commitIntervalMs";
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
@@ -35,8 +37,19 @@ public class IcebergSinkConfig {
   public static ConfigDef newConfigDef() {
     ConfigDef configDef = new ConfigDef();
     configDef.define(CATALOG_IMPL_PROP, Type.STRING, Importance.HIGH, "Iceberg catalog class name");
+    configDef.define(CONTROL_TOPIC_PROP, Type.STRING, Importance.HIGH, "Name of the control topic");
     configDef.define(
-        CONTROL_TOPIC_PROP, Type.STRING, Importance.HIGH, "Name of the Kafka control topic");
+        CONTROL_TOPIC_PARTITIONS_PROP,
+        Type.INT,
+        1,
+        Importance.MEDIUM,
+        "Number of partitions to use when automatically creating the control topic");
+    configDef.define(
+        CONTROL_TOPIC_REPLICATION_PROP,
+        Type.SHORT,
+        (short) 1,
+        Importance.MEDIUM,
+        "Replication factor to use when automatically creating the control topic");
     configDef.define(
         CONTROL_GROUP_ID_PROP,
         Type.STRING,
@@ -57,7 +70,7 @@ public class IcebergSinkConfig {
     configDef.define(
         TOPIC_AUTO_CREATE_PROP,
         Type.BOOLEAN,
-        true,
+        false,
         Importance.MEDIUM,
         "Whether to automatically create the control topic or not");
     return configDef;
@@ -101,6 +114,14 @@ public class IcebergSinkConfig {
     return props.get(CONTROL_TOPIC_PROP);
   }
 
+  public int getControlTopicPartitions() {
+    return PropertyUtil.propertyAsInt(props, CONTROL_TOPIC_PARTITIONS_PROP, 1);
+  }
+
+  public short getControlTopicReplication() {
+    return (short) PropertyUtil.propertyAsInt(props, CONTROL_TOPIC_REPLICATION_PROP, 1);
+  }
+
   public String getControlGroupId() {
     return props.get(CONTROL_GROUP_ID_PROP);
   }
@@ -114,6 +135,6 @@ public class IcebergSinkConfig {
   }
 
   public boolean getTopicAutoCreate() {
-    return PropertyUtil.propertyAsBoolean(props, TOPIC_AUTO_CREATE_PROP, true);
+    return PropertyUtil.propertyAsBoolean(props, TOPIC_AUTO_CREATE_PROP, false);
   }
 }

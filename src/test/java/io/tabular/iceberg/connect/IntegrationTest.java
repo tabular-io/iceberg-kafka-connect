@@ -75,6 +75,7 @@ public class IntegrationTest extends IntegrationTestBase {
             .config("value.converter.schemas.enable", false)
             .config("transforms", "tabular")
             .config("transforms.tabular.type", TabularEventTransform.class.getName())
+            .config("topic.auto.create", true)
             .config("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE))
             .config("iceberg.control.group.id", CONTROL_GROUP_ID)
             .config("iceberg.control.topic", CONTROL_TOPIC)
