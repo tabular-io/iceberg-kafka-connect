@@ -61,13 +61,8 @@ public class IntegrationTest extends IntegrationTestBase {
 
   @Test
   public void testIcebergSink() throws Exception {
-    // we are starting at latest offsets, so this should be ignored...
-    String ignore1 = format(RECORD_FORMAT, 0, "type1", System.currentTimeMillis());
-    producer.send(new ProducerRecord<>(TEST_TOPIC, ignore1));
-    producer.flush();
-
-    // TODO: get bootstrap.servers from worker properties?
     // set offset reset to earliest so we don't miss any test messages
+    // TODO: get bootstrap.servers from worker properties?
     KafkaConnectContainer.Config connectorConfig =
         new KafkaConnectContainer.Config(CONNECTOR_NAME)
             .config("topics", TEST_TOPIC)
@@ -114,7 +109,9 @@ public class IntegrationTest extends IntegrationTestBase {
 
     catalog.dropTable(TABLE_IDENTIFIER);
     catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA);
-    Thread.sleep(1000); // wait for the table refresh in the writer
+
+    // wait for the flush so the writer will refresh the table...
+    Thread.sleep(1000);
 
     runTest();
 
