@@ -1,0 +1,15 @@
+dependencies {
+  implementation libs.bundles.iceberg
+  implementation libs.bundles.aws
+  implementation libs.bundles.jackson
+  implementation libs.avro
+  compileOnly libs.bundles.kafka.connect
+  runtimeOnly libs.hadoop.common // REST catalog needs this when loading the FileIO
+
+  testImplementation libs.junit.api
+  testRuntimeOnly libs.junit.engine
+
+  testImplementation libs.mockito
+  testImplementation libs.assertj
+  testImplementation libs.awaitility
+}

@@ -7,6 +7,7 @@ import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES;
 import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import java.lang.reflect.InvocationTargetException;
 import java.util.UUID;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.FileFormat;
@@ -34,10 +35,13 @@ public class Utilities {
   private static Object getHadoopConfig() {
     try {
       Class<?> clazz = Class.forName("org.apache.hadoop.conf.Configuration");
-      return clazz.newInstance();
+      return clazz.getDeclaredConstructor().newInstance();
     } catch (ClassNotFoundException e) {
       LOG.info("Hadoop not found on classpath, not creating Hadoop config");
-    } catch (InstantiationException | IllegalAccessException e) {
+    } catch (InstantiationException
+        | IllegalAccessException
+        | NoSuchMethodException
+        | InvocationTargetException e) {
       LOG.warn(
           "Hadoop found on classpath but could not create config, proceeding without config", e);
     }

@@ -3,7 +3,6 @@ package io.tabular.iceberg.connect.transform;
 
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -13,7 +12,10 @@ public class TabularEventTransform<R extends ConnectRecord<R>> implements Transf
 
   @Override
   public R apply(R record) {
-    Preconditions.checkArgument(record.value() instanceof Map);
+    if (!(record.value() instanceof Map)) {
+      throw new IllegalArgumentException("Record must be a map");
+    }
+
     Map<?, ?> original = (Map<?, ?>) record.value();
 
     final Map<String, Object> updated = new HashMap<>();

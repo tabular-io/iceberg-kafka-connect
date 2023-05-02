@@ -1,71 +1,40 @@
-plugins {
-  id "java"
-  id "distribution"
-  id "com.diffplug.spotless" version "6.13.0"
+buildscript {
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    classpath("com.diffplug.spotless:spotless-plugin-gradle:6.13.0")
+  }
 }
 
-group "io.tabular.iceberg.connect"
-version "0.0.1"
+subprojects {
+  apply plugin: "java"
+  apply plugin: "com.diffplug.spotless"
 
-repositories {
-  mavenCentral()
-}
+  group "io.tabular.iceberg.connect"
+  version "0.0.1"
 
-dependencies {
-  implementation libs.bundles.iceberg
-  implementation libs.bundles.aws
-  implementation libs.bundles.jackson
-  implementation libs.avro
-  compileOnly libs.bundles.kafka.connect
-  runtimeOnly libs.hadoop.common // REST catalog needs this when loading the FileIO
+  repositories {
+    mavenCentral()
+  }
 
-  testImplementation libs.junit.api
-  testRuntimeOnly libs.junit.engine
+  sourceCompatibility = '1.8'
+  targetCompatibility = '1.8'
 
-  testImplementation libs.mockito
-  testImplementation libs.assertj
-  testImplementation libs.awaitility
-  testImplementation libs.testcontainers
-  testImplementation libs.testcontainers.kafka
-  testImplementation libs.http.client
-}
+  test {
+    useJUnitPlatform()
+  }
 
-sourceCompatibility = '1.8'
-targetCompatibility = '1.8'
+  configurations {
+    testImplementation.extendsFrom testCompileOnly
+  }
 
-
-test {
-  useJUnitPlatform()
-}
-
-configurations {
-  testImplementation.extendsFrom compileOnly
-}
-
-distributions {
-  main {
-    contents {
-      into('lib/') {
-        from jar
-        from configurations.runtimeClasspath
-      }
-      from(processResources.destinationDir) {
-        include 'manifest.json'
-      }
+  spotless {
+    java {
+      target "src/**/*.java"
+      googleJavaFormat("1.7")
+      removeUnusedImports()
+      licenseHeaderFile "$rootDir/LICENSE.txt"
     }
   }
 }
-tasks.distTar.enabled = false
-
-spotless {
-  java {
-    target "src/**/*.java"
-    googleJavaFormat("1.7")
-    removeUnusedImports()
-    licenseHeaderFile "$rootDir/LICENSE.txt"
-  }
-}
-
-// build the distribution first so it can be installed into kafka connect
-test.dependsOn installDist
-assemble.dependsOn installDist

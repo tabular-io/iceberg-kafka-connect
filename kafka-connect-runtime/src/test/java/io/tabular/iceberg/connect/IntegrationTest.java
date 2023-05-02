@@ -5,7 +5,6 @@ import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import io.tabular.iceberg.connect.transform.TabularEventTransform;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -44,7 +43,8 @@ public class IntegrationTest extends IntegrationTestBase {
   private static final PartitionSpec TEST_SPEC =
       PartitionSpec.builderFor(TEST_SCHEMA).day("ts").build();
 
-  private static final String RECORD_FORMAT = "{\"id\":%d,\"type\":\"%s\",\"event_ts_ms\":%d}";
+  private static final String RECORD_FORMAT =
+      "{\"id\":%d,\"type\":\"%s\",\"ts\":%d,\"payload\":\"%s\"}";
 
   @BeforeEach
   public void setup() {
@@ -73,8 +73,6 @@ public class IntegrationTest extends IntegrationTestBase {
             .config("key.converter.schemas.enable", false)
             .config("value.converter", "org.apache.kafka.connect.json.JsonConverter")
             .config("value.converter.schemas.enable", false)
-            .config("transforms", "tabular")
-            .config("transforms.tabular.type", TabularEventTransform.class.getName())
             .config("topic.auto.create", true)
             .config("iceberg.table", format("%s.%s", TEST_DB, TEST_TABLE))
             .config("iceberg.control.group.id", CONTROL_GROUP_ID)
@@ -124,10 +122,11 @@ public class IntegrationTest extends IntegrationTestBase {
   }
 
   private void runTest() {
-    String event1 = format(RECORD_FORMAT, 1, "type1", System.currentTimeMillis());
-    String event2 =
-        format(
-            RECORD_FORMAT, 2, "type2", System.currentTimeMillis() - Duration.ofDays(3).toMillis());
+    String event1 = format(RECORD_FORMAT, 1, "type1", System.currentTimeMillis(), "hello world!");
+
+    long threeDaysAgo = System.currentTimeMillis() - Duration.ofDays(3).toMillis();
+    String event2 = format(RECORD_FORMAT, 2, "type2", threeDaysAgo, "having fun?");
+
     producer.send(new ProducerRecord<>(TEST_TOPIC, event1));
     producer.send(new ProducerRecord<>(TEST_TOPIC, event2));
     producer.flush();

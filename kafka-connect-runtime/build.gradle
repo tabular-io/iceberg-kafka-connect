@@ -1,0 +1,42 @@
+plugins {
+  id "distribution"
+}
+
+dependencies {
+  implementation project(":iceberg-kafka-connect")
+
+  testImplementation libs.bundles.iceberg
+  testImplementation libs.bundles.aws
+  testImplementation libs.bundles.jackson
+  testCompileOnly libs.bundles.kafka.connect
+
+  testImplementation libs.junit.api
+  testRuntimeOnly libs.junit.engine
+
+  testImplementation libs.mockito
+  testImplementation libs.assertj
+  testImplementation libs.awaitility
+  testImplementation libs.testcontainers
+  testImplementation libs.testcontainers.kafka
+  testImplementation libs.http.client
+}
+
+distributions {
+  main {
+    contents {
+      into('lib/') {
+        from configurations.runtimeClasspath
+      }
+      from(processResources.destinationDir) {
+        include 'manifest.json'
+      }
+    }
+  }
+}
+tasks.distTar.enabled = false
+
+// build the distribution first so it can be installed into kafka connect
+test.dependsOn installDist
+assemble.dependsOn installDist
+installDist.dependsOn processResources
+distZip.dependsOn processResources

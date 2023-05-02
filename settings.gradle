@@ -5,3 +5,12 @@ dependencyResolutionManagement {
     }
   }
 }
+
+include "iceberg-kafka-connect"
+project(":iceberg-kafka-connect").projectDir = file("kafka-connect")
+
+include "iceberg-kafka-connect-runtime"
+project(":iceberg-kafka-connect-runtime").projectDir = file("kafka-connect-runtime")
+
+include "tabular-transforms"
+project(":tabular-transforms").projectDir = file("tabular-transforms")

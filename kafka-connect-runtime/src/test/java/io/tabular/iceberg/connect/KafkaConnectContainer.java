@@ -1,8 +1,6 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect;
 
-import static java.lang.String.format;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -77,7 +75,7 @@ public class KafkaConnectContainer extends GenericContainer<KafkaConnectContaine
   public void registerConnector(Config config) {
     try {
       HttpPost request =
-          new HttpPost(format("http://localhost:%d/connectors", getMappedPort(PORT)));
+          new HttpPost(String.format("http://localhost:%d/connectors", getMappedPort(PORT)));
       String body = MAPPER.writeValueAsString(config);
       request.setHeader("Content-Type", "application/json");
       request.setEntity(new StringEntity(body));
@@ -89,7 +87,8 @@ public class KafkaConnectContainer extends GenericContainer<KafkaConnectContaine
 
   public void ensureConnectorRunning(String name) {
     HttpGet request =
-        new HttpGet(format("http://localhost:%d/connectors/%s/status", getMappedPort(PORT), name));
+        new HttpGet(
+            String.format("http://localhost:%d/connectors/%s/status", getMappedPort(PORT), name));
     Awaitility.await()
         .atMost(Duration.ofSeconds(30))
         .until(
