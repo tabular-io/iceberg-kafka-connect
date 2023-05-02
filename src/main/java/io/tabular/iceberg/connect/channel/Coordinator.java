@@ -40,6 +40,7 @@ public class Coordinator extends Channel {
   private final Set<String> topics;
   private long startTime;
   private UUID currentCommitId;
+  private final int totalPartitionCount;
 
   public Coordinator(Catalog catalog, TableIdentifier tableIdentifier, IcebergSinkConfig config) {
     super("coordinator", config);
@@ -47,6 +48,7 @@ public class Coordinator extends Channel {
     this.commitIntervalMs = config.getCommitIntervalMs();
     this.commitTimeoutMs = config.getCommitTimeoutMs();
     this.topics = config.getTopics();
+    this.totalPartitionCount = getTotalPartitionCount();
   }
 
   @Override
@@ -65,6 +67,7 @@ public class Coordinator extends Channel {
 
     super.process();
 
+    // TODO: reduce frequency of commit check
     if (currentCommitId != null && isCommitComplete()) {
       commit(commitBuffer);
     }
@@ -95,29 +98,32 @@ public class Coordinator extends Channel {
   }
 
   private boolean isCommitComplete() {
-    if (System.currentTimeMillis() - startTime > commitTimeoutMs) {
-      // commit whatever we have received
-      return true;
-    }
-
-    // TODO: avoid getting total number of partitions so often, use better algorithm
-    int totalPartitions = getTotalPartitionCount();
-    int receivedPartitions =
+    int receivedPartitionCount =
         commitBuffer.stream()
             .map(event -> (CommitResponsePayload) event.getPayload())
             .filter(payload -> payload.getCommitId().equals(currentCommitId))
             .mapToInt(payload -> payload.getAssignments().size())
             .sum();
-    if (receivedPartitions < totalPartitions) {
-      LOG.info(
-          "Commit not ready, waiting for more responses, expected: {}, actual {}",
-          totalPartitions,
-          receivedPartitions);
-      return false;
+
+    if (receivedPartitionCount >= totalPartitionCount) {
+      LOG.info("Commit ready, received responses for all {} partitions", receivedPartitionCount);
+      return true;
     }
 
-    LOG.info("Commit ready, received responses for all {} partitions", receivedPartitions);
-    return true;
+    if (System.currentTimeMillis() - startTime > commitTimeoutMs) {
+      LOG.info(
+          "Commit timeout reached, committing data for {} of {} partitions",
+          receivedPartitionCount,
+          totalPartitionCount);
+      return true;
+    }
+
+    LOG.info(
+        "Commit not ready, received responses for {} of {} partitions, waiting for more",
+        receivedPartitionCount,
+        totalPartitionCount);
+
+    return false;
   }
 
   private void commit(List<Event> buffer) {
