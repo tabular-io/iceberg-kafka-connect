@@ -68,4 +68,4 @@ spotless {
 
 // build the distribution first so it can be installed into kafka connect
 test.dependsOn installDist
-assemble.dependsOn distZip
+assemble.dependsOn installDist
