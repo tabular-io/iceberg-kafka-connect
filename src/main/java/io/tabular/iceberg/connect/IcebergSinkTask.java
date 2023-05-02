@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.Map;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -60,7 +61,10 @@ public class IcebergSinkTask extends SinkTask {
 
   @Override
   public void close(Collection<TopicPartition> partitions) {
-    worker.stop();
+    if (worker != null) {
+      worker.stop();
+      worker = null;
+    }
     if (coordinator != null) {
       coordinator.stop();
       coordinator = null;
@@ -69,7 +73,7 @@ public class IcebergSinkTask extends SinkTask {
 
   @Override
   public void put(Collection<SinkRecord> sinkRecords) {
-    if (sinkRecords != null && !sinkRecords.isEmpty()) {
+    if (sinkRecords != null && !sinkRecords.isEmpty() && worker != null) {
       worker.save(sinkRecords);
     }
     coordinate();
@@ -83,6 +87,9 @@ public class IcebergSinkTask extends SinkTask {
   @Override
   public Map<TopicPartition, OffsetAndMetadata> preCommit(
       Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
+    if (worker == null) {
+      return ImmutableMap.of();
+    }
     return worker.getCommitOffsets();
   }
 

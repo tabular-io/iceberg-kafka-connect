@@ -43,7 +43,7 @@ public abstract class Channel {
   private final KafkaProducer<byte[], byte[]> producer;
   private final KafkaConsumer<byte[], byte[]> consumer;
   private final Admin admin;
-  private final Map<Integer, Long> channelOffsets = new HashMap<>();
+  private final Map<Integer, Long> controlTopicOffsets = new HashMap<>();
 
   public Channel(String name, IcebergSinkConfig config) {
     this.kafkaProps = config.getKafkaProps();
@@ -98,7 +98,7 @@ public abstract class Channel {
           record -> {
             // the consumer stores the offsets that corresponds to the next record to consume,
             // so increment the record offset by one
-            channelOffsets.put(record.partition(), record.offset() + 1);
+            controlTopicOffsets.put(record.partition(), record.offset() + 1);
 
             Event event;
             try {
@@ -114,8 +114,8 @@ public abstract class Channel {
     }
   }
 
-  protected Map<Integer, Long> channelOffsets() {
-    return channelOffsets;
+  protected Map<Integer, Long> controlTopicOffsets() {
+    return controlTopicOffsets;
   }
 
   private KafkaProducer<byte[], byte[]> createProducer() {
@@ -131,6 +131,7 @@ public abstract class Channel {
     Map<String, Object> consumerProps = new HashMap<>(kafkaProps);
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+    consumerProps.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false");
     consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "cg-iceberg-" + UUID.randomUUID());
     return new KafkaConsumer<>(
@@ -142,7 +143,7 @@ public abstract class Channel {
     return Admin.create(adminProps);
   }
 
-  protected void channelSeekToOffsets(Map<Integer, Long> offsets) {
+  protected void setControlTopicOffsets(Map<Integer, Long> offsets) {
     offsets.forEach(
         (k, v) -> consumer.seek(new TopicPartition(controlTopic, k), new OffsetAndMetadata(v)));
   }

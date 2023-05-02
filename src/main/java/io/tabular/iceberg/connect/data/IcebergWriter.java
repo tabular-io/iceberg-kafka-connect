@@ -43,8 +43,11 @@ public class IcebergWriter implements Closeable {
               new TopicPartition(record.topic(), record.kafkaPartition()),
               record.kafkaOffset() + 1);
           try {
-            Record row = recordConverter.convert(record.value());
-            writer.write(row);
+            // TODO: config to handle tombstones instead of always ignoring?
+            if (record.value() != null) {
+              Record row = recordConverter.convert(record.value());
+              writer.write(row);
+            }
           } catch (IOException e) {
             throw new UncheckedIOException(e);
           }

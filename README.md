@@ -10,16 +10,6 @@
 
 This assumes the source topic already exists and is named `tabular-events`.
 
-### Create the control topic
-```bash
-bin/kafka-topics  \
-  --command-config tabular-dev.props \
-  --bootstrap-server ${CONNECT_BOOTSTRAP_SERVERS} \
-  --create \
-  --topic control-tabular-events \
-  --partitions 1
-```
-
 ### Create the landing table
 ```sql
 CREATE TABLE bck.tabular_events_kc (

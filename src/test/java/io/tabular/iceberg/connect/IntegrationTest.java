@@ -48,7 +48,6 @@ public class IntegrationTest extends IntegrationTestBase {
 
   @BeforeEach
   public void setup() {
-    createTopic(CONTROL_TOPIC, 1);
     createTopic(TEST_TOPIC, 2);
     catalog.createNamespace(Namespace.of(TEST_DB));
   }
@@ -56,7 +55,6 @@ public class IntegrationTest extends IntegrationTestBase {
   @AfterEach
   public void teardown() {
     deleteTopic(TEST_TOPIC);
-    deleteTopic(CONTROL_TOPIC);
     catalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE));
     catalog.dropNamespace(Namespace.of(TEST_DB));
   }
@@ -68,13 +66,14 @@ public class IntegrationTest extends IntegrationTestBase {
     producer.send(new ProducerRecord<>(TEST_TOPIC, ignore1));
     producer.flush();
 
-    // TODO: get bootstrap.servers from worker properties
+    // TODO: get bootstrap.servers from worker properties?
+    // set offset reset to earliest so we don't miss any test messages
     KafkaConnectContainer.Config connectorConfig =
         new KafkaConnectContainer.Config(CONNECTOR_NAME)
             .config("topics", TEST_TOPIC)
             .config("connector.class", IcebergSinkConnector.class.getName())
             .config("tasks.max", 2)
-            .config("consumer.override.auto.offset.reset", "latest")
+            .config("consumer.override.auto.offset.reset", "earliest")
             .config("key.converter", "org.apache.kafka.connect.json.JsonConverter")
             .config("key.converter.schemas.enable", false)
             .config("value.converter", "org.apache.kafka.connect.json.JsonConverter")

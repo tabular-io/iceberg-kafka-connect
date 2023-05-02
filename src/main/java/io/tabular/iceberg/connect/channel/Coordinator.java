@@ -128,7 +128,7 @@ public class Coordinator extends Channel {
     } else {
       String offsetsStr;
       try {
-        offsetsStr = MAPPER.writeValueAsString(channelOffsets());
+        offsetsStr = MAPPER.writeValueAsString(controlTopicOffsets());
       } catch (IOException e) {
         throw new UncheckedIOException(e);
       }
@@ -147,9 +147,9 @@ public class Coordinator extends Channel {
 
   public void start() {
     super.start();
-    Map<Integer, Long> channelOffsets = getLastCommittedOffsets();
-    if (channelOffsets != null) {
-      channelSeekToOffsets(channelOffsets);
+    Map<Integer, Long> controlTopicOffsets = getLastCommittedOffsets();
+    if (controlTopicOffsets != null) {
+      setControlTopicOffsets(controlTopicOffsets);
     }
   }
 

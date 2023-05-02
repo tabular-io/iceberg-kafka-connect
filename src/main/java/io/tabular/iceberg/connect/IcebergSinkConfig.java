@@ -30,6 +30,7 @@ public class IcebergSinkConfig {
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
   private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.table.commitTimeoutMs";
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
+  private static final String TOPIC_AUTO_CREATE_PROP = "topic.auto.create";
 
   public static ConfigDef newConfigDef() {
     ConfigDef configDef = new ConfigDef();
@@ -53,6 +54,12 @@ public class IcebergSinkConfig {
         COMMIT_TIMEOUT_MS_DEFAULT,
         Importance.MEDIUM,
         "Coordinator time to wait for worker responses before committing, in millis");
+    configDef.define(
+        TOPIC_AUTO_CREATE_PROP,
+        Type.BOOLEAN,
+        true,
+        Importance.MEDIUM,
+        "Whether to automatically create the control topic or not");
     return configDef;
   }
 
@@ -104,5 +111,9 @@ public class IcebergSinkConfig {
 
   public int getCommitTimeoutMs() {
     return PropertyUtil.propertyAsInt(props, COMMIT_TIMEOUT_MS_PROP, COMMIT_TIMEOUT_MS_DEFAULT);
+  }
+
+  public boolean getTopicAutoCreate() {
+    return PropertyUtil.propertyAsBoolean(props, TOPIC_AUTO_CREATE_PROP, true);
   }
 }
