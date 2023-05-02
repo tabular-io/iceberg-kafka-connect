@@ -7,6 +7,7 @@ import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.channel.events.Event;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -89,10 +90,8 @@ public abstract class Channel {
     consumeAvailable(this::receive);
   }
 
-  @SuppressWarnings("deprecation")
   protected void consumeAvailable(Consumer<Event> eventHandler) {
-    // TODO: we're using the deprecated poll(long) API as it waits for metadata, better options?
-    ConsumerRecords<byte[], byte[]> records = consumer.poll(0L);
+    ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ZERO);
     while (!records.isEmpty()) {
       records.forEach(
           record -> {
@@ -110,7 +109,7 @@ public abstract class Channel {
             LOG.info("Received event of type: {}", event.getType().name());
             eventHandler.accept(event);
           });
-      records = consumer.poll(0L);
+      records = consumer.poll(Duration.ZERO);
     }
   }
 
@@ -130,10 +129,10 @@ public abstract class Channel {
   private KafkaConsumer<byte[], byte[]> createConsumer() {
     Map<String, Object> consumerProps = new HashMap<>(kafkaProps);
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
     consumerProps.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false");
     consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
-    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "cg-iceberg-" + UUID.randomUUID());
+    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "cg-control-" + UUID.randomUUID());
     return new KafkaConsumer<>(
         consumerProps, new ByteArrayDeserializer(), new ByteArrayDeserializer());
   }
@@ -161,6 +160,7 @@ public abstract class Channel {
               .map(info -> new TopicPartition(controlTopic, info.partition()))
               .collect(toList());
       consumer.assign(partitions);
+      consumer.seekToEnd(partitions);
     } catch (InterruptedException | ExecutionException e) {
       throw new ConnectException(e);
     }

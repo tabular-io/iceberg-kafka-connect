@@ -49,6 +49,7 @@ public class Coordinator extends Channel {
     this.topics = config.getTopics();
   }
 
+  @Override
   public void process() {
     if (startTime == 0) {
       startTime = System.currentTimeMillis();
@@ -63,6 +64,10 @@ public class Coordinator extends Channel {
     }
 
     super.process();
+
+    if (currentCommitId != null && isCommitComplete()) {
+      commit(commitBuffer);
+    }
   }
 
   @Override
@@ -72,8 +77,6 @@ public class Coordinator extends Channel {
       if (currentCommitId == null) {
         LOG.warn(
             "Received commit response when no commit in progress, this can happen during recovery");
-      } else if (isCommitComplete()) {
-        commit(commitBuffer);
       }
     }
   }
@@ -145,6 +148,7 @@ public class Coordinator extends Channel {
     currentCommitId = null;
   }
 
+  @Override
   public void start() {
     super.start();
     Map<Integer, Long> controlTopicOffsets = getLastCommittedOffsets();

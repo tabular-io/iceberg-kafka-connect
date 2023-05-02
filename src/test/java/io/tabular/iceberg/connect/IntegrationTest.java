@@ -81,6 +81,7 @@ public class IntegrationTest extends IntegrationTestBase {
             .config("iceberg.control.topic", CONTROL_TOPIC)
             .config("iceberg.kafka.bootstrap.servers", kafka.getNetworkAliases().get(0) + ":9092")
             .config("iceberg.table.commitIntervalMs", 1000)
+            .config("iceberg.table.commitTimeoutMs", 1000)
             .config("iceberg.catalog", RESTCatalog.class.getName())
             .config("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
             .config("iceberg.catalog." + AwsProperties.S3FILEIO_ENDPOINT, "http://minio:9000")
