@@ -1,7 +1,7 @@
 plugins {
   id "java"
+  id "distribution"
   id "com.diffplug.spotless" version "6.13.0"
-  id "com.github.johnrengelman.shadow" version "8.1.0"
 }
 
 group "io.tabular.iceberg.connect"
@@ -33,8 +33,6 @@ dependencies {
 sourceCompatibility = '1.8'
 targetCompatibility = '1.8'
 
-// build the jar first so it can be installed into kafka connect
-test.dependsOn(shadowJar)
 
 test {
   useJUnitPlatform()
@@ -44,16 +42,20 @@ configurations {
   testImplementation.extendsFrom compileOnly
 }
 
-shadowJar {
-  zip64 true
+distributions {
+  main {
+    contents {
+      into('lib/') {
+        from jar
+        from configurations.runtimeClasspath
+      }
+      from(processResources.destinationDir) {
+        include 'manifest.json'
+      }
+    }
+  }
 }
-
-task copyShadowJar(type: Copy) {
-  from shadowJar
-  into "${buildDir}/out"
-}
-
-shadowJar.finalizedBy copyShadowJar
+tasks.distTar.enabled = false
 
 spotless {
   java {
@@ -63,3 +65,7 @@ spotless {
     licenseHeaderFile "$rootDir/LICENSE.txt"
   }
 }
+
+// build the distribution first so it can be installed into kafka connect
+test.dependsOn installDist
+assemble.dependsOn distZip

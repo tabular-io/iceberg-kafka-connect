@@ -6,7 +6,7 @@ export AWS_PROFILE=infra
 
 aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 561839024272.dkr.ecr.us-west-2.amazonaws.com
 
-./gradlew -xtest clean build shadowJar
+./gradlew -xtest clean build
 
 docker buildx build  \
   --platform linux/amd64,linux/arm64 \

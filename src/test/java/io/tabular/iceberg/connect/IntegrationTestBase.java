@@ -49,10 +49,10 @@ public class IntegrationTestBase {
   protected static KafkaProducer<String, String> producer;
   protected static Admin admin;
 
-  private static final String LOCAL_JARS_DIR = "build/out";
-  private static final String BUCKET = "bucket";
-  private static final String KC_PLUGIN_DIR = "/kafka/connect/test";
+  private static final String LOCAL_INSTALL_DIR = "build/install";
+  private static final String KC_PLUGIN_DIR = "/test/kafka-connect";
 
+  private static final String BUCKET = "bucket";
   protected static final String AWS_ACCESS_KEY = "minioadmin";
   protected static final String AWS_SECRET_KEY = "minioadmin";
   protected static final String AWS_REGION = "us-east-1";
@@ -94,7 +94,7 @@ public class IntegrationTestBase {
         new KafkaConnectContainer(DockerImageName.parse(CONNECT_IMAGE))
             .withNetwork(network)
             .dependsOn(restCatalog, kafka)
-            .withFileSystemBind(LOCAL_JARS_DIR, KC_PLUGIN_DIR)
+            .withFileSystemBind(LOCAL_INSTALL_DIR, KC_PLUGIN_DIR)
             .withEnv("CONNECT_PLUGIN_PATH", KC_PLUGIN_DIR)
             .withEnv("CONNECT_BOOTSTRAP_SERVERS", kafka.getNetworkAliases().get(0) + ":9092")
             .withEnv("CONNECT_OFFSET_FLUSH_INTERVAL_MS", "500");
