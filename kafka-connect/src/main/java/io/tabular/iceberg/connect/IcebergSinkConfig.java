@@ -1,20 +1,18 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect;
 
-import static java.util.stream.Collectors.toCollection;
-
-import java.util.Arrays;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.util.PropertyUtil;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.connect.sink.SinkConnector;
 
-public class IcebergSinkConfig {
+public class IcebergSinkConfig extends AbstractConfig {
 
   public static final String INTERNAL_TRANSACTIONAL_SUFFIX_PROP =
       "iceberg.coordinator.transactional.suffix";
@@ -34,8 +32,16 @@ public class IcebergSinkConfig {
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
   private static final String TOPIC_AUTO_CREATE_PROP = "topic.auto.create";
 
-  public static ConfigDef newConfigDef() {
+  public static ConfigDef CONFIG_DEF = newConfigDef();
+
+  private static ConfigDef newConfigDef() {
     ConfigDef configDef = new ConfigDef();
+    configDef.define(
+        SinkConnector.TOPICS_CONFIG,
+        Type.LIST,
+        Importance.HIGH,
+        "Comma-delimited list of source topics");
+    configDef.define(TABLE_PROP, Type.STRING, Importance.HIGH, "Iceberg destination table");
     configDef.define(CATALOG_IMPL_PROP, Type.STRING, Importance.HIGH, "Iceberg catalog class name");
     configDef.define(CONTROL_TOPIC_PROP, Type.STRING, Importance.HIGH, "Name of the control topic");
     configDef.define(
@@ -76,22 +82,20 @@ public class IcebergSinkConfig {
     return configDef;
   }
 
-  // TODO: cache values?
-
   private final Map<String, String> props;
 
   public IcebergSinkConfig(Map<String, String> props) {
+    super(CONFIG_DEF, props);
     this.props = props;
   }
 
   public String getTransactionalSuffix() {
+    // this is for internal use and is not part of the config definition...
     return props.get(INTERNAL_TRANSACTIONAL_SUFFIX_PROP);
   }
 
   public SortedSet<String> getTopics() {
-    return Arrays.stream(props.get(SinkConnector.TOPICS_CONFIG).split(","))
-        .map(String::trim)
-        .collect(toCollection(TreeSet::new));
+    return new TreeSet<>(getList(SinkConnector.TOPICS_CONFIG));
   }
 
   public Map<String, String> getCatalogProps() {
@@ -103,38 +107,38 @@ public class IcebergSinkConfig {
   }
 
   public String getCatalogImpl() {
-    return props.get(CATALOG_IMPL_PROP);
+    return getString(CATALOG_IMPL_PROP);
   }
 
   public TableIdentifier getTable() {
-    return TableIdentifier.parse(props.get(TABLE_PROP));
+    return TableIdentifier.parse(getString(TABLE_PROP));
   }
 
   public String getControlTopic() {
-    return props.get(CONTROL_TOPIC_PROP);
+    return getString(CONTROL_TOPIC_PROP);
   }
 
   public int getControlTopicPartitions() {
-    return PropertyUtil.propertyAsInt(props, CONTROL_TOPIC_PARTITIONS_PROP, 1);
+    return getInt(CONTROL_TOPIC_PARTITIONS_PROP);
   }
 
   public short getControlTopicReplication() {
-    return (short) PropertyUtil.propertyAsInt(props, CONTROL_TOPIC_REPLICATION_PROP, 1);
+    return getShort(CONTROL_TOPIC_REPLICATION_PROP);
   }
 
   public String getControlGroupId() {
-    return props.get(CONTROL_GROUP_ID_PROP);
+    return getString(CONTROL_GROUP_ID_PROP);
   }
 
   public int getCommitIntervalMs() {
-    return PropertyUtil.propertyAsInt(props, COMMIT_INTERVAL_MS_PROP, COMMIT_INTERVAL_MS_DEFAULT);
+    return getInt(COMMIT_INTERVAL_MS_PROP);
   }
 
   public int getCommitTimeoutMs() {
-    return PropertyUtil.propertyAsInt(props, COMMIT_TIMEOUT_MS_PROP, COMMIT_TIMEOUT_MS_DEFAULT);
+    return getInt(COMMIT_TIMEOUT_MS_PROP);
   }
 
   public boolean getTopicAutoCreate() {
-    return PropertyUtil.propertyAsBoolean(props, TOPIC_AUTO_CREATE_PROP, false);
+    return getBoolean(TOPIC_AUTO_CREATE_PROP);
   }
 }

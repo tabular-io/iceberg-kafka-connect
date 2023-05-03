@@ -8,7 +8,7 @@ dependencies {
   testImplementation libs.bundles.iceberg
   testImplementation libs.bundles.aws
   testImplementation libs.bundles.jackson
-  testCompileOnly libs.bundles.kafka.connect
+  testImplementation libs.bundles.kafka.connect
 
   testImplementation libs.junit.api
   testRuntimeOnly libs.junit.engine

@@ -84,6 +84,6 @@ public class IcebergSinkConnector extends SinkConnector {
 
   @Override
   public ConfigDef config() {
-    return IcebergSinkConfig.newConfigDef();
+    return IcebergSinkConfig.CONFIG_DEF;
   }
 }

@@ -64,7 +64,7 @@ public class RecordConverter {
 
   public Record convert(Object data) {
     try {
-      if (data instanceof org.apache.kafka.common.protocol.types.Struct || data instanceof Map) {
+      if (data instanceof Struct || data instanceof Map) {
         return convertStructValue(data, tableSchema);
       } else if (data instanceof String) {
         Map<?, ?> map = MAPPER.readValue((String) data, Map.class);
@@ -166,7 +166,7 @@ public class RecordConverter {
   }
 
   protected List<Object> convertListValue(Object value, ListType type) {
-    Preconditions.checkArgument(value instanceof Map);
+    Preconditions.checkArgument(value instanceof List);
     List<?> list = (List<?>) value;
     return list.stream()
         .map(element -> convertValue(element, type.elementType()))
@@ -265,6 +265,8 @@ public class RecordConverter {
   protected UUID convertUUID(Object value) {
     if (value instanceof String) {
       return UUID.fromString((String) value);
+    } else if (value instanceof UUID) {
+      return (UUID) value;
     }
     throw new IllegalArgumentException("Cannot convert to UUID: " + value.getClass().getName());
   }
@@ -272,6 +274,10 @@ public class RecordConverter {
   protected ByteBuffer convertBase64Binary(Object value) {
     if (value instanceof String) {
       return ByteBuffer.wrap(Base64.getDecoder().decode((String) value));
+    } else if (value instanceof byte[]) {
+      return ByteBuffer.wrap((byte[]) value);
+    } else if (value instanceof ByteBuffer) {
+      return (ByteBuffer) value;
     }
     throw new IllegalArgumentException("Cannot convert to binary: " + value.getClass().getName());
   }
@@ -282,6 +288,8 @@ public class RecordConverter {
       return LocalDate.ofEpochDay(i);
     } else if (value instanceof String) {
       return LocalDate.parse((String) value);
+    } else if (value instanceof LocalDate) {
+      return (LocalDate) value;
     }
     throw new RuntimeException("Cannot convert date: " + value);
   }
@@ -292,6 +300,8 @@ public class RecordConverter {
       return LocalTime.ofNanoOfDay(l * NANOS_PER_MILLI);
     } else if (value instanceof String) {
       return LocalTime.parse((String) value);
+    } else if (value instanceof LocalTime) {
+      return (LocalTime) value;
     }
     throw new RuntimeException("Cannot convert time: " + value);
   }
@@ -304,6 +314,8 @@ public class RecordConverter {
         return OffsetDateTime.ofInstant(Instant.ofEpochMilli(l), ZoneOffset.UTC);
       } else if (value instanceof String) {
         return OffsetDateTime.parse((String) value);
+      } else if (value instanceof OffsetDateTime) {
+        return (OffsetDateTime) value;
       }
     } else {
       if (value instanceof Number) {
@@ -311,6 +323,8 @@ public class RecordConverter {
         return LocalDateTime.ofInstant(Instant.ofEpochMilli(l), DEFAULT_TZ);
       } else if (value instanceof String) {
         return LocalDateTime.parse((String) value);
+      } else if (value instanceof LocalDateTime) {
+        return (LocalDateTime) value;
       }
     }
     throw new RuntimeException("Cannot convert timestamp: " + value);

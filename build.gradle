@@ -25,10 +25,6 @@ subprojects {
     useJUnitPlatform()
   }
 
-  configurations {
-    testImplementation.extendsFrom testCompileOnly
-  }
-
   spotless {
     java {
       target "src/**/*.java"
