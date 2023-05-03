@@ -69,8 +69,7 @@ public class Coordinator extends Channel {
 
     super.process();
 
-    // TODO: reduce frequency of commit check
-    if (currentCommitId != null && isCommitComplete()) {
+    if (currentCommitId != null && isCommitTimedOut()) {
       commit(commitBuffer);
     }
   }
@@ -82,6 +81,8 @@ public class Coordinator extends Channel {
       if (currentCommitId == null) {
         LOG.warn(
             "Received commit response when no commit in progress, this can happen during recovery");
+      } else if (isCommitComplete()) {
+        commit(commitBuffer);
       }
     }
   }
@@ -99,6 +100,14 @@ public class Coordinator extends Channel {
         .sum();
   }
 
+  private boolean isCommitTimedOut() {
+    if (System.currentTimeMillis() - startTime > commitTimeoutMs) {
+      LOG.info("Commit timeout reached");
+      return true;
+    }
+    return false;
+  }
+
   private boolean isCommitComplete() {
     int receivedPartitionCount =
         commitBuffer.stream()
@@ -109,14 +118,6 @@ public class Coordinator extends Channel {
 
     if (receivedPartitionCount >= totalPartitionCount) {
       LOG.info("Commit ready, received responses for all {} partitions", receivedPartitionCount);
-      return true;
-    }
-
-    if (System.currentTimeMillis() - startTime > commitTimeoutMs) {
-      LOG.info(
-          "Commit timeout reached, committing data for {} of {} partitions",
-          receivedPartitionCount,
-          totalPartitionCount);
       return true;
     }
 

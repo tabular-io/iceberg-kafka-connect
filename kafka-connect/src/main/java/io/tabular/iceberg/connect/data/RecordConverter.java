@@ -49,23 +49,21 @@ public class RecordConverter {
   private static final long NANOS_PER_MILLI = 1_000_000L;
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static final JsonConverter JSON_CONVERTER = new JsonConverter();
 
-  static {
-    JSON_CONVERTER.configure(
+  private final StructType tableSchema;
+  private final NameMapping nameMapping;
+  private final JsonConverter jsonConverter;
+
+  public RecordConverter(Table table) {
+    this.tableSchema = table.schema().asStruct();
+    this.nameMapping = getNameMapping(table);
+    this.jsonConverter = new JsonConverter();
+    jsonConverter.configure(
         ImmutableMap.of(
             JsonConverterConfig.SCHEMAS_ENABLE_CONFIG,
             false,
             ConverterConfig.TYPE_CONFIG,
             ConverterType.VALUE.getName()));
-  }
-
-  private final StructType tableSchema;
-  private final NameMapping nameMapping;
-
-  public RecordConverter(Table table) {
-    this.tableSchema = table.schema().asStruct();
-    this.nameMapping = getNameMapping(table);
   }
 
   public Record convert(Object data) {
@@ -260,7 +258,7 @@ public class RecordConverter {
         return MAPPER.writeValueAsString(value);
       } else if (value instanceof Struct) {
         Struct struct = (Struct) value;
-        byte[] data = JSON_CONVERTER.fromConnectData(null, struct.schema(), struct);
+        byte[] data = jsonConverter.fromConnectData(null, struct.schema(), struct);
         return new String(data, StandardCharsets.UTF_8);
       }
     } catch (IOException e) {
