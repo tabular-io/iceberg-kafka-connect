@@ -12,7 +12,7 @@ This assumes the source topic already exists and is named `tabular-events`.
 
 ### Create the landing table
 ```sql
-CREATE TABLE bck.tabular_events_kc (
+CREATE TABLE default.tabular_events (
     id STRING,
     type STRING,
     ts TIMESTAMP,
@@ -40,27 +40,24 @@ curl http://localhost:8083/connectors \
 -H 'Accept: application/json' \
 -d @- << EOF
 {
-"name": "tabular-events-kc",
+"name": "tabular-events-sink",
 "config": {
     "connector.class": "io.tabular.iceberg.connect.IcebergSinkConnector",
     "tasks.max": "2",
     "topics": "tabular-events",
     "consumer.override.auto.offset.reset": "latest",
-    "transforms": "tabular",
-    "transforms.tabular.type": "io.tabular.iceberg.connect.transform.TabularEventTransform",
-    "topic.auto.create": "true",
-    "iceberg.table": "bck.tabular_events_kc",
+    "iceberg.table": "default.tabular_events",
+    "iceberg.table.commitIntervalMs": "300000",
     "iceberg.control.group.id": "cg-control-tabular-events",
     "iceberg.control.topic": "control-tabular-events",
     "iceberg.kafka.bootstrap.servers": "${CONNECT_BOOTSTRAP_SERVERS}",
     "iceberg.kafka.security.protocol": "${CONNECT_SECURITY_PROTOCOL}",
     "iceberg.kafka.sasl.mechanism": "${CONNECT_SASL_MECHANISM}",
     "iceberg.kafka.sasl.jaas.config": "${CONNECT_SASL_JAAS_CONFIG}",
-    "iceberg.table.commitIntervalMs": "300000",
     "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
-    "iceberg.catalog.uri": "https://api.dev.tabular.io/ws",
+    "iceberg.catalog.uri": "https://api.tabular.io/ws",
     "iceberg.catalog.credential": "${TABULAR_TOKEN}",
-    "iceberg.catalog.warehouse": "tabular-private-us-west-2",
+    "iceberg.catalog.warehouse": "${TABULAR_WAREHOUSE}",
     "iceberg.catalog.http-client.type": "apache"
     }
 }
@@ -68,5 +65,5 @@ EOF
 ```
 ### Check status
 ```bash
-curl http://localhost:8083/connectors/tabular-events-kc/status
+curl http://localhost:8083/connectors/tabular-events-sink/status
 ```
