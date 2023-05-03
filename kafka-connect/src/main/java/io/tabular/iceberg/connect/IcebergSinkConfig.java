@@ -23,14 +23,11 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String CATALOG_IMPL_PROP = "iceberg.catalog";
   private static final String TABLE_PROP = "iceberg.table";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
-  private static final String CONTROL_TOPIC_PARTITIONS_PROP = "iceberg.control.topic.partitions";
-  private static final String CONTROL_TOPIC_REPLICATION_PROP = "iceberg.control.topic.replication";
   private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group.id";
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.table.commitIntervalMs";
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
   private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.table.commitTimeoutMs";
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
-  private static final String TOPIC_AUTO_CREATE_PROP = "topic.auto.create";
 
   public static ConfigDef CONFIG_DEF = newConfigDef();
 
@@ -44,18 +41,6 @@ public class IcebergSinkConfig extends AbstractConfig {
     configDef.define(TABLE_PROP, Type.STRING, Importance.HIGH, "Iceberg destination table");
     configDef.define(CATALOG_IMPL_PROP, Type.STRING, Importance.HIGH, "Iceberg catalog class name");
     configDef.define(CONTROL_TOPIC_PROP, Type.STRING, Importance.HIGH, "Name of the control topic");
-    configDef.define(
-        CONTROL_TOPIC_PARTITIONS_PROP,
-        Type.INT,
-        1,
-        Importance.MEDIUM,
-        "Number of partitions to use when automatically creating the control topic");
-    configDef.define(
-        CONTROL_TOPIC_REPLICATION_PROP,
-        Type.SHORT,
-        (short) 1,
-        Importance.MEDIUM,
-        "Replication factor to use when automatically creating the control topic");
     configDef.define(
         CONTROL_GROUP_ID_PROP,
         Type.STRING,
@@ -73,12 +58,6 @@ public class IcebergSinkConfig extends AbstractConfig {
         COMMIT_TIMEOUT_MS_DEFAULT,
         Importance.MEDIUM,
         "Coordinator time to wait for worker responses before committing, in millis");
-    configDef.define(
-        TOPIC_AUTO_CREATE_PROP,
-        Type.BOOLEAN,
-        false,
-        Importance.MEDIUM,
-        "Whether to automatically create the control topic or not");
     return configDef;
   }
 
@@ -118,14 +97,6 @@ public class IcebergSinkConfig extends AbstractConfig {
     return getString(CONTROL_TOPIC_PROP);
   }
 
-  public int getControlTopicPartitions() {
-    return getInt(CONTROL_TOPIC_PARTITIONS_PROP);
-  }
-
-  public short getControlTopicReplication() {
-    return getShort(CONTROL_TOPIC_REPLICATION_PROP);
-  }
-
   public String getControlGroupId() {
     return getString(CONTROL_GROUP_ID_PROP);
   }
@@ -136,9 +107,5 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public int getCommitTimeoutMs() {
     return getInt(COMMIT_TIMEOUT_MS_PROP);
-  }
-
-  public boolean getTopicAutoCreate() {
-    return getBoolean(TOPIC_AUTO_CREATE_PROP);
   }
 }

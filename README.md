@@ -19,6 +19,20 @@ CREATE TABLE bck.tabular_events_kc (
     payload STRING)
 PARTITIONED BY (hours(ts))
 ```
+
+### Create the control topic
+
+If your Kafka cluster has `auto.create.topics.enable` set to `true` (the default), then the control topic will be automatically created. If not, then you will need to create the topic first:
+```bash
+bin/kafka-topics  \
+  --command-config command-config.props \
+  --bootstrap-server ${CONNECT_BOOTSTRAP_SERVERS} \
+  --create \
+  --topic control-tabular-events \
+  --partitions 1
+```
+*NOTE: Clusters running on Confluent Cloud have `auto.create.topics.enable` set to `false` by default.*
+
 ### Start the connector
 ```bash
 curl http://localhost:8083/connectors \

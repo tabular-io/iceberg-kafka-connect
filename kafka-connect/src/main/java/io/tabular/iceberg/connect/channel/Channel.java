@@ -1,18 +1,14 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect.channel;
 
-import static java.util.stream.Collectors.toList;
-
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.channel.events.Event;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 import org.apache.iceberg.avro.AvroEncoderUtil;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
@@ -29,7 +25,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -129,8 +124,7 @@ public abstract class Channel {
   private KafkaConsumer<byte[], byte[]> createConsumer() {
     Map<String, Object> consumerProps = new HashMap<>(kafkaProps);
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
-    consumerProps.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false");
+    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
     consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "cg-control-" + UUID.randomUUID());
     return new KafkaConsumer<>(
@@ -152,18 +146,7 @@ public abstract class Channel {
   }
 
   public void start() {
-    Map<String, Object> adminProps = new HashMap<>(kafkaProps);
-    try (Admin admin = Admin.create(adminProps)) {
-      List<TopicPartition> partitions =
-          admin.describeTopics(ImmutableList.of(controlTopic)).topicNameValues().get(controlTopic)
-              .get().partitions().stream()
-              .map(info -> new TopicPartition(controlTopic, info.partition()))
-              .collect(toList());
-      consumer.assign(partitions);
-      consumer.seekToEnd(partitions);
-    } catch (InterruptedException | ExecutionException e) {
-      throw new ConnectException(e);
-    }
+    consumer.subscribe(ImmutableList.of(controlTopic));
   }
 
   public void stop() {
