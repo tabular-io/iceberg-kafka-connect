@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.LocalDate;
@@ -16,8 +17,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
+import org.apache.iceberg.mapping.MappedField;
+import org.apache.iceberg.mapping.NameMapping;
+import org.apache.iceberg.mapping.NameMappingParser;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Types;
@@ -27,6 +32,8 @@ import org.apache.kafka.connect.data.Struct;
 import org.junit.jupiter.api.Test;
 
 public class RecordConverterTest {
+
+  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private static final org.apache.iceberg.Schema SCHEMA =
       new org.apache.iceberg.Schema(
@@ -54,6 +61,11 @@ public class RecordConverterTest {
       new org.apache.iceberg.Schema(
           Types.NestedField.required(1, "ii", Types.IntegerType.get()),
           Types.NestedField.required(2, "st", SCHEMA.asStruct()));
+
+  private static final org.apache.iceberg.Schema SIMPLE_SCHEMA =
+      new org.apache.iceberg.Schema(
+          Types.NestedField.required(1, "ii", Types.IntegerType.get()),
+          Types.NestedField.required(2, "st", Types.StringType.get()));
 
   private static final Schema CONNECT_SCHEMA =
       SchemaBuilder.struct()
@@ -96,13 +108,32 @@ public class RecordConverterTest {
     Map<String, Object> data = createMapData();
     Record record = converter.convert(data);
     assertRecordValues(record);
+  }
 
+  @Test
+  public void testNestedMapConvert() {
+    Table table = mock(Table.class);
     when(table.schema()).thenReturn(NESTED_SCHEMA);
-    converter = new RecordConverter(table);
+    RecordConverter converter = new RecordConverter(table);
 
     Map<String, Object> nestedData = createNestedMapData();
-    record = converter.convert(nestedData);
+    Record record = converter.convert(nestedData);
     assertNestedRecordValues(record);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testMapToString() throws Exception {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(SIMPLE_SCHEMA);
+    RecordConverter converter = new RecordConverter(table);
+
+    Map<String, Object> nestedData = createNestedMapData();
+    Record record = converter.convert(nestedData);
+
+    String str = (String) record.getField("st");
+    Map<String, Object> map = (Map<String, Object>) MAPPER.readValue(str, Map.class);
+    assertEquals(SCHEMA.columns().size(), map.size());
   }
 
   @Test
@@ -114,13 +145,50 @@ public class RecordConverterTest {
     Struct data = createStructData();
     Record record = converter.convert(data);
     assertRecordValues(record);
+  }
 
+  @Test
+  public void testNestedStructConvert() {
+    Table table = mock(Table.class);
     when(table.schema()).thenReturn(NESTED_SCHEMA);
-    converter = new RecordConverter(table);
+    RecordConverter converter = new RecordConverter(table);
 
     Struct nestedData = createNestedStructData();
-    record = converter.convert(nestedData);
+    Record record = converter.convert(nestedData);
     assertNestedRecordValues(record);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testStructToString() throws Exception {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(SIMPLE_SCHEMA);
+    RecordConverter converter = new RecordConverter(table);
+
+    Struct nestedData = createNestedStructData();
+    Record record = converter.convert(nestedData);
+
+    String str = (String) record.getField("st");
+    Map<String, Object> map = (Map<String, Object>) MAPPER.readValue(str, Map.class);
+    assertEquals(SCHEMA.columns().size(), map.size());
+  }
+
+  @Test
+  public void testNameMapping() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(SIMPLE_SCHEMA);
+
+    NameMapping nameMapping = NameMapping.of(MappedField.of(1, ImmutableList.of("renamed_ii")));
+    when(table.properties())
+        .thenReturn(
+            ImmutableMap.of(
+                TableProperties.DEFAULT_NAME_MAPPING, NameMappingParser.toJson(nameMapping)));
+
+    RecordConverter converter = new RecordConverter(table);
+
+    Map<String, Object> data = ImmutableMap.of("renamed_ii", 123);
+    Record record = converter.convert(data);
+    assertEquals(123, record.getField("ii"));
   }
 
   private Map<String, Object> createMapData() {

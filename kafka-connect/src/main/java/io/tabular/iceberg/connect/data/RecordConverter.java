@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -23,43 +24,48 @@ import java.util.Map;
 import java.util.UUID;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.TableProperties;
-import org.apache.iceberg.common.DynMethods;
-import org.apache.iceberg.common.DynMethods.BoundMethod;
 import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.mapping.MappedField;
 import org.apache.iceberg.mapping.NameMapping;
 import org.apache.iceberg.mapping.NameMappingParser;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types.ListType;
 import org.apache.iceberg.types.Types.MapType;
 import org.apache.iceberg.types.Types.NestedField;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.types.Types.TimestampType;
-import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.json.JsonConverterConfig;
+import org.apache.kafka.connect.storage.ConverterConfig;
+import org.apache.kafka.connect.storage.ConverterType;
 
 public class RecordConverter {
 
   private static final ZoneId DEFAULT_TZ = ZoneId.systemDefault();
   private static final long NANOS_PER_MILLI = 1_000_000L;
+
   private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final JsonConverter JSON_CONVERTER = new JsonConverter();
+
+  static {
+    JSON_CONVERTER.configure(
+        ImmutableMap.of(
+            JsonConverterConfig.SCHEMAS_ENABLE_CONFIG,
+            false,
+            ConverterConfig.TYPE_CONFIG,
+            ConverterType.VALUE.getName()));
+  }
 
   private final StructType tableSchema;
   private final NameMapping nameMapping;
-  private final BoundMethod convertToJson;
 
   public RecordConverter(Table table) {
     this.tableSchema = table.schema().asStruct();
     this.nameMapping = getNameMapping(table);
-
-    JsonConverter jsonConverter = new JsonConverter();
-    convertToJson =
-        DynMethods.builder("convertToJsonWithoutEnvelope")
-            .hiddenImpl(JsonConverter.class, Schema.class, Object.class)
-            .build(jsonConverter);
   }
 
   public Record convert(Object data) {
@@ -254,7 +260,8 @@ public class RecordConverter {
         return MAPPER.writeValueAsString(value);
       } else if (value instanceof Struct) {
         Struct struct = (Struct) value;
-        return convertToJson.invoke(struct.schema(), struct);
+        byte[] data = JSON_CONVERTER.fromConnectData(null, struct.schema(), struct);
+        return new String(data, StandardCharsets.UTF_8);
       }
     } catch (IOException e) {
       throw new UncheckedIOException(e);
