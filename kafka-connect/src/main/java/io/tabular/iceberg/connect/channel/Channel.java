@@ -6,6 +6,7 @@ import io.tabular.iceberg.connect.channel.events.Event;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -16,6 +17,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -124,7 +126,7 @@ public abstract class Channel {
   private KafkaConsumer<byte[], byte[]> createConsumer() {
     Map<String, Object> consumerProps = new HashMap<>(kafkaProps);
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
     consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "cg-control-" + UUID.randomUUID());
     return new KafkaConsumer<>(
@@ -145,8 +147,22 @@ public abstract class Channel {
     return admin;
   }
 
+  protected void initConsumerOffsets(Collection<TopicPartition> partitions) {
+    consumer.seekToEnd(partitions);
+  }
+
   public void start() {
-    consumer.subscribe(ImmutableList.of(controlTopic));
+    consumer.subscribe(
+        ImmutableList.of(controlTopic),
+        new ConsumerRebalanceListener() {
+          @Override
+          public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+
+          @Override
+          public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            initConsumerOffsets(partitions);
+          }
+        });
   }
 
   public void stop() {

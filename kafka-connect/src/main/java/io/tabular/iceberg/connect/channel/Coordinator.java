@@ -12,6 +12,7 @@ import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.channel.events.EventType;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,7 @@ import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -132,6 +134,9 @@ public class Coordinator extends Channel {
             .flatMap(event -> ((CommitResponsePayload) event.getPayload()).getDataFiles().stream())
             .filter(dataFile -> dataFile.recordCount() > 0)
             .collect(toList());
+
+    table.refresh();
+
     if (dataFiles.isEmpty()) {
       LOG.info("Nothing to commit");
     } else {
@@ -141,7 +146,6 @@ public class Coordinator extends Channel {
       } catch (IOException e) {
         throw new UncheckedIOException(e);
       }
-      table.refresh();
       AppendFiles appendOp = table.newAppend();
       appendOp.set(CONTROL_OFFSETS_SNAPSHOT_PROP, offsetsStr);
       dataFiles.forEach(appendOp::appendFile);
@@ -155,8 +159,8 @@ public class Coordinator extends Channel {
   }
 
   @Override
-  public void start() {
-    super.start();
+  protected void initConsumerOffsets(Collection<TopicPartition> partitions) {
+    super.initConsumerOffsets(partitions);
     Map<Integer, Long> controlTopicOffsets = getLastCommittedOffsets();
     if (controlTopicOffsets != null) {
       setControlTopicOffsets(controlTopicOffsets);
