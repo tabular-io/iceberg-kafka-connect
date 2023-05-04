@@ -1,6 +1,10 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect.data;
 
+import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE;
+import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
+import static java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,13 +13,13 @@ import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.Temporal;
 import java.util.Base64;
 import java.util.HashMap;
@@ -37,6 +41,7 @@ import org.apache.iceberg.types.Types.MapType;
 import org.apache.iceberg.types.Types.NestedField;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.types.Types.TimestampType;
+import org.apache.iceberg.util.DateTimeUtil;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
@@ -45,8 +50,22 @@ import org.apache.kafka.connect.storage.ConverterType;
 
 public class RecordConverter {
 
-  private static final ZoneId DEFAULT_TZ = ZoneId.systemDefault();
-  private static final long NANOS_PER_MILLI = 1_000_000L;
+  // support ' ' separator
+  private static final DateTimeFormatter LOCAL_DATE_TIME_FORMAT =
+      new DateTimeFormatterBuilder()
+          .parseCaseInsensitive()
+          .append(ISO_LOCAL_DATE)
+          .appendLiteral(' ')
+          .append(ISO_LOCAL_TIME)
+          .toFormatter();
+
+  // support ' ' separator
+  private static final DateTimeFormatter OFFSET_DATE_TIME_FORMAT =
+      new DateTimeFormatterBuilder()
+          .parseCaseInsensitive()
+          .append(LOCAL_DATE_TIME_FORMAT)
+          .appendOffsetId()
+          .toFormatter();
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -289,8 +308,8 @@ public class RecordConverter {
 
   protected LocalDate convertDateValue(Object value) {
     if (value instanceof Number) {
-      long i = ((Number) value).intValue();
-      return LocalDate.ofEpochDay(i);
+      int i = ((Number) value).intValue();
+      return DateTimeUtil.dateFromDays(i);
     } else if (value instanceof String) {
       return LocalDate.parse((String) value);
     } else if (value instanceof LocalDate) {
@@ -302,7 +321,7 @@ public class RecordConverter {
   protected LocalTime convertTimeValue(Object value) {
     if (value instanceof Number) {
       long l = ((Number) value).longValue();
-      return LocalTime.ofNanoOfDay(l * NANOS_PER_MILLI);
+      return DateTimeUtil.timeFromMicros(l * 1000);
     } else if (value instanceof String) {
       return LocalTime.parse((String) value);
     } else if (value instanceof LocalTime) {
@@ -316,22 +335,38 @@ public class RecordConverter {
     if (type.shouldAdjustToUTC()) {
       if (value instanceof Number) {
         long l = ((Number) value).longValue();
-        return OffsetDateTime.ofInstant(Instant.ofEpochMilli(l), ZoneOffset.UTC);
+        return DateTimeUtil.timestamptzFromMicros(l * 1000);
       } else if (value instanceof String) {
-        return OffsetDateTime.parse((String) value);
+        return parseOffsetDateTime((String) value);
       } else if (value instanceof OffsetDateTime) {
         return (OffsetDateTime) value;
       }
     } else {
       if (value instanceof Number) {
         long l = ((Number) value).longValue();
-        return LocalDateTime.ofInstant(Instant.ofEpochMilli(l), DEFAULT_TZ);
+        return DateTimeUtil.timestampFromMicros(l * 1000);
       } else if (value instanceof String) {
-        return LocalDateTime.parse((String) value);
+        return parseLocalDateTime((String) value);
       } else if (value instanceof LocalDateTime) {
         return (LocalDateTime) value;
       }
     }
     throw new RuntimeException("Cannot convert timestamp: " + value);
+  }
+
+  private OffsetDateTime parseOffsetDateTime(String str) {
+    try {
+      return OffsetDateTime.parse(str, ISO_OFFSET_DATE_TIME);
+    } catch (DateTimeParseException e) {
+      return OffsetDateTime.parse(str, OFFSET_DATE_TIME_FORMAT);
+    }
+  }
+
+  private LocalDateTime parseLocalDateTime(String str) {
+    try {
+      return LocalDateTime.parse(str, ISO_LOCAL_DATE_TIME);
+    } catch (DateTimeParseException e) {
+      return LocalDateTime.parse(str, LOCAL_DATE_TIME_FORMAT);
+    }
   }
 }

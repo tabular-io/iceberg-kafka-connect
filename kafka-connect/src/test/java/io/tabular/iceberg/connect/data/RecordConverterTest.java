@@ -12,6 +12,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.Temporal;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +28,7 @@ import org.apache.iceberg.mapping.NameMappingParser;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Types;
+import org.apache.iceberg.types.Types.TimestampType;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -189,6 +192,42 @@ public class RecordConverterTest {
     Map<String, Object> data = ImmutableMap.of("renamed_ii", 123);
     Record record = converter.convert(data);
     assertEquals(123, record.getField("ii"));
+  }
+
+  @Test
+  public void testTimestampWithZoneConversion() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(SIMPLE_SCHEMA);
+    RecordConverter converter = new RecordConverter(table);
+
+    OffsetDateTime expected = OffsetDateTime.parse("2023-05-18T11:22:33Z");
+    Temporal ts = converter.convertTimestampValue("2023-05-18T11:22:33Z", TimestampType.withZone());
+    assertEquals(expected, ts);
+
+    ts = converter.convertTimestampValue("2023-05-18 11:22:33Z", TimestampType.withZone());
+    assertEquals(expected, ts);
+
+    long epochMillis = expected.toInstant().toEpochMilli();
+    ts = converter.convertTimestampValue(epochMillis, TimestampType.withZone());
+    assertEquals(expected, ts);
+  }
+
+  @Test
+  public void testTimestampWithoutZoneConversion() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(SIMPLE_SCHEMA);
+    RecordConverter converter = new RecordConverter(table);
+
+    LocalDateTime expected = LocalDateTime.parse("2023-05-18T11:22:33");
+    Temporal ts =
+        converter.convertTimestampValue("2023-05-18T11:22:33", TimestampType.withoutZone());
+    assertEquals(expected, ts);
+    ts = converter.convertTimestampValue("2023-05-18 11:22:33", TimestampType.withoutZone());
+    assertEquals(expected, ts);
+
+    long epochMillis = expected.atZone(ZoneOffset.UTC).toInstant().toEpochMilli();
+    ts = converter.convertTimestampValue(epochMillis, TimestampType.withoutZone());
+    assertEquals(expected, ts);
   }
 
   private Map<String, Object> createMapData() {

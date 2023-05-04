@@ -33,8 +33,6 @@ public class IcebergWriter implements Closeable {
   }
 
   public void write(Collection<SinkRecord> sinkRecords) {
-    // TODO: detect schema change
-
     sinkRecords.forEach(
         record -> {
           // the consumer stores the offsets that corresponds to the next record to consume,

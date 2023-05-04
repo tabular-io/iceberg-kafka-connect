@@ -114,7 +114,6 @@ public class IntegrationTest extends IntegrationTestBase {
 
     runTest();
 
-    // TODO: with parallelism of 2 this may sometimes return 2 files
     files = getDataFiles();
     assertThat(files).hasSize(1);
     assertEquals(2, files.get(0).recordCount());

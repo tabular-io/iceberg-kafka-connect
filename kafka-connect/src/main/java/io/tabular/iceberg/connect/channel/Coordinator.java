@@ -170,7 +170,7 @@ public class Coordinator extends Channel {
 
   private Map<Integer, Long> getLastCommittedOffsets() {
     // TODO: support branches
-    // TODO: verify offsets for job
+    // TODO: verify offsets for job name
     Snapshot snapshot = table.currentSnapshot();
     while (snapshot != null) {
       Map<String, String> summary = snapshot.summary();
