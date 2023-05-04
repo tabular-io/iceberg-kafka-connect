@@ -58,8 +58,8 @@ public class IntegrationTestBase {
   protected static final String AWS_REGION = "us-east-1";
 
   private static final String MINIO_IMAGE = "minio/minio";
-  private static final String KAFKA_IMAGE = "confluentinc/cp-kafka:7.3.3";
-  private static final String CONNECT_IMAGE = "confluentinc/cp-kafka-connect:7.3.3";
+  private static final String KAFKA_IMAGE = "confluentinc/cp-kafka:7.4.0";
+  private static final String CONNECT_IMAGE = "confluentinc/cp-kafka-connect:7.4.0";
   private static final String REST_CATALOG_IMAGE = "tabulario/iceberg-rest:0.4.0";
 
   @BeforeAll

@@ -4,6 +4,7 @@ package io.tabular.iceberg.connect;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import org.apache.iceberg.IcebergBuild;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.util.PropertyUtil;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -30,6 +31,14 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
 
   public static ConfigDef CONFIG_DEF = newConfigDef();
+
+  public static String getVersion() {
+    String kcVersion = IcebergSinkConfig.class.getPackage().getImplementationVersion();
+    if (kcVersion == null) {
+      kcVersion = "unknown";
+    }
+    return IcebergBuild.version() + "-kc-" + kcVersion;
+  }
 
   private static ConfigDef newConfigDef() {
     ConfigDef configDef = new ConfigDef();

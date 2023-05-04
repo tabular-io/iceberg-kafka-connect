@@ -4,6 +4,8 @@ plugins {
 
 dependencies {
   implementation project(":iceberg-kafka-connect")
+  implementation libs.bundles.iceberg.ext
+  implementation libs.bundles.aws
 
   testImplementation libs.bundles.iceberg
   testImplementation libs.bundles.aws
@@ -19,6 +21,12 @@ dependencies {
   testImplementation libs.testcontainers
   testImplementation libs.testcontainers.kafka
   testImplementation libs.http.client
+}
+
+processResources {
+  filter {
+    it.replace('__VERSION__', project.version)
+  }
 }
 
 distributions {

@@ -1,4 +1,4 @@
-FROM confluentinc/cp-kafka-connect
+FROM confluentinc/cp-kafka-connect:7.4.0
 USER root
 RUN yum -y install jq
 USER appuser

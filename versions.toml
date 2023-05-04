@@ -27,8 +27,11 @@ iceberg-common = { module = "org.apache.iceberg:iceberg-common", version.ref = "
 iceberg-core = { module = "org.apache.iceberg:iceberg-core", version.ref = "iceberg-ver" }
 iceberg-data = { module = "org.apache.iceberg:iceberg-data", version.ref = "iceberg-ver" }
 iceberg-guava = { module = "org.apache.iceberg:iceberg-bundled-guava", version.ref = "iceberg-ver" }
+iceberg-hive-metastore = { module = "org.apache.iceberg:iceberg-hive-metastore", version.ref = "iceberg-ver" }
+iceberg-nessie = { module = "org.apache.iceberg:iceberg-nessie", version.ref = "iceberg-ver" }
 iceberg-orc = { module = "org.apache.iceberg:iceberg-orc", version.ref = "iceberg-ver" }
 iceberg-parquet = { module = "org.apache.iceberg:iceberg-parquet", version.ref = "iceberg-ver" }
+iceberg-snowflake = { module = "org.apache.iceberg:iceberg-snowflake", version.ref = "iceberg-ver" }
 kafka-clients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka-ver" }
 kafka-connect-api = { module = "org.apache.kafka:connect-api", version.ref = "kafka-ver" }
 kafka-connect-json = { module = "org.apache.kafka:connect-json", version.ref = "kafka-ver" }
@@ -50,6 +53,7 @@ testcontainers-kafka = { module = "org.testcontainers:kafka", version.ref = "tes
 
 [bundles]
 aws = ["aws-dynamodb", "aws-glue", "aws-kms", "aws-s3", "aws-sts"]
-iceberg = ["iceberg-api", "iceberg-aws", "iceberg-common", "iceberg-core", "iceberg-data", "iceberg-guava", "iceberg-orc", "iceberg-parquet"]
+iceberg = ["iceberg-api", "iceberg-common", "iceberg-core", "iceberg-data", "iceberg-guava", "iceberg-orc", "iceberg-parquet"]
+iceberg-ext = ["iceberg-aws", "iceberg-hive-metastore", "iceberg-nessie", "iceberg-snowflake"]
 jackson = ["jackson-core", "jackson-databind"]
 kafka-connect = ["kafka-clients", "kafka-connect-api", "kafka-connect-json", "kafka-connect-transforms"]

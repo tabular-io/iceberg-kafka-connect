@@ -3,6 +3,7 @@ package io.tabular.iceberg.connect;
 
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.util.Map;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
@@ -11,6 +12,12 @@ import org.apache.kafka.common.config.ConfigException;
 import org.junit.jupiter.api.Test;
 
 public class IcebergSinkConfigTest {
+
+  @Test
+  public void testGetVersion() {
+    String version = IcebergSinkConfig.getVersion();
+    assertNotNull(version);
+  }
 
   @Test
   public void testMissingRequired() {

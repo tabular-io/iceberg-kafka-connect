@@ -110,7 +110,7 @@ public class IntegrationTest extends IntegrationTestBase {
     catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA);
 
     // wait for the flush so the writer will refresh the table...
-    Thread.sleep(1000);
+    Thread.sleep(2000);
 
     runTest();
 

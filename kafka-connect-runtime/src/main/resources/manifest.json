@@ -2,7 +2,7 @@
   "component_types": [
     "sink"
   ],
-  "description": "A connector for reading data from Kafka and writing to Iceberg tables",
+  "description": "A sink connector for writing data to Iceberg tables",
   "features": {
     "confluent_control_center_integration": true,
     "delivery_guarantee": [
@@ -22,12 +22,12 @@
   ],
   "name": "iceberg-kafka-connect",
   "owner": {
-    "name": "Tabular, Inc.",
+    "name": "Tabular Technologies, Inc.",
     "type": "organization",
     "url": "https://www.tabular.io",
     "username": "tabular"
   },
   "requirements": [],
-  "title": "Kafka Connect Iceberg",
-  "version": "0.0.1"
+  "title": "Iceberg Kafka Connect",
+  "version": "__VERSION__"
 }
