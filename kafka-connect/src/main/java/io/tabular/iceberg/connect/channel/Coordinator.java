@@ -1,6 +1,7 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect.channel;
 
+import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -13,10 +14,10 @@ import io.tabular.iceberg.connect.channel.events.EventType;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import org.apache.iceberg.AppendFiles;
@@ -35,21 +36,19 @@ public class Coordinator extends Channel {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String CONTROL_OFFSETS_SNAPSHOT_PROP = "kafka.connect.control.offsets";
 
-  private final Table table;
+  private final Catalog catalog;
+  private final Map<TableIdentifier, Table> tables;
+  private final IcebergSinkConfig config;
   private final List<Event> commitBuffer = new LinkedList<>();
-  private final int commitIntervalMs;
-  private final int commitTimeoutMs;
-  private final Set<String> topics;
   private long startTime;
   private UUID currentCommitId;
   private final int totalPartitionCount;
 
-  public Coordinator(Catalog catalog, TableIdentifier tableIdentifier, IcebergSinkConfig config) {
+  public Coordinator(Catalog catalog, IcebergSinkConfig config) {
     super("coordinator", config);
-    this.table = catalog.loadTable(tableIdentifier);
-    this.commitIntervalMs = config.getCommitIntervalMs();
-    this.commitTimeoutMs = config.getCommitTimeoutMs();
-    this.topics = config.getTopics();
+    this.catalog = catalog;
+    this.tables = new HashMap<>();
+    this.config = config;
     this.totalPartitionCount = getTotalPartitionCount();
   }
 
@@ -60,7 +59,8 @@ public class Coordinator extends Channel {
     }
 
     // send out begin commit
-    if (currentCommitId == null && System.currentTimeMillis() - startTime >= commitIntervalMs) {
+    if (currentCommitId == null
+        && System.currentTimeMillis() - startTime >= config.getCommitIntervalMs()) {
       currentCommitId = UUID.randomUUID();
       Event event = new Event(EventType.COMMIT_REQUEST, new CommitRequestPayload(currentCommitId));
       send(event);
@@ -88,7 +88,7 @@ public class Coordinator extends Channel {
   }
 
   private int getTotalPartitionCount() {
-    return admin().describeTopics(topics).topicNameValues().values().stream()
+    return admin().describeTopics(config.getTopics()).topicNameValues().values().stream()
         .mapToInt(
             value -> {
               try {
@@ -101,7 +101,7 @@ public class Coordinator extends Channel {
   }
 
   private boolean isCommitTimedOut() {
-    if (System.currentTimeMillis() - startTime > commitTimeoutMs) {
+    if (System.currentTimeMillis() - startTime > config.getCommitTimeoutMs()) {
       LOG.info("Commit timeout reached");
       return true;
     }
@@ -130,30 +130,44 @@ public class Coordinator extends Channel {
   }
 
   private void commit(List<Event> buffer) {
-    List<DataFile> dataFiles =
+    Map<TableIdentifier, List<Event>> eventMap =
         buffer.stream()
-            .flatMap(event -> ((CommitResponsePayload) event.getPayload()).getDataFiles().stream())
-            .filter(dataFile -> dataFile.recordCount() > 0)
-            .collect(toList());
+            .collect(
+                groupingBy(
+                    event ->
+                        ((CommitResponsePayload) event.getPayload())
+                            .getTableName()
+                            .toIdentifier()));
 
-    table.refresh();
+    eventMap.forEach(
+        (tableIdentifier, eventList) -> {
+          Table table = getTable(tableIdentifier);
+          table.refresh();
 
-    if (dataFiles.isEmpty()) {
-      LOG.info("Nothing to commit");
-    } else {
-      String offsetsStr;
-      try {
-        offsetsStr = MAPPER.writeValueAsString(controlTopicOffsets());
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      }
-      AppendFiles appendOp = table.newAppend();
-      appendOp.set(CONTROL_OFFSETS_SNAPSHOT_PROP, offsetsStr);
-      dataFiles.forEach(appendOp::appendFile);
-      appendOp.commit();
+          List<DataFile> dataFiles =
+              eventList.stream()
+                  .flatMap(
+                      event -> ((CommitResponsePayload) event.getPayload()).getDataFiles().stream())
+                  .filter(dataFile -> dataFile.recordCount() > 0)
+                  .collect(toList());
 
-      LOG.info("Iceberg commit complete");
-    }
+          if (dataFiles.isEmpty()) {
+            LOG.info("Nothing to commit");
+          } else {
+            String offsetsStr;
+            try {
+              offsetsStr = MAPPER.writeValueAsString(controlTopicOffsets());
+            } catch (IOException e) {
+              throw new UncheckedIOException(e);
+            }
+            AppendFiles appendOp = table.newAppend();
+            appendOp.set(CONTROL_OFFSETS_SNAPSHOT_PROP, offsetsStr);
+            dataFiles.forEach(appendOp::appendFile);
+            appendOp.commit();
+
+            LOG.info("Iceberg commit complete");
+          }
+        });
 
     buffer.clear();
     currentCommitId = null;
@@ -163,7 +177,7 @@ public class Coordinator extends Channel {
   protected void initConsumerOffsets(Collection<TopicPartition> partitions) {
     super.initConsumerOffsets(partitions);
     Map<Integer, Long> controlTopicOffsets = getLastCommittedOffsets();
-    if (controlTopicOffsets != null) {
+    if (!controlTopicOffsets.isEmpty()) {
       setControlTopicOffsets(controlTopicOffsets);
     }
   }
@@ -171,21 +185,38 @@ public class Coordinator extends Channel {
   private Map<Integer, Long> getLastCommittedOffsets() {
     // TODO: support branches
     // TODO: verify offsets for job name
-    Snapshot snapshot = table.currentSnapshot();
-    while (snapshot != null) {
-      Map<String, String> summary = snapshot.summary();
-      String value = summary.get(CONTROL_OFFSETS_SNAPSHOT_PROP);
-      if (value != null) {
-        TypeReference<Map<Integer, Long>> typeRef = new TypeReference<Map<Integer, Long>>() {};
-        try {
-          return MAPPER.readValue(value, typeRef);
-        } catch (IOException e) {
-          throw new UncheckedIOException(e);
-        }
-      }
-      Long parentSnapshotId = snapshot.parentId();
-      snapshot = parentSnapshotId != null ? table.snapshot(parentSnapshotId) : null;
-    }
-    return null;
+
+    // FIXME!!! handle different offsets per table!!
+    //  Right now just getting low water mark which will could dupes!!
+
+    Map<Integer, Long> offsets = new HashMap<>();
+    config
+        .getTables()
+        .forEach(
+            tableName -> {
+              Table table = getTable(TableIdentifier.parse(tableName));
+              Snapshot snapshot = table.currentSnapshot();
+              while (snapshot != null) {
+                Map<String, String> summary = snapshot.summary();
+                String value = summary.get(CONTROL_OFFSETS_SNAPSHOT_PROP);
+                if (value != null) {
+                  TypeReference<Map<Integer, Long>> typeRef =
+                      new TypeReference<Map<Integer, Long>>() {};
+                  try {
+                    Map<Integer, Long> offsetsInSnapshot = MAPPER.readValue(value, typeRef);
+                    offsetsInSnapshot.forEach((k, v) -> offsets.merge(k, v, Long::min));
+                  } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                  }
+                }
+                Long parentSnapshotId = snapshot.parentId();
+                snapshot = parentSnapshotId != null ? table.snapshot(parentSnapshotId) : null;
+              }
+            });
+    return offsets;
+  }
+
+  private Table getTable(TableIdentifier tableIdentifier) {
+    return tables.computeIfAbsent(tableIdentifier, notUsed -> catalog.loadTable(tableIdentifier));
   }
 }

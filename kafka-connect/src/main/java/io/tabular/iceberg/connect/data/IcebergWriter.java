@@ -5,7 +5,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.iceberg.Table;
@@ -24,32 +23,28 @@ public class IcebergWriter implements Closeable {
   private TaskWriter<Record> writer;
   private Map<TopicPartition, Long> offsets;
 
-  public IcebergWriter(Catalog catalog, TableIdentifier tableIdentifier) {
+  public IcebergWriter(Catalog catalog, String tableName) {
+    this.tableIdentifier = TableIdentifier.parse(tableName);
     this.table = catalog.loadTable(tableIdentifier);
-    this.tableIdentifier = tableIdentifier;
     this.recordConverter = new RecordConverter(table);
     this.writer = Utilities.createTableWriter(table);
     this.offsets = new HashMap<>();
   }
 
-  public void write(Collection<SinkRecord> sinkRecords) {
-    sinkRecords.forEach(
-        record -> {
-          // the consumer stores the offsets that corresponds to the next record to consume,
-          // so increment the record offset by one
-          offsets.put(
-              new TopicPartition(record.topic(), record.kafkaPartition()),
-              record.kafkaOffset() + 1);
-          try {
-            // TODO: config to handle tombstones instead of always ignoring?
-            if (record.value() != null) {
-              Record row = recordConverter.convert(record.value());
-              writer.write(row);
-            }
-          } catch (IOException e) {
-            throw new UncheckedIOException(e);
-          }
-        });
+  public void write(SinkRecord record) {
+    // the consumer stores the offsets that corresponds to the next record to consume,
+    // so increment the record offset by one
+    offsets.put(
+        new TopicPartition(record.topic(), record.kafkaPartition()), record.kafkaOffset() + 1);
+    try {
+      // TODO: config to handle tombstones instead of always ignoring?
+      if (record.value() != null) {
+        Record row = recordConverter.convert(record.value());
+        writer.write(row);
+      }
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
   }
 
   public WriterResult complete() {

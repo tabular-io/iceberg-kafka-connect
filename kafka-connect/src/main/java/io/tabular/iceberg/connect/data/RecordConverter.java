@@ -86,20 +86,10 @@ public class RecordConverter {
   }
 
   public Record convert(Object data) {
-    try {
-      if (data instanceof Struct || data instanceof Map) {
-        return convertStructValue(data, tableSchema);
-      } else if (data instanceof String) {
-        Map<?, ?> map = MAPPER.readValue((String) data, Map.class);
-        return convertStructValue(map, tableSchema);
-      } else if (data instanceof byte[]) {
-        Map<?, ?> map = MAPPER.readValue((byte[]) data, Map.class);
-        return convertStructValue(map, tableSchema);
-      }
-    } catch (IOException e) {
-      throw new UncheckedIOException(e);
+    if (data instanceof Struct || data instanceof Map) {
+      return convertStructValue(data, tableSchema);
     }
-    throw new IllegalArgumentException("Cannot convert type: " + data.getClass().getName());
+    throw new UnsupportedOperationException("Cannot convert type: " + data.getClass().getName());
   }
 
   private NameMapping getNameMapping(Table table) {

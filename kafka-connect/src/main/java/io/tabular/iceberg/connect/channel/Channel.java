@@ -1,6 +1,8 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect.channel;
 
+import static java.util.stream.Collectors.toList;
+
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.channel.events.Event;
 import java.io.IOException;
@@ -8,6 +10,7 @@ import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -54,25 +57,34 @@ public abstract class Channel {
   }
 
   protected void send(Event event) {
-    send(event, ImmutableMap.of());
+    send(ImmutableList.of(event), ImmutableMap.of());
   }
 
-  protected void send(Event event, Map<TopicPartition, OffsetAndMetadata> sourceOffsets) {
-    LOG.info("Sending event of type: {}", event.getType().name());
+  protected void send(List<Event> events, Map<TopicPartition, Long> sourceOffsets) {
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
+    sourceOffsets.forEach((k, v) -> offsetsToCommit.put(k, new OffsetAndMetadata(v)));
 
-    byte[] data;
-    try {
-      data = AvroEncoderUtil.encode(event, event.getSchema());
-    } catch (IOException e) {
-      throw new UncheckedIOException(e);
-    }
+    List<ProducerRecord<byte[], byte[]>> recordList =
+        events.stream()
+            .map(
+                event -> {
+                  LOG.info("Sending event of type: {}", event.getType().name());
+                  try {
+                    byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
+                    return new ProducerRecord<byte[], byte[]>(controlTopic, data);
+                  } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                  }
+                })
+            .collect(toList());
 
     producer.beginTransaction();
     try {
-      producer.send(new ProducerRecord<>(controlTopic, data));
+      recordList.forEach(producer::send);
       if (!sourceOffsets.isEmpty()) {
         // TODO: this doesn't fence zombies
-        producer.sendOffsetsToTransaction(sourceOffsets, new ConsumerGroupMetadata(controlGroupId));
+        producer.sendOffsetsToTransaction(
+            offsetsToCommit, new ConsumerGroupMetadata(controlGroupId));
       }
       producer.commitTransaction();
     } catch (Exception e) {

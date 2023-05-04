@@ -30,7 +30,7 @@ public class IcebergSinkConfigTest {
     Map<String, String> props =
         ImmutableMap.of(
             "topics", "source-topic",
-            "iceberg.table", "db.landing",
+            "iceberg.tables", "db.landing",
             "iceberg.catalog", RESTCatalog.class.getName(),
             "iceberg.control.topic", "control-topic",
             "iceberg.control.group.id", "control-group");

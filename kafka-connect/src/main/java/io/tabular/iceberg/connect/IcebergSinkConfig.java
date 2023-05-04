@@ -1,11 +1,11 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect;
 
+import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.iceberg.IcebergBuild;
-import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.util.PropertyUtil;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -17,17 +17,20 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public static final String INTERNAL_TRANSACTIONAL_SUFFIX_PROP =
       "iceberg.coordinator.transactional.suffix";
+  private static final String ROUTE_VALUES = "routeValues";
 
   private static final String CATALOG_PROP_PREFIX = "iceberg.catalog.";
   private static final String KAFKA_PROP_PREFIX = "iceberg.kafka.";
+  private static final String TABLE_PROP_PREFIX = "iceberg.table.";
 
   private static final String CATALOG_IMPL_PROP = "iceberg.catalog";
-  private static final String TABLE_PROP = "iceberg.table";
+  private static final String TABLES_PROP = "iceberg.tables";
+  private static final String TABLES_ROUTE_FIELD_PROP = "iceberg.tables.routeField";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
   private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group.id";
-  private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.table.commitIntervalMs";
+  private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.control.commitIntervalMs";
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
-  private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.table.commitTimeoutMs";
+  private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.control.commitTimeoutMs";
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
 
   public static ConfigDef CONFIG_DEF = newConfigDef();
@@ -47,7 +50,14 @@ public class IcebergSinkConfig extends AbstractConfig {
         Type.LIST,
         Importance.HIGH,
         "Comma-delimited list of source topics");
-    configDef.define(TABLE_PROP, Type.STRING, Importance.HIGH, "Iceberg destination table");
+    configDef.define(
+        TABLES_PROP, Type.STRING, Importance.HIGH, "Comma-delimited list of destination tables");
+    configDef.define(
+        TABLES_ROUTE_FIELD_PROP,
+        Type.STRING,
+        null,
+        Importance.MEDIUM,
+        "Source record field for routing records to tables");
     configDef.define(CATALOG_IMPL_PROP, Type.STRING, Importance.HIGH, "Iceberg catalog class name");
     configDef.define(CONTROL_TOPIC_PROP, Type.STRING, Importance.HIGH, "Name of the control topic");
     configDef.define(
@@ -98,8 +108,16 @@ public class IcebergSinkConfig extends AbstractConfig {
     return getString(CATALOG_IMPL_PROP);
   }
 
-  public TableIdentifier getTable() {
-    return TableIdentifier.parse(getString(TABLE_PROP));
+  public List<String> getTables() {
+    return getList(TABLES_PROP);
+  }
+
+  public String getTablesRouteField() {
+    return getString(TABLES_ROUTE_FIELD_PROP);
+  }
+
+  public List<String> getTableRouteValues(String tableName) {
+    return getList(TABLE_PROP_PREFIX + tableName + "." + ROUTE_VALUES);
   }
 
   public String getControlTopic() {

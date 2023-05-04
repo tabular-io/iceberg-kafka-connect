@@ -7,7 +7,6 @@ import io.tabular.iceberg.connect.data.Utilities;
 import java.util.Collection;
 import java.util.Map;
 import org.apache.iceberg.catalog.Catalog;
-import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -37,15 +36,14 @@ public class IcebergSinkTask extends SinkTask {
   @Override
   public void open(Collection<TopicPartition> partitions) {
     Catalog catalog = Utilities.loadCatalog(config);
-    TableIdentifier tableIdentifier = config.getTable();
 
     if (isLeader(partitions)) {
       LOG.info("Task elected leader, starting commit coordinator");
-      coordinator = new Coordinator(catalog, tableIdentifier, config);
+      coordinator = new Coordinator(catalog, config);
       coordinator.start();
     }
     LOG.info("Starting commit worker");
-    worker = new Worker(catalog, tableIdentifier, config, context);
+    worker = new Worker(catalog, config, context);
     worker.syncCommitOffsets();
     worker.start();
   }
