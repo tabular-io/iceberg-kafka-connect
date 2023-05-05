@@ -93,13 +93,13 @@ public abstract class Channel {
     }
   }
 
-  protected abstract void receive(Event event);
+  protected abstract void receive(Envelope envelope);
 
   public void process() {
     consumeAvailable(this::receive);
   }
 
-  protected void consumeAvailable(Consumer<Event> eventHandler) {
+  protected void consumeAvailable(Consumer<Envelope> eventHandler) {
     ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ZERO);
     while (!records.isEmpty()) {
       records.forEach(
@@ -116,7 +116,7 @@ public abstract class Channel {
             }
 
             LOG.info("Received event of type: {}", event.getType().name());
-            eventHandler.accept(event);
+            eventHandler.accept(new Envelope(event, record.partition(), record.offset()));
           });
       records = consumer.poll(Duration.ZERO);
     }

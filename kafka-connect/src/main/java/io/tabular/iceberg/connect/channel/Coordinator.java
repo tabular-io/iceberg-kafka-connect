@@ -26,6 +26,7 @@ import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,12 +35,12 @@ public class Coordinator extends Channel {
 
   private static final Logger LOG = LoggerFactory.getLogger(Coordinator.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static final String CONTROL_OFFSETS_SNAPSHOT_PROP = "kafka.connect.control.offsets";
+  private static final String CONTROL_OFFSETS_SNAPSHOT_PREFIX = "kafka.connect.control.offsets.";
 
   private final Catalog catalog;
   private final Map<TableIdentifier, Table> tables;
   private final IcebergSinkConfig config;
-  private final List<Event> commitBuffer = new LinkedList<>();
+  private final List<Envelope> commitBuffer = new LinkedList<>();
   private long startTime;
   private UUID currentCommitId;
   private final int totalPartitionCount;
@@ -75,9 +76,9 @@ public class Coordinator extends Channel {
   }
 
   @Override
-  protected void receive(Event event) {
-    if (event.getType() == EventType.COMMIT_RESPONSE) {
-      commitBuffer.add(event);
+  protected void receive(Envelope envelope) {
+    if (envelope.getEvent().getType() == EventType.COMMIT_RESPONSE) {
+      commitBuffer.add(envelope);
       if (currentCommitId == null) {
         LOG.warn(
             "Received commit response when no commit in progress, this can happen during recovery");
@@ -111,12 +112,13 @@ public class Coordinator extends Channel {
   private boolean isCommitComplete() {
     int receivedPartitionCount =
         commitBuffer.stream()
-            .map(event -> (CommitResponsePayload) event.getPayload())
+            .map(envelope -> (CommitResponsePayload) envelope.getEvent().getPayload())
             .filter(payload -> payload.getCommitId().equals(currentCommitId))
             .mapToInt(payload -> payload.getAssignments().size())
             .sum();
 
     // FIXME!! not all workers will send messages for all tables!
+
     if (receivedPartitionCount >= totalPartitionCount * config.getTables().size()) {
       LOG.info("Commit ready, received responses for all {} partitions", receivedPartitionCount);
       return true;
@@ -130,25 +132,33 @@ public class Coordinator extends Channel {
     return false;
   }
 
-  private void commit(List<Event> buffer) {
-    Map<TableIdentifier, List<Event>> eventMap =
+  private void commit(List<Envelope> buffer) {
+    Map<TableIdentifier, List<Envelope>> commitMap =
         buffer.stream()
             .collect(
                 groupingBy(
-                    event ->
-                        ((CommitResponsePayload) event.getPayload())
+                    envelope ->
+                        ((CommitResponsePayload) envelope.getEvent().getPayload())
                             .getTableName()
                             .toIdentifier()));
 
-    eventMap.forEach(
-        (tableIdentifier, eventList) -> {
+    commitMap.forEach(
+        (tableIdentifier, envelopeList) -> {
           Table table = getTable(tableIdentifier);
           table.refresh();
+          Map<Integer, Long> commitedOffsets = getLastCommittedOffsetsForTable(tableIdentifier);
 
           List<DataFile> dataFiles =
-              eventList.stream()
+              envelopeList.stream()
+                  .filter(
+                      envelope -> {
+                        Long minOffset = commitedOffsets.get(envelope.getPartition());
+                        return minOffset == null || envelope.getOffset() >= minOffset;
+                      })
                   .flatMap(
-                      event -> ((CommitResponsePayload) event.getPayload()).getDataFiles().stream())
+                      envelope ->
+                          ((CommitResponsePayload) envelope.getEvent().getPayload())
+                              .getDataFiles().stream())
                   .filter(dataFile -> dataFile.recordCount() > 0)
                   .collect(toList());
 
@@ -161,8 +171,9 @@ public class Coordinator extends Channel {
             } catch (IOException e) {
               throw new UncheckedIOException(e);
             }
+            String offsetsProp = CONTROL_OFFSETS_SNAPSHOT_PREFIX + config.getControlTopic();
             AppendFiles appendOp = table.newAppend();
-            appendOp.set(CONTROL_OFFSETS_SNAPSHOT_PROP, offsetsStr);
+            appendOp.set(offsetsProp, offsetsStr);
             dataFiles.forEach(appendOp::appendFile);
             appendOp.commit();
 
@@ -177,44 +188,47 @@ public class Coordinator extends Channel {
   @Override
   protected void initConsumerOffsets(Collection<TopicPartition> partitions) {
     super.initConsumerOffsets(partitions);
-    Map<Integer, Long> controlTopicOffsets = getLastCommittedOffsets();
+    Map<Integer, Long> controlTopicOffsets = getLowWatermarkOffsets();
     if (!controlTopicOffsets.isEmpty()) {
       setControlTopicOffsets(controlTopicOffsets);
     }
   }
 
-  private Map<Integer, Long> getLastCommittedOffsets() {
-    // TODO: support branches
-    // TODO: verify offsets for job name
-
-    // FIXME!!! handle different offsets per table!!
-    //  Right now just getting low water mark which could cause dupes!!
-
+  private Map<Integer, Long> getLowWatermarkOffsets() {
     Map<Integer, Long> offsets = new HashMap<>();
     config
         .getTables()
         .forEach(
             tableName -> {
-              Table table = getTable(TableIdentifier.parse(tableName));
-              Snapshot snapshot = table.currentSnapshot();
-              while (snapshot != null) {
-                Map<String, String> summary = snapshot.summary();
-                String value = summary.get(CONTROL_OFFSETS_SNAPSHOT_PROP);
-                if (value != null) {
-                  TypeReference<Map<Integer, Long>> typeRef =
-                      new TypeReference<Map<Integer, Long>>() {};
-                  try {
-                    Map<Integer, Long> offsetsInSnapshot = MAPPER.readValue(value, typeRef);
-                    offsetsInSnapshot.forEach((k, v) -> offsets.merge(k, v, Long::min));
-                  } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                  }
-                }
-                Long parentSnapshotId = snapshot.parentId();
-                snapshot = parentSnapshotId != null ? table.snapshot(parentSnapshotId) : null;
-              }
+              TableIdentifier tableIdentifier = TableIdentifier.parse(tableName);
+              getLastCommittedOffsetsForTable(tableIdentifier)
+                  .forEach((k, v) -> offsets.merge(k, v, Long::min));
             });
     return offsets;
+  }
+
+  private Map<Integer, Long> getLastCommittedOffsetsForTable(TableIdentifier tableIdentifier) {
+    // TODO: support branches
+
+    String offsetsProp = CONTROL_OFFSETS_SNAPSHOT_PREFIX + config.getControlTopic();
+    Table table = getTable(tableIdentifier);
+    Snapshot snapshot = table.currentSnapshot();
+
+    while (snapshot != null) {
+      Map<String, String> summary = snapshot.summary();
+      String value = summary.get(offsetsProp);
+      if (value != null) {
+        TypeReference<Map<Integer, Long>> typeRef = new TypeReference<Map<Integer, Long>>() {};
+        try {
+          return MAPPER.readValue(value, typeRef);
+        } catch (IOException e) {
+          throw new UncheckedIOException(e);
+        }
+      }
+      Long parentSnapshotId = snapshot.parentId();
+      snapshot = parentSnapshotId != null ? table.snapshot(parentSnapshotId) : null;
+    }
+    return ImmutableMap.of();
   }
 
   private Table getTable(TableIdentifier tableIdentifier) {

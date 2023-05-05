@@ -65,7 +65,8 @@ public class Worker extends Channel {
   }
 
   @Override
-  protected void receive(Event event) {
+  protected void receive(Envelope envelope) {
+    Event event = envelope.getEvent();
     if (event.getType() == EventType.COMMIT_REQUEST) {
       List<WriterResult> writeResults =
           writers.values().stream().map(IcebergWriter::complete).collect(toList());
