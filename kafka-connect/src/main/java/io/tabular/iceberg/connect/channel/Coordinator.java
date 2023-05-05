@@ -116,7 +116,8 @@ public class Coordinator extends Channel {
             .mapToInt(payload -> payload.getAssignments().size())
             .sum();
 
-    if (receivedPartitionCount >= totalPartitionCount) {
+    // FIXME!! not all workers will send messages for all tables!
+    if (receivedPartitionCount >= totalPartitionCount * config.getTables().size()) {
       LOG.info("Commit ready, received responses for all {} partitions", receivedPartitionCount);
       return true;
     }
