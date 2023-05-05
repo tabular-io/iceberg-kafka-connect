@@ -28,6 +28,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String CATALOG_IMPL_PROP = "iceberg.catalog";
   private static final String TABLES_PROP = "iceberg.tables";
   private static final String TABLES_ROUTE_FIELD_PROP = "iceberg.tables.routeField";
+  private static final String TABLES_CDC_FIELD_PROP = "iceberg.tables.cdcField";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
   private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group.id";
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.control.commitIntervalMs";
@@ -62,6 +63,12 @@ public class IcebergSinkConfig extends AbstractConfig {
         null,
         Importance.MEDIUM,
         "Source record field for routing records to tables");
+    configDef.define(
+        TABLES_CDC_FIELD_PROP,
+        Type.STRING,
+        null,
+        Importance.MEDIUM,
+        "Source record field that identifies the type of operation (insert, update, or delete)");
     configDef.define(CATALOG_IMPL_PROP, Type.STRING, Importance.HIGH, "Iceberg catalog class name");
     configDef.define(CONTROL_TOPIC_PROP, Type.STRING, Importance.HIGH, "Name of the control topic");
     configDef.define(
@@ -130,6 +137,10 @@ public class IcebergSinkConfig extends AbstractConfig {
           }
           return Pattern.compile(value);
         });
+  }
+
+  public String getTablesCdcField() {
+    return getString(TABLES_CDC_FIELD_PROP);
   }
 
   public String getControlTopic() {

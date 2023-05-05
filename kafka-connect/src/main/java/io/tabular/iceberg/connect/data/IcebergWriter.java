@@ -1,6 +1,7 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect.data;
 
+import io.tabular.iceberg.connect.IcebergSinkConfig;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -14,20 +15,23 @@ import org.apache.iceberg.data.Record;
 import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.WriteResult;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 public class IcebergWriter implements Closeable {
   private final Table table;
   private final TableIdentifier tableIdentifier;
+  private final IcebergSinkConfig config;
   private RecordConverter recordConverter;
   private TaskWriter<Record> writer;
   private Map<TopicPartition, Long> offsets;
 
-  public IcebergWriter(Catalog catalog, String tableName) {
+  public IcebergWriter(Catalog catalog, String tableName, IcebergSinkConfig config) {
     this.tableIdentifier = TableIdentifier.parse(tableName);
     this.table = catalog.loadTable(tableIdentifier);
+    this.config = config;
     this.recordConverter = new RecordConverter(table);
-    this.writer = Utilities.createTableWriter(table);
+    this.writer = Utilities.createTableWriter(table, config);
     this.offsets = new HashMap<>();
   }
 
@@ -40,10 +44,48 @@ public class IcebergWriter implements Closeable {
       // TODO: config to handle tombstones instead of always ignoring?
       if (record.value() != null) {
         Record row = recordConverter.convert(record.value());
-        writer.write(row);
+        String cdcField = config.getTablesCdcField();
+        if (cdcField == null) {
+          writer.write(row);
+        } else {
+          Operation op = extractCdcOperation(record.value(), cdcField);
+          // FIXME!! hack alert!
+          row.setField("__op__", op);
+          writer.write(row);
+        }
       }
     } catch (IOException e) {
       throw new UncheckedIOException(e);
+    }
+  }
+
+  private Operation extractCdcOperation(Object recordValue, String cdcField) {
+    Object opValue;
+    if (recordValue instanceof Struct) {
+      opValue = ((Struct) recordValue).get(cdcField);
+    } else if (recordValue instanceof Map) {
+      opValue = ((Map<?, ?>) recordValue).get(cdcField);
+    } else {
+      throw new UnsupportedOperationException(
+          "Cannot extract value from type: " + recordValue.getClass().getName());
+    }
+
+    if (opValue == null) {
+      return Operation.INSERT;
+    }
+
+    // FIXME!! define mapping in config!!
+
+    String opStr = opValue.toString().toUpperCase();
+    switch (opStr) {
+      case "UPDATE":
+      case "U":
+        return Operation.UPDATE;
+      case "DELETE":
+      case "D":
+        return Operation.DELETE;
+      default:
+        return Operation.INSERT;
     }
   }
 
@@ -59,12 +101,13 @@ public class IcebergWriter implements Closeable {
         new WriterResult(
             tableIdentifier,
             Arrays.asList(writeResult.dataFiles()),
+            Arrays.asList(writeResult.deleteFiles()),
             table.spec().partitionType(),
             offsets);
 
     table.refresh();
     recordConverter = new RecordConverter(table);
-    writer = Utilities.createTableWriter(table);
+    writer = Utilities.createTableWriter(table, config);
     offsets = new HashMap<>();
 
     return result;

@@ -22,6 +22,8 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.DataFile;
+import org.apache.iceberg.DeleteFile;
+import org.apache.iceberg.RowDelta;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
@@ -148,21 +150,31 @@ public class Coordinator extends Channel {
           table.refresh();
           Map<Integer, Long> commitedOffsets = getLastCommittedOffsetsForTable(tableIdentifier);
 
-          List<DataFile> dataFiles =
+          List<CommitResponsePayload> payloads =
               envelopeList.stream()
                   .filter(
                       envelope -> {
                         Long minOffset = commitedOffsets.get(envelope.getPartition());
                         return minOffset == null || envelope.getOffset() >= minOffset;
                       })
-                  .flatMap(
-                      envelope ->
-                          ((CommitResponsePayload) envelope.getEvent().getPayload())
-                              .getDataFiles().stream())
+                  .map(envelope -> (CommitResponsePayload) envelope.getEvent().getPayload())
+                  .collect(toList());
+
+          List<DataFile> dataFiles =
+              payloads.stream()
+                  .filter(payload -> payload.getDataFiles() != null)
+                  .flatMap(payload -> payload.getDataFiles().stream())
                   .filter(dataFile -> dataFile.recordCount() > 0)
                   .collect(toList());
 
-          if (dataFiles.isEmpty()) {
+          List<DeleteFile> deleteFiles =
+              payloads.stream()
+                  .filter(payload -> payload.getDeleteFiles() != null)
+                  .flatMap(payload -> payload.getDeleteFiles().stream())
+                  .filter(deleteFile -> deleteFile.recordCount() > 0)
+                  .collect(toList());
+
+          if (dataFiles.isEmpty() && deleteFiles.isEmpty()) {
             LOG.info("Nothing to commit");
           } else {
             String offsetsStr;
@@ -171,11 +183,21 @@ public class Coordinator extends Channel {
             } catch (IOException e) {
               throw new UncheckedIOException(e);
             }
+
             String offsetsProp = CONTROL_OFFSETS_SNAPSHOT_PREFIX + config.getControlTopic();
-            AppendFiles appendOp = table.newAppend();
-            appendOp.set(offsetsProp, offsetsStr);
-            dataFiles.forEach(appendOp::appendFile);
-            appendOp.commit();
+
+            if (deleteFiles.isEmpty()) {
+              AppendFiles appendOp = table.newAppend();
+              appendOp.set(offsetsProp, offsetsStr);
+              dataFiles.forEach(appendOp::appendFile);
+              appendOp.commit();
+            } else {
+              RowDelta deltaOp = table.newRowDelta();
+              deltaOp.set(offsetsProp, offsetsStr);
+              dataFiles.forEach(deltaOp::addRows);
+              deleteFiles.forEach(deltaOp::addDeletes);
+              deltaOp.commit();
+            }
 
             LOG.info("Iceberg commit complete");
           }

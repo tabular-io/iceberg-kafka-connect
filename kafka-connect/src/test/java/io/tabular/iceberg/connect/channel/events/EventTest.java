@@ -9,6 +9,8 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.UUID;
 import org.apache.iceberg.DataFile;
+import org.apache.iceberg.DeleteFile;
+import org.apache.iceberg.FileContent;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.Metrics;
 import org.apache.iceberg.PartitionData;
@@ -47,6 +49,7 @@ public class EventTest {
                 commitId,
                 new TableName(ImmutableList.of("db"), "tbl"),
                 ImmutableList.of(createDataFile(), createDataFile()),
+                ImmutableList.of(createDeleteFile(), createDeleteFile()),
                 ImmutableList.of(
                     new TopicPartitionOffset("topic", 1, 1L),
                     new TopicPartitionOffset("topic", 2, null))));
@@ -59,6 +62,8 @@ public class EventTest {
     assertEquals(commitId, payload.getCommitId());
     assertThat(payload.getDataFiles()).hasSize(2);
     assertThat(payload.getDataFiles()).allMatch(f -> f.specId() == 1);
+    assertThat(payload.getDeleteFiles()).hasSize(2);
+    assertThat(payload.getDeleteFiles()).allMatch(f -> f.specId() == 1);
     assertThat(payload.getAssignments()).hasSize(2);
     assertThat(payload.getAssignments()).allMatch(tp -> tp.getTopic().equals("topic"));
   }
@@ -85,6 +90,49 @@ public class EventTest {
         new Metrics(1L, ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of());
 
     return ctor.newInstance(
-        1, "hi", FileFormat.PARQUET, partitionData, 1L, metrics, null, null, null);
+        1,
+        "path",
+        FileFormat.PARQUET,
+        partitionData,
+        1L,
+        metrics,
+        ByteBuffer.wrap(new byte[] {0}),
+        null,
+        1);
+  }
+
+  private DeleteFile createDeleteFile() {
+    Ctor<DeleteFile> ctor =
+        DynConstructors.builder(DeleteFile.class)
+            .hiddenImpl(
+                "org.apache.iceberg.GenericDeleteFile",
+                int.class,
+                FileContent.class,
+                String.class,
+                FileFormat.class,
+                PartitionData.class,
+                long.class,
+                Metrics.class,
+                int[].class,
+                Integer.class,
+                ByteBuffer.class)
+            .build();
+
+    PartitionData partitionData =
+        new PartitionData(StructType.of(required(999, "type", StringType.get())));
+    Metrics metrics =
+        new Metrics(1L, ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of());
+
+    return ctor.newInstance(
+        1,
+        FileContent.EQUALITY_DELETES,
+        "path",
+        FileFormat.PARQUET,
+        partitionData,
+        1L,
+        metrics,
+        new int[] {1},
+        1,
+        ByteBuffer.wrap(new byte[] {0}));
   }
 }

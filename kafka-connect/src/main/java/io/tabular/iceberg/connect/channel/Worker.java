@@ -102,6 +102,7 @@ public class Worker extends Channel {
                               commitId,
                               TableName.of(writeResult.getTableIdentifier()),
                               writeResult.getDataFiles(),
+                              writeResult.getDeleteFiles(),
                               assignments)))
               .collect(toList());
 
@@ -133,17 +134,7 @@ public class Worker extends Channel {
               });
 
     } else {
-      Object value = record.value();
-      String routeValue;
-      if (value instanceof Struct) {
-        routeValue = ((Struct) value).get(routeField).toString();
-      } else if (record.value() instanceof Map) {
-        routeValue = ((Map<?, ?>) value).get(routeField).toString();
-      } else {
-        throw new UnsupportedOperationException(
-            "Cannot extract value from type: " + value.getClass().getName());
-      }
-
+      String routeValue = extractRouteValue(record.value(), routeField);
       if (routeValue != null) {
         config
             .getTables()
@@ -158,7 +149,26 @@ public class Worker extends Channel {
     }
   }
 
+  private String extractRouteValue(Object recordValue, String routeField) {
+    if (recordValue == null) {
+      return null;
+    }
+
+    Object routeValue;
+    if (recordValue instanceof Struct) {
+      routeValue = ((Struct) recordValue).get(routeField).toString();
+    } else if (recordValue instanceof Map) {
+      routeValue = ((Map<?, ?>) recordValue).get(routeField).toString();
+    } else {
+      throw new UnsupportedOperationException(
+          "Cannot extract value from type: " + recordValue.getClass().getName());
+    }
+
+    return routeValue == null ? null : routeValue.toString();
+  }
+
   private IcebergWriter getWriterForTable(String tableName) {
-    return writers.computeIfAbsent(tableName, notUsed -> new IcebergWriter(catalog, tableName));
+    return writers.computeIfAbsent(
+        tableName, notUsed -> new IcebergWriter(catalog, tableName, config));
   }
 }

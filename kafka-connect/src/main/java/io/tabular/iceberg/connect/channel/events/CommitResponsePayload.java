@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.iceberg.DataFile;
+import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.avro.AvroSchemaUtil;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Types.StructType;
@@ -17,6 +18,7 @@ public class CommitResponsePayload implements Payload {
   private UUID commitId;
   private TableName tableName;
   private List<DataFile> dataFiles;
+  private List<DeleteFile> deleteFiles;
   private List<TopicPartitionOffset> assignments;
   private Schema avroSchema;
 
@@ -29,10 +31,12 @@ public class CommitResponsePayload implements Payload {
       UUID commitId,
       TableName tableName,
       List<DataFile> dataFiles,
+      List<DeleteFile> deleteFiles,
       List<TopicPartitionOffset> assignments) {
     this.commitId = commitId;
     this.tableName = tableName;
     this.dataFiles = dataFiles;
+    this.deleteFiles = deleteFiles;
     this.assignments = assignments;
 
     StructType dataFileStruct = DataFile.getType(partitionType);
@@ -41,6 +45,12 @@ public class CommitResponsePayload implements Payload {
             dataFileStruct,
             ImmutableMap.of(
                 dataFileStruct, "org.apache.iceberg.GenericDataFile",
+                partitionType, "org.apache.iceberg.PartitionData"));
+    Schema deleteFileSchema =
+        AvroSchemaUtil.convert(
+            dataFileStruct,
+            ImmutableMap.of(
+                dataFileStruct, "org.apache.iceberg.GenericDeleteFile",
                 partitionType, "org.apache.iceberg.PartitionData"));
 
     this.avroSchema =
@@ -62,6 +72,13 @@ public class CommitResponsePayload implements Payload {
             .array()
             .items(dataFileSchema)
             .noDefault()
+            .name("deleteFiles")
+            .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+            .type()
+            .nullable()
+            .array()
+            .items(deleteFileSchema)
+            .noDefault()
             .name("assignments")
             .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
             .type()
@@ -82,6 +99,10 @@ public class CommitResponsePayload implements Payload {
 
   public List<DataFile> getDataFiles() {
     return dataFiles;
+  }
+
+  public List<DeleteFile> getDeleteFiles() {
+    return deleteFiles;
   }
 
   public List<TopicPartitionOffset> getAssignments() {
@@ -107,6 +128,9 @@ public class CommitResponsePayload implements Payload {
         this.dataFiles = (List<DataFile>) v;
         return;
       case 3:
+        this.deleteFiles = (List<DeleteFile>) v;
+        return;
+      case 4:
         this.assignments = (List<TopicPartitionOffset>) v;
         return;
       default:
@@ -124,6 +148,8 @@ public class CommitResponsePayload implements Payload {
       case 2:
         return dataFiles;
       case 3:
+        return deleteFiles;
+      case 4:
         return assignments;
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
