@@ -187,7 +187,7 @@ public class Coordinator extends Channel {
     // TODO: verify offsets for job name
 
     // FIXME!!! handle different offsets per table!!
-    //  Right now just getting low water mark which will could dupes!!
+    //  Right now just getting low water mark which could cause dupes!!
 
     Map<Integer, Long> offsets = new HashMap<>();
     config
