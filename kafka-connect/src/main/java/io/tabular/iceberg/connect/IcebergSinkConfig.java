@@ -1,11 +1,14 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 import org.apache.iceberg.IcebergBuild;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.util.PropertyUtil;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -32,6 +35,8 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
   private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.control.commitTimeoutMs";
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
+
+  private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
 
   public static ConfigDef CONFIG_DEF = newConfigDef();
 
@@ -117,7 +122,11 @@ public class IcebergSinkConfig extends AbstractConfig {
   }
 
   public List<String> getTableRouteValues(String tableName) {
-    return getList(TABLE_PROP_PREFIX + tableName + "." + ROUTE_VALUES);
+    String value = props.get(TABLE_PROP_PREFIX + tableName + "." + ROUTE_VALUES);
+    if (value == null) {
+      return ImmutableList.of();
+    }
+    return Arrays.asList(COMMA_WITH_WHITESPACE.split(value.trim(), -1));
   }
 
   public String getControlTopic() {
