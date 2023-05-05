@@ -51,7 +51,7 @@ public class IcebergSinkConfig extends AbstractConfig {
         Importance.HIGH,
         "Comma-delimited list of source topics");
     configDef.define(
-        TABLES_PROP, Type.STRING, Importance.HIGH, "Comma-delimited list of destination tables");
+        TABLES_PROP, Type.LIST, Importance.HIGH, "Comma-delimited list of destination tables");
     configDef.define(
         TABLES_ROUTE_FIELD_PROP,
         Type.STRING,
