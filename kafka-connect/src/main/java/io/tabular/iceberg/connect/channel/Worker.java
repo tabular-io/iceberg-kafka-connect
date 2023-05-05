@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.regex.Pattern;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -148,8 +149,8 @@ public class Worker extends Channel {
             .getTables()
             .forEach(
                 tableName -> {
-                  List<String> tableRouteValues = config.getTableRouteValues(tableName);
-                  if (tableRouteValues.contains(routeValue)) {
+                  Pattern tableRouteValues = config.getTableRouteValues(tableName);
+                  if (tableRouteValues.matcher(routeValue).matches()) {
                     getWriterForTable(tableName).write(record);
                   }
                 });
