@@ -1,9 +1,7 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect.data;
 
-import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE;
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME;
-import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
 import static java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 import static java.util.stream.Collectors.toList;
 
@@ -18,8 +16,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.Temporal;
 import java.util.Base64;
@@ -52,23 +49,6 @@ import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.ConverterType;
 
 public class RecordConverter {
-
-  // support ' ' separator
-  private static final DateTimeFormatter LOCAL_DATE_TIME_FORMAT =
-      new DateTimeFormatterBuilder()
-          .parseCaseInsensitive()
-          .append(ISO_LOCAL_DATE)
-          .appendLiteral(' ')
-          .append(ISO_LOCAL_TIME)
-          .toFormatter();
-
-  // support ' ' separator
-  private static final DateTimeFormatter OFFSET_DATE_TIME_FORMAT =
-      new DateTimeFormatterBuilder()
-          .parseCaseInsensitive()
-          .append(LOCAL_DATE_TIME_FORMAT)
-          .appendOffsetId()
-          .toFormatter();
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -355,7 +335,7 @@ public class RecordConverter {
     try {
       return OffsetDateTime.parse(str, ISO_OFFSET_DATE_TIME);
     } catch (DateTimeParseException e) {
-      return OffsetDateTime.parse(str, OFFSET_DATE_TIME_FORMAT);
+      return LocalDateTime.parse(str, ISO_LOCAL_DATE_TIME).atOffset(ZoneOffset.UTC);
     }
   }
 
@@ -363,7 +343,7 @@ public class RecordConverter {
     try {
       return LocalDateTime.parse(str, ISO_LOCAL_DATE_TIME);
     } catch (DateTimeParseException e) {
-      return LocalDateTime.parse(str, LOCAL_DATE_TIME_FORMAT);
+      return OffsetDateTime.parse(str, ISO_OFFSET_DATE_TIME).toLocalDateTime();
     }
   }
 }

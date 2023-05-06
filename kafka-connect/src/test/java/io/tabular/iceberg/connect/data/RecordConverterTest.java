@@ -204,7 +204,7 @@ public class RecordConverterTest {
     Temporal ts = converter.convertTimestampValue("2023-05-18T11:22:33Z", TimestampType.withZone());
     assertEquals(expected, ts);
 
-    ts = converter.convertTimestampValue("2023-05-18 11:22:33Z", TimestampType.withZone());
+    ts = converter.convertTimestampValue("2023-05-18T11:22:33", TimestampType.withZone());
     assertEquals(expected, ts);
 
     long epochMillis = expected.toInstant().toEpochMilli();
@@ -222,7 +222,7 @@ public class RecordConverterTest {
     Temporal ts =
         converter.convertTimestampValue("2023-05-18T11:22:33", TimestampType.withoutZone());
     assertEquals(expected, ts);
-    ts = converter.convertTimestampValue("2023-05-18 11:22:33", TimestampType.withoutZone());
+    ts = converter.convertTimestampValue("2023-05-18T11:22:33Z", TimestampType.withoutZone());
     assertEquals(expected, ts);
 
     long epochMillis = expected.atZone(ZoneOffset.UTC).toInstant().toEpochMilli();
