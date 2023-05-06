@@ -60,11 +60,12 @@ public class Utilities {
 
     FileAppenderFactory<Record> appenderFactory =
         new GenericAppenderFactory(
-            table.schema(),
-            table.spec(),
-            Ints.toArray(table.schema().identifierFieldIds()),
-            table.schema(),
-            null);
+                table.schema(),
+                table.spec(),
+                Ints.toArray(table.schema().identifierFieldIds()),
+                table.schema(),
+                null)
+            .setAll(table.properties());
 
     // (partition ID + task ID + operation ID) must be unique
     OutputFileFactory fileFactory =
