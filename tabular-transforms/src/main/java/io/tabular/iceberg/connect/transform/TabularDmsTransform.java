@@ -48,6 +48,7 @@ public class TabularDmsTransform<R extends ConnectRecord<R>> implements Transfor
     result.put("_cdc_op", op);
     result.put(
         "_cdc_table", format("%s.%s", metadata.get("schema-name"), metadata.get("table-name")));
+    result.put("_cdc_ts", metadata.get("timestamp"));
 
     return record.newRecord(
         record.topic(),
