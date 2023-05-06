@@ -96,11 +96,15 @@ public abstract class Channel {
   protected abstract void receive(Envelope envelope);
 
   public void process() {
-    consumeAvailable(this::receive);
+    consumeAvailable(this::receive, Duration.ZERO);
   }
 
-  protected void consumeAvailable(Consumer<Envelope> eventHandler) {
-    ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ZERO);
+  protected void process(Duration duration) {
+    consumeAvailable(this::receive, duration);
+  }
+
+  protected void consumeAvailable(Consumer<Envelope> eventHandler, Duration pollDuration) {
+    ConsumerRecords<byte[], byte[]> records = consumer.poll(pollDuration);
     while (!records.isEmpty()) {
       records.forEach(
           record -> {
@@ -118,7 +122,7 @@ public abstract class Channel {
             LOG.info("Received event of type: {}", event.getType().name());
             eventHandler.accept(new Envelope(event, record.partition(), record.offset()));
           });
-      records = consumer.poll(Duration.ZERO);
+      records = consumer.poll(pollDuration);
     }
   }
 
@@ -175,6 +179,9 @@ public abstract class Channel {
             initConsumerOffsets(partitions);
           }
         });
+
+    // initial poll with longer duration so the consumer will initialize...
+    process(Duration.ofMillis(1000));
   }
 
   public void stop() {

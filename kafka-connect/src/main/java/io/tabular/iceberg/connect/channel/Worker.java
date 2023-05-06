@@ -31,7 +31,6 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 
 public class Worker extends Channel {
-
   private final Catalog catalog;
   private final IcebergSinkConfig config;
   private final Map<String, IcebergWriter> writers;
@@ -141,7 +140,7 @@ public class Worker extends Channel {
             .forEach(
                 tableName -> {
                   Pattern tableRouteValues = config.getTableRouteValues(tableName);
-                  if (tableRouteValues.matcher(routeValue).matches()) {
+                  if (tableRouteValues != null && tableRouteValues.matcher(routeValue).matches()) {
                     getWriterForTable(tableName).write(record);
                   }
                 });
