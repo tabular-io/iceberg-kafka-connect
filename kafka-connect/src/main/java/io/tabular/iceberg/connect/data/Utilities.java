@@ -19,6 +19,7 @@ import org.apache.iceberg.io.FileAppenderFactory;
 import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.UnpartitionedWriter;
+import org.apache.iceberg.relocated.com.google.common.primitives.Ints;
 import org.apache.iceberg.util.PropertyUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,7 +59,12 @@ public class Utilities {
             table.properties(), WRITE_TARGET_FILE_SIZE_BYTES, WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT);
 
     FileAppenderFactory<Record> appenderFactory =
-        new GenericAppenderFactory(table.schema(), table.spec()).setAll(table.properties());
+        new GenericAppenderFactory(
+            table.schema(),
+            table.spec(),
+            Ints.toArray(table.schema().identifierFieldIds()),
+            table.schema(),
+            null);
 
     // (partition ID + task ID + operation ID) must be unique
     OutputFileFactory fileFactory =

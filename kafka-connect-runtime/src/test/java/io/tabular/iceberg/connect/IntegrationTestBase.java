@@ -1,7 +1,6 @@
 // Copyright 2023 Tabular Technologies Inc.
 package io.tabular.iceberg.connect;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -112,9 +111,7 @@ public class IntegrationTestBase {
   public static void teardownAll() {
     kafkaConnect.close();
     try {
-      if (catalog instanceof Closeable) {
-        ((Closeable) catalog).close();
-      }
+      catalog.close();
     } catch (IOException e) {
       // NO-OP
     }

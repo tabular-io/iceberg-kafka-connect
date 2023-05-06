@@ -46,9 +46,8 @@ abstract class BaseDeltaTaskWriter extends BaseTaskWriter<Record> {
 
   @Override
   public void write(Record row) throws IOException {
+    Operation op = row instanceof RecordWrapper ? ((RecordWrapper) row).op() : Operation.INSERT;
     RowDataDeltaWriter writer = route(row);
-    Operation op = (Operation) row.getField("__op__"); // FIXME!! hack alert
-    row.setField("__op__", null);
     if (op == Operation.UPDATE || op == Operation.DELETE) {
       writer.delete(row);
     }

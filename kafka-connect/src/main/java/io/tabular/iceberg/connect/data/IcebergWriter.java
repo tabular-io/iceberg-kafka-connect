@@ -49,9 +49,7 @@ public class IcebergWriter implements Closeable {
           writer.write(row);
         } else {
           Operation op = extractCdcOperation(record.value(), cdcField);
-          // FIXME!! hack alert!
-          row.setField("__op__", op);
-          writer.write(row);
+          writer.write(new RecordWrapper(row, op));
         }
       }
     } catch (IOException e) {
