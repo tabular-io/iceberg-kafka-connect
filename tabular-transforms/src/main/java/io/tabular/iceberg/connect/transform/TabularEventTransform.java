@@ -18,11 +18,11 @@ public class TabularEventTransform<R extends ConnectRecord<R>> implements Transf
 
     Map<?, ?> original = (Map<?, ?>) record.value();
 
-    final Map<String, Object> updated = new HashMap<>();
-    updated.put("id", original.get("id"));
-    updated.put("type", original.get("type"));
-    updated.put("ts", original.get("event_ts_ms"));
-    updated.put("payload", record.value());
+    final Map<String, Object> result = new HashMap<>();
+    result.put("id", original.get("id"));
+    result.put("type", original.get("type"));
+    result.put("ts", original.get("event_ts_ms"));
+    result.put("payload", record.value());
 
     return record.newRecord(
         record.topic(),
@@ -30,7 +30,7 @@ public class TabularEventTransform<R extends ConnectRecord<R>> implements Transf
         record.keySchema(),
         record.key(),
         record.valueSchema(),
-        updated,
+        result,
         record.timestamp());
   }
 
