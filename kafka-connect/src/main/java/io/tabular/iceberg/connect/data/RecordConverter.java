@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -36,6 +37,8 @@ import org.apache.iceberg.mapping.NameMappingParser;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Type;
+import org.apache.iceberg.types.Types;
+import org.apache.iceberg.types.Types.DecimalType;
 import org.apache.iceberg.types.Types.ListType;
 import org.apache.iceberg.types.Types.MapType;
 import org.apache.iceberg.types.Types.NestedField;
@@ -117,7 +120,7 @@ public class RecordConverter {
       case DOUBLE:
         return convertDouble(value);
       case DECIMAL:
-        return convertDecimal(value);
+        return convertDecimal(value, (Types.DecimalType) type);
       case BOOLEAN:
         return convertBoolean(value);
       case STRING:
@@ -231,21 +234,25 @@ public class RecordConverter {
     throw new IllegalArgumentException("Cannot convert to double: " + value.getClass().getName());
   }
 
-  protected BigDecimal convertDecimal(Object value) {
+  protected BigDecimal convertDecimal(Object value, DecimalType type) {
+    BigDecimal bd;
     if (value instanceof BigDecimal) {
-      return (BigDecimal) value;
+      bd = (BigDecimal) value;
     } else if (value instanceof Number) {
       Number num = (Number) value;
       long l = num.longValue();
       if (num.equals(l)) {
-        return BigDecimal.valueOf(num.longValue());
+        bd = BigDecimal.valueOf(num.longValue());
+      } else {
+        bd = BigDecimal.valueOf(num.doubleValue());
       }
-      return BigDecimal.valueOf(num.doubleValue());
     } else if (value instanceof String) {
-      return new BigDecimal((String) value);
+      bd = new BigDecimal((String) value);
+    } else {
+      throw new IllegalArgumentException(
+          "Cannot convert to BigDecimal: " + value.getClass().getName());
     }
-    throw new IllegalArgumentException(
-        "Cannot convert to BigDecimal: " + value.getClass().getName());
+    return bd.setScale(type.scale(), RoundingMode.HALF_UP);
   }
 
   protected boolean convertBoolean(Object value) {
