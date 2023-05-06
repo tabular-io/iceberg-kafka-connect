@@ -155,9 +155,9 @@ public class Worker extends Channel {
 
     Object routeValue;
     if (recordValue instanceof Struct) {
-      routeValue = ((Struct) recordValue).get(routeField).toString();
+      routeValue = ((Struct) recordValue).get(routeField);
     } else if (recordValue instanceof Map) {
-      routeValue = ((Map<?, ?>) recordValue).get(routeField).toString();
+      routeValue = ((Map<?, ?>) recordValue).get(routeField);
     } else {
       throw new UnsupportedOperationException(
           "Cannot extract value from type: " + recordValue.getClass().getName());

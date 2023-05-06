@@ -8,8 +8,12 @@ import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.transforms.Transformation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class TabularDmsTransform<R extends ConnectRecord<R>> implements Transformation<R> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(TabularDmsTransform.class.getName());
   private static final ConfigDef EMPTY_CONFIG = new ConfigDef();
 
   @Override
@@ -25,7 +29,8 @@ public class TabularDmsTransform<R extends ConnectRecord<R>> implements Transfor
     Object dataObj = original.get("data");
     Object metadataObj = original.get("metadata");
     if (!(dataObj instanceof Map) || !(metadataObj instanceof Map)) {
-      throw new IllegalArgumentException("Invalid DMS record format");
+      LOG.warn("Unable to transform DMS record, leaving as-is...");
+      return record;
     }
 
     final Map<String, Object> result = new HashMap<>((Map<String, Object>) dataObj);
