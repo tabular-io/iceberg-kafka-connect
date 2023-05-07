@@ -1,4 +1,4 @@
 dependencies {
+  implementation libs.slf4j
   compileOnly libs.bundles.kafka.connect
-  compileOnly libs.slf4j
 }

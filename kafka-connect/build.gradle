@@ -2,6 +2,7 @@ dependencies {
   implementation libs.bundles.iceberg
   implementation libs.bundles.jackson
   implementation libs.avro
+  implementation libs.slf4j
   compileOnly libs.bundles.kafka.connect
 
   // REST catalog needs this when loading the FileIO

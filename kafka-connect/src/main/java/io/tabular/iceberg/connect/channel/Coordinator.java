@@ -135,6 +135,14 @@ public class Coordinator extends Channel {
   }
 
   private void commit(List<Envelope> buffer) {
+    try {
+      doCommit(buffer);
+    } catch (Exception e) {
+      LOG.warn("Commit failed, will try again next cycle", e);
+    }
+  }
+
+  private void doCommit(List<Envelope> buffer) {
     Map<TableIdentifier, List<Envelope>> commitMap =
         buffer.stream()
             .collect(
