@@ -49,6 +49,7 @@ abstract class BaseDeltaTaskWriter extends BaseTaskWriter<Record> {
     Operation op = row instanceof RecordWrapper ? ((RecordWrapper) row).op() : Operation.INSERT;
     RowDataDeltaWriter writer = route(row);
     if (op == Operation.UPDATE || op == Operation.DELETE) {
+      // TODO: use deleteKey()
       writer.delete(row);
     }
     if (op == Operation.UPDATE || op == Operation.INSERT) {
