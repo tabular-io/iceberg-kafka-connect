@@ -12,6 +12,7 @@ import io.tabular.iceberg.connect.channel.events.EventType;
 import io.tabular.iceberg.connect.channel.events.TableName;
 import io.tabular.iceberg.connect.channel.events.TopicPartitionOffset;
 import io.tabular.iceberg.connect.data.IcebergWriter;
+import io.tabular.iceberg.connect.data.Utilities;
 import io.tabular.iceberg.connect.data.WriterResult;
 import java.util.Collection;
 import java.util.HashMap;
@@ -25,7 +26,6 @@ import org.apache.iceberg.catalog.Catalog;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -152,17 +152,7 @@ public class Worker extends Channel {
     if (recordValue == null) {
       return null;
     }
-
-    Object routeValue;
-    if (recordValue instanceof Struct) {
-      routeValue = ((Struct) recordValue).get(routeField);
-    } else if (recordValue instanceof Map) {
-      routeValue = ((Map<?, ?>) recordValue).get(routeField);
-    } else {
-      throw new UnsupportedOperationException(
-          "Cannot extract value from type: " + recordValue.getClass().getName());
-    }
-
+    Object routeValue = Utilities.extractFromRecordValue(recordValue, routeField);
     return routeValue == null ? null : routeValue.toString();
   }
 

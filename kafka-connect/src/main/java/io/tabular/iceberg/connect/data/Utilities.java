@@ -8,6 +8,7 @@ import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES_DE
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import java.lang.reflect.InvocationTargetException;
+import java.util.Map;
 import java.util.UUID;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.FileFormat;
@@ -21,6 +22,7 @@ import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.UnpartitionedWriter;
 import org.apache.iceberg.relocated.com.google.common.primitives.Ints;
 import org.apache.iceberg.util.PropertyUtil;
+import org.apache.kafka.connect.data.Struct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,6 +49,17 @@ public class Utilities {
           "Hadoop found on classpath but could not create config, proceeding without config", e);
     }
     return null;
+  }
+
+  public static Object extractFromRecordValue(Object recordValue, String fieldName) {
+    if (recordValue instanceof Struct) {
+      return ((Struct) recordValue).get(fieldName);
+    } else if (recordValue instanceof Map) {
+      return ((Map<?, ?>) recordValue).get(fieldName);
+    } else {
+      throw new UnsupportedOperationException(
+          "Cannot extract value from type: " + recordValue.getClass().getName());
+    }
   }
 
   public static TaskWriter<Record> createTableWriter(Table table, IcebergSinkConfig config) {

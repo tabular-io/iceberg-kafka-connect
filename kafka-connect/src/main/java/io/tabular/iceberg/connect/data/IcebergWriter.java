@@ -15,7 +15,6 @@ import org.apache.iceberg.data.Record;
 import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.WriteResult;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 public class IcebergWriter implements Closeable {
@@ -58,29 +57,23 @@ public class IcebergWriter implements Closeable {
   }
 
   private Operation extractCdcOperation(Object recordValue, String cdcField) {
-    Object opValue;
-    if (recordValue instanceof Struct) {
-      opValue = ((Struct) recordValue).get(cdcField);
-    } else if (recordValue instanceof Map) {
-      opValue = ((Map<?, ?>) recordValue).get(cdcField);
-    } else {
-      throw new UnsupportedOperationException(
-          "Cannot extract value from type: " + recordValue.getClass().getName());
-    }
+    Object opValue = Utilities.extractFromRecordValue(recordValue, cdcField);
 
     if (opValue == null) {
       return Operation.INSERT;
     }
 
-    // FIXME!! define mapping in config!!
+    String opStr = opValue.toString().trim().toUpperCase();
+    if (opStr.isEmpty()) {
+      return Operation.INSERT;
+    }
 
-    String opStr = opValue.toString().toUpperCase();
-    switch (opStr) {
-      case "UPDATE":
-      case "U":
+    // TODO: define value mapping in config?
+
+    switch (opStr.charAt(0)) {
+      case 'U':
         return Operation.UPDATE;
-      case "DELETE":
-      case "D":
+      case 'D':
         return Operation.DELETE;
       default:
         return Operation.INSERT;
