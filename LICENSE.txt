@@ -1,1 +1,0 @@
-// Copyright $YEAR Tabular Technologies Inc.

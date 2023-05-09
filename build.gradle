@@ -30,7 +30,7 @@ subprojects {
       target "src/**/*.java"
       googleJavaFormat("1.7")
       removeUnusedImports()
-      licenseHeaderFile "$rootDir/LICENSE.txt"
+      licenseHeaderFile "$rootDir/header.txt"
     }
   }
 }
