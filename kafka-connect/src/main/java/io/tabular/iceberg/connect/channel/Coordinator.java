@@ -107,8 +107,10 @@ public class Coordinator extends Channel {
     }
   }
 
+  @SuppressWarnings("deprecation")
   private int getTotalPartitionCount() {
-    return admin().describeTopics(config.getTopics()).topicNameValues().values().stream()
+    // use deprecated values() for backwards compatibility
+    return admin().describeTopics(config.getTopics()).values().values().stream()
         .mapToInt(
             value -> {
               try {
