@@ -1,6 +1,2 @@
-FROM confluentinc/cp-kafka-connect:7.4.0
-USER root
-RUN yum -y install jq
-USER appuser
-COPY kafka-connect-runtime/build/install /usr/share/confluent-hub-components/
-COPY tabular-transforms/build/libs /usr/share/confluent-hub-components/
+FROM quay.io/strimzi/kafka:0.34.0-kafka-3.4.0
+COPY kafka-connect-runtime/build/install /opt/kafka/plugins/
