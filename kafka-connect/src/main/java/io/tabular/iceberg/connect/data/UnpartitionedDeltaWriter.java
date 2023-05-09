@@ -20,8 +20,9 @@ public class UnpartitionedDeltaWriter extends BaseDeltaTaskWriter {
       OutputFileFactory fileFactory,
       FileIO io,
       long targetFileSize,
-      Schema schema) {
-    super(spec, format, appenderFactory, fileFactory, io, targetFileSize, schema);
+      Schema schema,
+      boolean upsertMode) {
+    super(spec, format, appenderFactory, fileFactory, io, targetFileSize, schema, upsertMode);
     this.writer = new RowDataDeltaWriter(null);
   }
 

@@ -90,7 +90,7 @@ public class Utilities {
 
     TaskWriter<Record> writer;
     if (table.spec().isUnpartitioned()) {
-      if (config.getTablesCdcField() == null) {
+      if (config.getTablesCdcField() == null && !config.isUpsertMode()) {
         writer =
             new UnpartitionedWriter<>(
                 table.spec(), format, appenderFactory, fileFactory, table.io(), targetFileSize);
@@ -103,10 +103,11 @@ public class Utilities {
                 fileFactory,
                 table.io(),
                 targetFileSize,
-                table.schema());
+                table.schema(),
+                config.isUpsertMode());
       }
     } else {
-      if (config.getTablesCdcField() == null) {
+      if (config.getTablesCdcField() == null && !config.isUpsertMode()) {
         writer =
             new PartitionedAppendWriter(
                 table.spec(),
@@ -125,7 +126,8 @@ public class Utilities {
                 fileFactory,
                 table.io(),
                 targetFileSize,
-                table.schema());
+                table.schema(),
+                config.isUpsertMode());
       }
     }
     return writer;

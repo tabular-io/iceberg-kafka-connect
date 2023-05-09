@@ -27,8 +27,9 @@ public class PartitionedDeltaWriter extends BaseDeltaTaskWriter {
       OutputFileFactory fileFactory,
       FileIO io,
       long targetFileSize,
-      Schema schema) {
-    super(spec, format, appenderFactory, fileFactory, io, targetFileSize, schema);
+      Schema schema,
+      boolean upsertMode) {
+    super(spec, format, appenderFactory, fileFactory, io, targetFileSize, schema, upsertMode);
     this.partitionKey = new PartitionKey(spec, schema);
   }
 

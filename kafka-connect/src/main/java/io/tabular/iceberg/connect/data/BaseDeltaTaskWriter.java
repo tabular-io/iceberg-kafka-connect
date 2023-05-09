@@ -22,6 +22,7 @@ abstract class BaseDeltaTaskWriter extends BaseTaskWriter<Record> {
   private final Schema deleteSchema;
   private final InternalRecordWrapper wrapper;
   private final InternalRecordWrapper keyWrapper;
+  private final boolean upsertMode;
 
   BaseDeltaTaskWriter(
       PartitionSpec spec,
@@ -30,12 +31,14 @@ abstract class BaseDeltaTaskWriter extends BaseTaskWriter<Record> {
       OutputFileFactory fileFactory,
       FileIO io,
       long targetFileSize,
-      Schema schema) {
+      Schema schema,
+      boolean upsertMode) {
     super(spec, format, appenderFactory, fileFactory, io, targetFileSize);
     this.schema = schema;
     this.deleteSchema = TypeUtil.select(schema, Sets.newHashSet(schema.identifierFieldIds()));
     this.wrapper = new InternalRecordWrapper(schema.asStruct());
     this.keyWrapper = new InternalRecordWrapper(deleteSchema.asStruct());
+    this.upsertMode = upsertMode;
   }
 
   abstract RowDataDeltaWriter route(Record row);
@@ -46,7 +49,10 @@ abstract class BaseDeltaTaskWriter extends BaseTaskWriter<Record> {
 
   @Override
   public void write(Record row) throws IOException {
-    Operation op = row instanceof RecordWrapper ? ((RecordWrapper) row).op() : Operation.INSERT;
+    Operation op =
+        row instanceof RecordWrapper
+            ? ((RecordWrapper) row).op()
+            : upsertMode ? Operation.UPDATE : Operation.INSERT;
     RowDataDeltaWriter writer = route(row);
     if (op == Operation.UPDATE || op == Operation.DELETE) {
       // TODO: use deleteKey()

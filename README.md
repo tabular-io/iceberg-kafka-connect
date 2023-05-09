@@ -4,7 +4,7 @@
 * Commit coordination for centralized Iceberg commits
 * Exactly-once delivery semantics
 * Multi-table output
-* Row mutations (update/delete rows)
+* Row mutations (update/delete rows), upsert mode
 * Message conversion using the Iceberg schema as the source of truth
 * Field name mapping via Iceberg’s column mapping functionality
 

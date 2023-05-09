@@ -29,6 +29,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String TABLES_PROP = "iceberg.tables";
   private static final String TABLES_ROUTE_FIELD_PROP = "iceberg.tables.routeField";
   private static final String TABLES_CDC_FIELD_PROP = "iceberg.tables.cdcField";
+  private static final String TABLES_UPSERT_MODE_ENABLED_PROP = "iceberg.tables.upsertModeEnabled";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
   private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group.id";
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.control.commitIntervalMs";
@@ -69,6 +70,12 @@ public class IcebergSinkConfig extends AbstractConfig {
         null,
         Importance.MEDIUM,
         "Source record field that identifies the type of operation (insert, update, or delete)");
+    configDef.define(
+        TABLES_UPSERT_MODE_ENABLED_PROP,
+        Type.BOOLEAN,
+        false,
+        Importance.MEDIUM,
+        "Set to true to treat all appends as upserts, false otherwise");
     configDef.define(CATALOG_IMPL_PROP, Type.STRING, Importance.HIGH, "Iceberg catalog class name");
     configDef.define(CONTROL_TOPIC_PROP, Type.STRING, Importance.HIGH, "Name of the control topic");
     configDef.define(
@@ -157,5 +164,9 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public int getCommitTimeoutMs() {
     return getInt(COMMIT_TIMEOUT_MS_PROP);
+  }
+
+  public boolean isUpsertMode() {
+    return getBoolean(TABLES_UPSERT_MODE_ENABLED_PROP);
   }
 }
