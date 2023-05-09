@@ -10,7 +10,6 @@ jackson-ver = "2.14.2"
 junit-ver = "5.9.2"
 kafka-ver = "3.4.0"
 slf4j-ver = "1.7.36"
-strimzi-env-ver = "1.1.0"
 testcontainers-ver = "1.18.0"
 
 
@@ -40,7 +39,6 @@ kafka-connect-transforms = { module = "org.apache.kafka:connect-transforms", ver
 jackson-core = { module = "com.fasterxml.jackson.core:jackson-core", version.ref = "jackson-ver" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson-ver" }
 slf4j = { module = "org.slf4j:slf4j-api", version.ref = "slf4j-ver" }
-strimzi-env = { module = "io.strimzi:kafka-env-var-config-provider", version.ref = "strimzi-env-ver" }
 
 # test dependencies
 assertj = { module = "org.assertj:assertj-core", version.ref = "assertj-ver" }
