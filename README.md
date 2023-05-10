@@ -1,4 +1,4 @@
-# Kafka Connect Iceberg Sink
+# Iceberg Kafka Connect Sink
 
 ## Features
 * Commit coordination for centralized Iceberg commits
