@@ -18,21 +18,31 @@
  */
 package io.tabular.iceberg.connect;
 
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 import org.apache.iceberg.IcebergBuild;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.util.PropertyUtil;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.connect.sink.SinkConnector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class IcebergSinkConfig extends AbstractConfig {
+
+  private static final Logger LOG = LoggerFactory.getLogger(IcebergSinkConfig.class.getName());
 
   public static final String INTERNAL_TRANSACTIONAL_SUFFIX_PROP =
       "iceberg.coordinator.transactional.suffix";
@@ -115,16 +125,23 @@ public class IcebergSinkConfig extends AbstractConfig {
     return configDef;
   }
 
-  private final Map<String, String> props;
+  private final Map<String, String> originalProps;
+  private final Map<String, String> catalogProps;
+  private final Map<String, String> kafkaProps;
 
-  public IcebergSinkConfig(Map<String, String> props) {
-    super(CONFIG_DEF, props);
-    this.props = props;
+  public IcebergSinkConfig(Map<String, String> originalProps) {
+    super(CONFIG_DEF, originalProps);
+    this.originalProps = originalProps;
+
+    this.catalogProps = PropertyUtil.propertiesWithPrefix(originalProps, CATALOG_PROP_PREFIX);
+
+    this.kafkaProps = new HashMap<>(loadWorkerProps());
+    kafkaProps.putAll(PropertyUtil.propertiesWithPrefix(originalProps, KAFKA_PROP_PREFIX));
   }
 
   public String getTransactionalSuffix() {
     // this is for internal use and is not part of the config definition...
-    return props.get(INTERNAL_TRANSACTIONAL_SUFFIX_PROP);
+    return originalProps.get(INTERNAL_TRANSACTIONAL_SUFFIX_PROP);
   }
 
   public SortedSet<String> getTopics() {
@@ -132,11 +149,11 @@ public class IcebergSinkConfig extends AbstractConfig {
   }
 
   public Map<String, String> getCatalogProps() {
-    return PropertyUtil.propertiesWithPrefix(props, CATALOG_PROP_PREFIX);
+    return catalogProps;
   }
 
   public Map<String, String> getKafkaProps() {
-    return PropertyUtil.propertiesWithPrefix(props, KAFKA_PROP_PREFIX);
+    return kafkaProps;
   }
 
   public String getCatalogImpl() {
@@ -155,7 +172,7 @@ public class IcebergSinkConfig extends AbstractConfig {
     return tableRouteRegexMap.computeIfAbsent(
         tableName,
         notUsed -> {
-          String value = props.get(TABLE_PROP_PREFIX + tableName + "." + ROUTE_VALUES);
+          String value = originalProps.get(TABLE_PROP_PREFIX + tableName + "." + ROUTE_VALUES);
           if (value == null) {
             return null;
           }
@@ -185,5 +202,26 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public boolean isUpsertMode() {
     return getBoolean(TABLES_UPSERT_MODE_ENABLED_PROP);
+  }
+
+  private Map<String, String> loadWorkerProps() {
+    String javaCmd = System.getProperty("sun.java.command");
+    if (javaCmd != null && !javaCmd.isEmpty()) {
+      String[] args = javaCmd.split(" ");
+      if (args.length > 1
+          && (args[0].endsWith(".ConnectDistributed") || args[0].endsWith(".ConnectStandalone"))) {
+        Properties props = new Properties();
+        try (InputStream in = Files.newInputStream(Paths.get(args[1]))) {
+          props.load(in);
+          return Maps.fromProperties(props);
+        } catch (Exception e) {
+          // NO-OP
+        }
+      }
+    }
+    LOG.info(
+        "Worker properties not loaded, using only {}* properties for Kafka clients",
+        KAFKA_PROP_PREFIX);
+    return ImmutableMap.of();
   }
 }

@@ -98,7 +98,6 @@ public class IntegrationCdcTest extends IntegrationTestBase {
             .config("key.converter.schemas.enable", false)
             .config("value.converter", "org.apache.kafka.connect.json.JsonConverter")
             .config("value.converter.schemas.enable", false)
-            .config("iceberg.kafka.bootstrap.servers", kafka.getNetworkAliases().get(0) + ":9092")
             .config("iceberg.tables", format("%s.%s", TEST_DB, TEST_TABLE))
             .config("iceberg.tables.cdcField", "op")
             .config("iceberg.control.group.id", CONTROL_GROUP_ID)
