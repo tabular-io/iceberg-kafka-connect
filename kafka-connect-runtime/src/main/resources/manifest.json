@@ -2,7 +2,7 @@
   "component_types": [
     "sink"
   ],
-  "description": "A sink connector for writing data to Apache Iceberg tables",
+  "description": "A sink connector for writing data to Iceberg tables",
   "features": {
     "confluent_control_center_integration": true,
     "delivery_guarantee": [
@@ -28,6 +28,6 @@
     "username": "tabular"
   },
   "requirements": [],
-  "title": "Apache Iceberg Sink Connector",
+  "title": "Iceberg Sink Connector",
   "version": "__VERSION__"
 }
