@@ -29,6 +29,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 import org.apache.iceberg.IcebergBuild;
+import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.util.PropertyUtil;
@@ -63,6 +64,10 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
   private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.control.commitTimeoutMs";
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
+  private static final String NAME_PROP = "name";
+
+  private static final String DEFAULT_CONTROL_TOPIC_PREFIX = "control-";
+  private static final String DEFAULT_CONTROL_GROUP_PREFIX = "cg-control-";
 
   public static ConfigDef CONFIG_DEF = newConfigDef();
 
@@ -104,11 +109,13 @@ public class IcebergSinkConfig extends AbstractConfig {
         Importance.MEDIUM,
         "Set to true to treat all appends as upserts, false otherwise");
     configDef.define(CATALOG_IMPL_PROP, Type.STRING, Importance.HIGH, "Iceberg catalog class name");
-    configDef.define(CONTROL_TOPIC_PROP, Type.STRING, Importance.HIGH, "Name of the control topic");
+    configDef.define(
+        CONTROL_TOPIC_PROP, Type.STRING, null, Importance.MEDIUM, "Name of the control topic");
     configDef.define(
         CONTROL_GROUP_ID_PROP,
         Type.STRING,
-        Importance.HIGH,
+        null,
+        Importance.MEDIUM,
         "Name of the consumer group to store offsets");
     configDef.define(
         COMMIT_INTERVAL_MS_PROP,
@@ -137,6 +144,10 @@ public class IcebergSinkConfig extends AbstractConfig {
 
     this.kafkaProps = new HashMap<>(loadWorkerProps());
     kafkaProps.putAll(PropertyUtil.propertiesWithPrefix(originalProps, KAFKA_PROP_PREFIX));
+  }
+
+  public String getConnectorName() {
+    return originalProps.get(NAME_PROP);
   }
 
   public String getTransactionalSuffix() {
@@ -185,11 +196,23 @@ public class IcebergSinkConfig extends AbstractConfig {
   }
 
   public String getControlTopic() {
-    return getString(CONTROL_TOPIC_PROP);
+    String result = getString(CONTROL_TOPIC_PROP);
+    if (result != null) {
+      return result;
+    }
+    String connectorName = getConnectorName();
+    Preconditions.checkNotNull(connectorName);
+    return DEFAULT_CONTROL_TOPIC_PREFIX + connectorName;
   }
 
   public String getControlGroupId() {
-    return getString(CONTROL_GROUP_ID_PROP);
+    String result = getString(CONTROL_GROUP_ID_PROP);
+    if (result != null) {
+      return result;
+    }
+    String connectorName = getConnectorName();
+    Preconditions.checkNotNull(connectorName);
+    return DEFAULT_CONTROL_GROUP_PREFIX + connectorName;
   }
 
   public int getCommitIntervalMs() {

@@ -24,13 +24,13 @@ PARTITIONED BY (hours(ts))
 
 ### Create the control topic
 
-If your Kafka cluster has `auto.create.topics.enable` set to `true` (the default), then the control topic will be automatically created. If not, then you will need to create the topic first:
+If your Kafka cluster has `auto.create.topics.enable` set to `true` (the default), then the control topic will be automatically created. If not, then you will need to create the topic first. The default topic name is `control-<connector name>`:
 ```bash
 bin/kafka-topics  \
   --command-config command-config.props \
   --bootstrap-server ${CONNECT_BOOTSTRAP_SERVERS} \
   --create \
-  --topic control-tabular-events \
+  --topic control-tabular-events-sink \
   --partitions 1
 ```
 *NOTE: Clusters running on Confluent Cloud have `auto.create.topics.enable` set to `false` by default.*
@@ -50,8 +50,6 @@ curl http://localhost:8083/connectors \
     "consumer.override.auto.offset.reset": "latest",
     "iceberg.table": "default.tabular_events",
     "iceberg.table.commitIntervalMs": "300000",
-    "iceberg.control.group.id": "cg-control-tabular-events",
-    "iceberg.control.topic": "control-tabular-events",
     "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
     "iceberg.catalog.uri": "https://api.tabular.io/ws",
     "iceberg.catalog.credential": "${TABULAR_TOKEN}",

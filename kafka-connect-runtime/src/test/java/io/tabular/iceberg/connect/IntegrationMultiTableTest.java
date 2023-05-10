@@ -46,8 +46,6 @@ public class IntegrationMultiTableTest extends IntegrationTestBase {
 
   private static final String CONNECTOR_NAME = "test_connector";
   private static final String TEST_TOPIC = "test-topic";
-  private static final String CONTROL_GROUP_ID = "control-cg";
-  private static final String CONTROL_TOPIC = "control-topic";
   private static final String TEST_DB = "default";
   private static final String TEST_TABLE1 = "foobar1";
   private static final String TEST_TABLE2 = "foobar2";
@@ -99,8 +97,6 @@ public class IntegrationMultiTableTest extends IntegrationTestBase {
             .config("iceberg.tables.routeField", "type")
             .config(format("iceberg.table.%s.%s.routeValues", TEST_DB, TEST_TABLE1), "type1")
             .config(format("iceberg.table.%s.%s.routeValues", TEST_DB, TEST_TABLE2), "type2")
-            .config("iceberg.control.group.id", CONTROL_GROUP_ID)
-            .config("iceberg.control.topic", CONTROL_TOPIC)
             .config("iceberg.control.commitIntervalMs", 1000)
             .config("iceberg.control.commitTimeoutMs", 1000)
             .config("iceberg.catalog", RESTCatalog.class.getName())
