@@ -64,7 +64,9 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
   private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.control.commitTimeoutMs";
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
+
   private static final String NAME_PROP = "name";
+  private static final String BOOTSTRAP_SERVERS_PROP = "bootstrap.servers";
 
   private static final String DEFAULT_CONTROL_TOPIC_PREFIX = "control-";
   private static final String DEFAULT_CONTROL_GROUP_PREFIX = "cg-control-";
@@ -233,10 +235,13 @@ public class IcebergSinkConfig extends AbstractConfig {
       String[] args = javaCmd.split(" ");
       if (args.length > 1
           && (args[0].endsWith(".ConnectDistributed") || args[0].endsWith(".ConnectStandalone"))) {
-        Properties props = new Properties();
+        Properties result = new Properties();
         try (InputStream in = Files.newInputStream(Paths.get(args[1]))) {
-          props.load(in);
-          return Maps.fromProperties(props);
+          result.load(in);
+          // sanity check that this is the config we want
+          if (result.containsKey(BOOTSTRAP_SERVERS_PROP)) {
+            return Maps.fromProperties(result);
+          }
         } catch (Exception e) {
           // NO-OP
         }
