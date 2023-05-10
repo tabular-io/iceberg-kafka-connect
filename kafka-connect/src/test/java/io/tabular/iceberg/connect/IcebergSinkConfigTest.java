@@ -52,6 +52,6 @@ public class IcebergSinkConfigTest {
             "iceberg.control.topic", "control-topic",
             "iceberg.control.group.id", "control-group");
     IcebergSinkConfig config = new IcebergSinkConfig(props);
-    assertEquals(60_000, config.getCommitIntervalMs());
+    assertEquals(300_000, config.getCommitIntervalMs());
   }
 }

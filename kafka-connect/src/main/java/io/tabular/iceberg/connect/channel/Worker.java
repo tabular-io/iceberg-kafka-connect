@@ -22,6 +22,7 @@ import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import io.tabular.iceberg.connect.channel.events.CommitCompletePayload;
 import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.channel.events.Event;
@@ -118,9 +119,12 @@ public class Worker extends Channel {
                               commitId,
                               TableName.of(writeResult.getTableIdentifier()),
                               writeResult.getDataFiles(),
-                              writeResult.getDeleteFiles(),
-                              assignments)))
+                              writeResult.getDeleteFiles())))
               .collect(toList());
+
+      Event completedEvent =
+          new Event(EventType.COMMIT_COMPLETE, new CommitCompletePayload(commitId, assignments));
+      events.add(completedEvent);
 
       send(events, offsets);
       context.requestCommit();

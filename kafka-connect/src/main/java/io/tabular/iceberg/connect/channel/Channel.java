@@ -47,6 +47,8 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,10 +60,11 @@ public abstract class Channel {
   private final String controlTopic;
   private final String controlGroupId;
   private final String transactionalId;
-  private final KafkaProducer<byte[], byte[]> producer;
-  private final KafkaConsumer<byte[], byte[]> consumer;
+  private final KafkaProducer<String, byte[]> producer;
+  private final KafkaConsumer<String, byte[]> consumer;
   private final Admin admin;
   private final Map<Integer, Long> controlTopicOffsets = new HashMap<>();
+  private final String producerId;
 
   public Channel(String name, IcebergSinkConfig config) {
     this.kafkaProps = config.getKafkaProps();
@@ -71,6 +74,7 @@ public abstract class Channel {
     this.producer = createProducer();
     this.consumer = createConsumer();
     this.admin = createAdmin();
+    this.producerId = UUID.randomUUID().toString();
   }
 
   protected void send(Event event) {
@@ -81,14 +85,15 @@ public abstract class Channel {
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
     sourceOffsets.forEach((k, v) -> offsetsToCommit.put(k, new OffsetAndMetadata(v)));
 
-    List<ProducerRecord<byte[], byte[]>> recordList =
+    List<ProducerRecord<String, byte[]>> recordList =
         events.stream()
             .map(
                 event -> {
                   LOG.info("Sending event of type: {}", event.getType().name());
                   try {
                     byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
-                    return new ProducerRecord<byte[], byte[]>(controlTopic, data);
+                    // key by producer ID to keep event order
+                    return new ProducerRecord<>(controlTopic, producerId, data);
                   } catch (IOException e) {
                     throw new UncheckedIOException(e);
                   }
@@ -121,7 +126,7 @@ public abstract class Channel {
   }
 
   protected void consumeAvailable(Consumer<Envelope> eventHandler, Duration pollDuration) {
-    ConsumerRecords<byte[], byte[]> records = consumer.poll(pollDuration);
+    ConsumerRecords<String, byte[]> records = consumer.poll(pollDuration);
     while (!records.isEmpty()) {
       records.forEach(
           record -> {
@@ -147,23 +152,23 @@ public abstract class Channel {
     return controlTopicOffsets;
   }
 
-  private KafkaProducer<byte[], byte[]> createProducer() {
+  private KafkaProducer<String, byte[]> createProducer() {
     Map<String, Object> producerProps = new HashMap<>(kafkaProps);
     producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
-    KafkaProducer<byte[], byte[]> result =
-        new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer());
+    KafkaProducer<String, byte[]> result =
+        new KafkaProducer<>(producerProps, new StringSerializer(), new ByteArraySerializer());
     result.initTransactions();
     return result;
   }
 
-  private KafkaConsumer<byte[], byte[]> createConsumer() {
+  private KafkaConsumer<String, byte[]> createConsumer() {
     Map<String, Object> consumerProps = new HashMap<>(kafkaProps);
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
     consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "cg-control-" + UUID.randomUUID());
     return new KafkaConsumer<>(
-        consumerProps, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        consumerProps, new StringDeserializer(), new ByteArrayDeserializer());
   }
 
   private Admin createAdmin() {

@@ -66,10 +66,7 @@ public class EventTest {
                 commitId,
                 new TableName(ImmutableList.of("db"), "tbl"),
                 ImmutableList.of(createDataFile(), createDataFile()),
-                ImmutableList.of(createDeleteFile(), createDeleteFile()),
-                ImmutableList.of(
-                    new TopicPartitionOffset("topic", 1, 1L),
-                    new TopicPartitionOffset("topic", 2, null))));
+                ImmutableList.of(createDeleteFile(), createDeleteFile())));
 
     byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
     Event result = AvroEncoderUtil.decode(data);
@@ -81,6 +78,26 @@ public class EventTest {
     assertThat(payload.getDataFiles()).allMatch(f -> f.specId() == 1);
     assertThat(payload.getDeleteFiles()).hasSize(2);
     assertThat(payload.getDeleteFiles()).allMatch(f -> f.specId() == 1);
+  }
+
+  @Test
+  public void testCommitCompleteSerialization() throws Exception {
+    UUID commitId = UUID.randomUUID();
+    Event event =
+        new Event(
+            EventType.COMMIT_COMPLETE,
+            new CommitCompletePayload(
+                commitId,
+                ImmutableList.of(
+                    new TopicPartitionOffset("topic", 1, 1L),
+                    new TopicPartitionOffset("topic", 2, null))));
+
+    byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
+    Event result = AvroEncoderUtil.decode(data);
+
+    assertEquals(event.getType(), result.getType());
+    CommitCompletePayload payload = (CommitCompletePayload) result.getPayload();
+    assertEquals(commitId, payload.getCommitId());
     assertThat(payload.getAssignments()).hasSize(2);
     assertThat(payload.getAssignments()).allMatch(tp -> tp.getTopic().equals("topic"));
   }

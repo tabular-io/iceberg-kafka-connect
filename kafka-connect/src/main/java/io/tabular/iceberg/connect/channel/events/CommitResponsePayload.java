@@ -36,7 +36,6 @@ public class CommitResponsePayload implements Payload {
   private TableName tableName;
   private List<DataFile> dataFiles;
   private List<DeleteFile> deleteFiles;
-  private List<TopicPartitionOffset> assignments;
   private Schema avroSchema;
 
   public CommitResponsePayload(Schema avroSchema) {
@@ -48,13 +47,11 @@ public class CommitResponsePayload implements Payload {
       UUID commitId,
       TableName tableName,
       List<DataFile> dataFiles,
-      List<DeleteFile> deleteFiles,
-      List<TopicPartitionOffset> assignments) {
+      List<DeleteFile> deleteFiles) {
     this.commitId = commitId;
     this.tableName = tableName;
     this.dataFiles = dataFiles;
     this.deleteFiles = deleteFiles;
-    this.assignments = assignments;
 
     StructType dataFileStruct = DataFile.getType(partitionType);
     Schema dataFileSchema =
@@ -96,13 +93,6 @@ public class CommitResponsePayload implements Payload {
             .array()
             .items(deleteFileSchema)
             .noDefault()
-            .name("assignments")
-            .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
-            .type()
-            .nullable()
-            .array()
-            .items(TopicPartitionOffset.AVRO_SCHEMA)
-            .noDefault()
             .endRecord();
   }
 
@@ -120,10 +110,6 @@ public class CommitResponsePayload implements Payload {
 
   public List<DeleteFile> getDeleteFiles() {
     return deleteFiles;
-  }
-
-  public List<TopicPartitionOffset> getAssignments() {
-    return assignments;
   }
 
   @Override
@@ -147,9 +133,6 @@ public class CommitResponsePayload implements Payload {
       case 3:
         this.deleteFiles = (List<DeleteFile>) v;
         return;
-      case 4:
-        this.assignments = (List<TopicPartitionOffset>) v;
-        return;
       default:
         // ignore the object, it must be from a newer version of the format
     }
@@ -166,8 +149,6 @@ public class CommitResponsePayload implements Payload {
         return dataFiles;
       case 3:
         return deleteFiles;
-      case 4:
-        return assignments;
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
     }

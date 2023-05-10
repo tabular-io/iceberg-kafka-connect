@@ -24,6 +24,7 @@ import static java.util.stream.Collectors.toList;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import io.tabular.iceberg.connect.channel.events.CommitCompletePayload;
 import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.channel.events.Event;
@@ -60,6 +61,7 @@ public class Coordinator extends Channel {
   private final Map<TableIdentifier, Table> tables;
   private final IcebergSinkConfig config;
   private final List<Envelope> commitBuffer = new LinkedList<>();
+  private final List<CommitCompletePayload> completedBuffer = new LinkedList<>();
   private long startTime;
   private UUID currentCommitId;
   private final int totalPartitionCount;
@@ -90,20 +92,26 @@ public class Coordinator extends Channel {
     super.process();
 
     if (currentCommitId != null && isCommitTimedOut()) {
-      commit(commitBuffer);
+      commit();
     }
   }
 
   @Override
   protected void receive(Envelope envelope) {
-    if (envelope.getEvent().getType() == EventType.COMMIT_RESPONSE) {
-      commitBuffer.add(envelope);
-      if (currentCommitId == null) {
-        LOG.warn(
-            "Received commit response when no commit in progress, this can happen during recovery");
-      } else if (isCommitComplete()) {
-        commit(commitBuffer);
-      }
+    switch (envelope.getEvent().getType()) {
+      case COMMIT_RESPONSE:
+        commitBuffer.add(envelope);
+        if (currentCommitId == null) {
+          LOG.warn(
+              "Received commit response when no commit in progress, this can happen during recovery");
+        }
+        break;
+      case COMMIT_COMPLETE:
+        completedBuffer.add((CommitCompletePayload) envelope.getEvent().getPayload());
+        if (isCommitComplete()) {
+          commit();
+        }
+        break;
     }
   }
 
@@ -132,15 +140,12 @@ public class Coordinator extends Channel {
 
   private boolean isCommitComplete() {
     int receivedPartitionCount =
-        commitBuffer.stream()
-            .map(envelope -> (CommitResponsePayload) envelope.getEvent().getPayload())
+        completedBuffer.stream()
             .filter(payload -> payload.getCommitId().equals(currentCommitId))
             .mapToInt(payload -> payload.getAssignments().size())
             .sum();
 
-    // FIXME!! not all workers will send messages for all tables!
-
-    if (receivedPartitionCount >= totalPartitionCount * config.getTables().size()) {
+    if (receivedPartitionCount >= totalPartitionCount) {
       LOG.info("Commit ready, received responses for all {} partitions", receivedPartitionCount);
       return true;
     }
@@ -153,17 +158,17 @@ public class Coordinator extends Channel {
     return false;
   }
 
-  private void commit(List<Envelope> buffer) {
+  private void commit() {
     try {
-      doCommit(buffer);
+      doCommit();
     } catch (Exception e) {
       LOG.warn("Commit failed, will try again next cycle", e);
     }
   }
 
-  private void doCommit(List<Envelope> buffer) {
+  private void doCommit() {
     Map<TableIdentifier, List<Envelope>> commitMap =
-        buffer.stream()
+        commitBuffer.stream()
             .collect(
                 groupingBy(
                     envelope ->
@@ -230,7 +235,8 @@ public class Coordinator extends Channel {
           }
         });
 
-    buffer.clear();
+    commitBuffer.clear();
+    completedBuffer.clear();
     currentCommitId = null;
   }
 
