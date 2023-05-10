@@ -28,6 +28,6 @@
     "username": "tabular"
   },
   "requirements": [],
-  "title": "Iceberg Kafka Connect",
+  "title": "Iceberg Sink Connector",
   "version": "__VERSION__"
 }
