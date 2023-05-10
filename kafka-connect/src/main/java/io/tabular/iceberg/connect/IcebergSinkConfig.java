@@ -61,7 +61,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
   private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group.id";
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.control.commitIntervalMs";
-  private static final int COMMIT_INTERVAL_MS_DEFAULT = 60_000;
+  private static final int COMMIT_INTERVAL_MS_DEFAULT = 300_000;
   private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.control.commitTimeoutMs";
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
 

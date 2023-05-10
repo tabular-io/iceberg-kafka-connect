@@ -49,7 +49,6 @@ curl http://localhost:8083/connectors \
     "topics": "tabular-events",
     "consumer.override.auto.offset.reset": "latest",
     "iceberg.tables": "default.tabular_events",
-    "iceberg.control.commitIntervalMs": "300000",
     "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
     "iceberg.catalog.uri": "https://api.tabular.io/ws",
     "iceberg.catalog.credential": "${TABULAR_TOKEN}",
