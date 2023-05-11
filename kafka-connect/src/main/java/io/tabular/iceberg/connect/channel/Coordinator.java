@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
@@ -47,6 +48,8 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.util.Tasks;
+import org.apache.iceberg.util.ThreadPools;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,6 +68,7 @@ public class Coordinator extends Channel {
   private long startTime;
   private UUID currentCommitId;
   private final int totalPartitionCount;
+  private final ExecutorService exec;
 
   public Coordinator(Catalog catalog, IcebergSinkConfig config) {
     super("coordinator", config);
@@ -72,6 +76,7 @@ public class Coordinator extends Channel {
     this.tables = new HashMap<>();
     this.config = config;
     this.totalPartitionCount = getTotalPartitionCount();
+    this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.getCommitThreads());
   }
 
   @Override
@@ -176,68 +181,75 @@ public class Coordinator extends Channel {
                             .getTableName()
                             .toIdentifier()));
 
-    commitMap.forEach(
-        (tableIdentifier, envelopeList) -> {
-          Table table = getTable(tableIdentifier);
-          table.refresh();
-          Map<Integer, Long> commitedOffsets = getLastCommittedOffsetsForTable(tableIdentifier);
-
-          List<CommitResponsePayload> payloads =
-              envelopeList.stream()
-                  .filter(
-                      envelope -> {
-                        Long minOffset = commitedOffsets.get(envelope.getPartition());
-                        return minOffset == null || envelope.getOffset() >= minOffset;
-                      })
-                  .map(envelope -> (CommitResponsePayload) envelope.getEvent().getPayload())
-                  .collect(toList());
-
-          List<DataFile> dataFiles =
-              payloads.stream()
-                  .filter(payload -> payload.getDataFiles() != null)
-                  .flatMap(payload -> payload.getDataFiles().stream())
-                  .filter(dataFile -> dataFile.recordCount() > 0)
-                  .collect(toList());
-
-          List<DeleteFile> deleteFiles =
-              payloads.stream()
-                  .filter(payload -> payload.getDeleteFiles() != null)
-                  .flatMap(payload -> payload.getDeleteFiles().stream())
-                  .filter(deleteFile -> deleteFile.recordCount() > 0)
-                  .collect(toList());
-
-          if (dataFiles.isEmpty() && deleteFiles.isEmpty()) {
-            LOG.info("Nothing to commit");
-          } else {
-            String offsetsStr;
-            try {
-              offsetsStr = MAPPER.writeValueAsString(controlTopicOffsets());
-            } catch (IOException e) {
-              throw new UncheckedIOException(e);
-            }
-
-            String offsetsProp = CONTROL_OFFSETS_SNAPSHOT_PREFIX + config.getControlTopic();
-
-            if (deleteFiles.isEmpty()) {
-              AppendFiles appendOp = table.newAppend();
-              appendOp.set(offsetsProp, offsetsStr);
-              dataFiles.forEach(appendOp::appendFile);
-              appendOp.commit();
-            } else {
-              RowDelta deltaOp = table.newRowDelta();
-              deltaOp.set(offsetsProp, offsetsStr);
-              dataFiles.forEach(deltaOp::addRows);
-              deleteFiles.forEach(deltaOp::addDeletes);
-              deltaOp.commit();
-            }
-
-            LOG.info("Iceberg commit complete");
-          }
-        });
+    Tasks.foreach(commitMap.entrySet())
+        .executeWith(exec)
+        .stopOnFailure()
+        .run(
+            entry -> {
+              commitToTable(entry.getKey(), entry.getValue());
+            });
 
     commitBuffer.clear();
     completedBuffer.clear();
     currentCommitId = null;
+  }
+
+  private void commitToTable(TableIdentifier tableIdentifier, List<Envelope> envelopeList) {
+    Table table = getTable(tableIdentifier);
+    table.refresh();
+    Map<Integer, Long> commitedOffsets = getLastCommittedOffsetsForTable(tableIdentifier);
+
+    List<CommitResponsePayload> payloads =
+        envelopeList.stream()
+            .filter(
+                envelope -> {
+                  Long minOffset = commitedOffsets.get(envelope.getPartition());
+                  return minOffset == null || envelope.getOffset() >= minOffset;
+                })
+            .map(envelope -> (CommitResponsePayload) envelope.getEvent().getPayload())
+            .collect(toList());
+
+    List<DataFile> dataFiles =
+        payloads.stream()
+            .filter(payload -> payload.getDataFiles() != null)
+            .flatMap(payload -> payload.getDataFiles().stream())
+            .filter(dataFile -> dataFile.recordCount() > 0)
+            .collect(toList());
+
+    List<DeleteFile> deleteFiles =
+        payloads.stream()
+            .filter(payload -> payload.getDeleteFiles() != null)
+            .flatMap(payload -> payload.getDeleteFiles().stream())
+            .filter(deleteFile -> deleteFile.recordCount() > 0)
+            .collect(toList());
+
+    if (dataFiles.isEmpty() && deleteFiles.isEmpty()) {
+      LOG.info("Nothing to commit");
+    } else {
+      String offsetsStr;
+      try {
+        offsetsStr = MAPPER.writeValueAsString(controlTopicOffsets());
+      } catch (IOException e) {
+        throw new UncheckedIOException(e);
+      }
+
+      String offsetsProp = CONTROL_OFFSETS_SNAPSHOT_PREFIX + config.getControlTopic();
+
+      if (deleteFiles.isEmpty()) {
+        AppendFiles appendOp = table.newAppend();
+        appendOp.set(offsetsProp, offsetsStr);
+        dataFiles.forEach(appendOp::appendFile);
+        appendOp.commit();
+      } else {
+        RowDelta deltaOp = table.newRowDelta();
+        deltaOp.set(offsetsProp, offsetsStr);
+        dataFiles.forEach(deltaOp::addRows);
+        deleteFiles.forEach(deltaOp::addDeletes);
+        deltaOp.commit();
+      }
+
+      LOG.info("Iceberg commit complete");
+    }
   }
 
   @Override

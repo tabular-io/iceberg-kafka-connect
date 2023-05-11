@@ -64,6 +64,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 300_000;
   private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.control.commitTimeoutMs";
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
+  private static final String COMMIT_THREADS_PROP = "iceberg.control.commitThreads";
 
   private static final String NAME_PROP = "name";
   private static final String BOOTSTRAP_SERVERS_PROP = "bootstrap.servers";
@@ -131,6 +132,12 @@ public class IcebergSinkConfig extends AbstractConfig {
         COMMIT_TIMEOUT_MS_DEFAULT,
         Importance.MEDIUM,
         "Coordinator time to wait for worker responses before committing, in millis");
+    configDef.define(
+        COMMIT_THREADS_PROP,
+        Type.INT,
+        Runtime.getRuntime().availableProcessors() * 2,
+        Importance.MEDIUM,
+        "Coordinator threads to use for table commits, default is (cores * 2)");
     return configDef;
   }
 
@@ -223,6 +230,10 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public int getCommitTimeoutMs() {
     return getInt(COMMIT_TIMEOUT_MS_PROP);
+  }
+
+  public int getCommitThreads() {
+    return getInt(COMMIT_THREADS_PROP);
   }
 
   public boolean isUpsertMode() {
