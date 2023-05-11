@@ -51,7 +51,6 @@ public class IcebergSinkConnector extends SinkConnector {
 
   @Override
   public List<Map<String, String>> taskConfigs(int maxTasks) {
-    // TODO: use connector name instead of UUID
     String txnSuffix = "-txn-" + UUID.randomUUID() + "-";
     return IntStream.range(0, maxTasks)
         .mapToObj(
