@@ -81,12 +81,12 @@ public class EventTest {
   }
 
   @Test
-  public void testCommitCompleteSerialization() throws Exception {
+  public void testCommitReadySerialization() throws Exception {
     UUID commitId = UUID.randomUUID();
     Event event =
         new Event(
-            EventType.COMMIT_COMPLETE,
-            new CommitCompletePayload(
+            EventType.COMMIT_READY,
+            new CommitReadyPayload(
                 commitId,
                 ImmutableList.of(
                     new TopicPartitionOffset("topic", 1, 1L),
@@ -96,7 +96,7 @@ public class EventTest {
     Event result = AvroEncoderUtil.decode(data);
 
     assertEquals(event.getType(), result.getType());
-    CommitCompletePayload payload = (CommitCompletePayload) result.getPayload();
+    CommitReadyPayload payload = (CommitReadyPayload) result.getPayload();
     assertEquals(commitId, payload.getCommitId());
     assertThat(payload.getAssignments()).hasSize(2);
     assertThat(payload.getAssignments()).allMatch(tp -> tp.getTopic().equals("topic"));

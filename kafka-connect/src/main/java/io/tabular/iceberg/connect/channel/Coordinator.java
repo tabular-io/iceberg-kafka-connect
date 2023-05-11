@@ -24,7 +24,7 @@ import static java.util.stream.Collectors.toList;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.channel.events.CommitCompletePayload;
+import io.tabular.iceberg.connect.channel.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.channel.events.Event;
@@ -64,7 +64,7 @@ public class Coordinator extends Channel {
   private final Map<TableIdentifier, Table> tables;
   private final IcebergSinkConfig config;
   private final List<Envelope> commitBuffer = new LinkedList<>();
-  private final List<CommitCompletePayload> completedBuffer = new LinkedList<>();
+  private final List<CommitReadyPayload> readyBuffer = new LinkedList<>();
   private long startTime;
   private UUID currentCommitId;
   private final int totalPartitionCount;
@@ -111,8 +111,8 @@ public class Coordinator extends Channel {
               "Received commit response when no commit in progress, this can happen during recovery");
         }
         break;
-      case COMMIT_COMPLETE:
-        completedBuffer.add((CommitCompletePayload) envelope.getEvent().getPayload());
+      case COMMIT_READY:
+        readyBuffer.add((CommitReadyPayload) envelope.getEvent().getPayload());
         if (isCommitComplete()) {
           commit();
         }
@@ -145,7 +145,7 @@ public class Coordinator extends Channel {
 
   private boolean isCommitComplete() {
     int receivedPartitionCount =
-        completedBuffer.stream()
+        readyBuffer.stream()
             .filter(payload -> payload.getCommitId().equals(currentCommitId))
             .mapToInt(payload -> payload.getAssignments().size())
             .sum();
@@ -190,7 +190,7 @@ public class Coordinator extends Channel {
             });
 
     commitBuffer.clear();
-    completedBuffer.clear();
+    readyBuffer.clear();
     currentCommitId = null;
   }
 

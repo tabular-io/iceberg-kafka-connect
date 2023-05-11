@@ -25,17 +25,17 @@ import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 
-public class CommitCompletePayload implements Payload {
+public class CommitReadyPayload implements Payload {
 
   private UUID commitId;
   private List<TopicPartitionOffset> assignments;
   private Schema avroSchema;
 
-  public CommitCompletePayload(Schema avroSchema) {
+  public CommitReadyPayload(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }
 
-  public CommitCompletePayload(UUID commitId, List<TopicPartitionOffset> assignments) {
+  public CommitReadyPayload(UUID commitId, List<TopicPartitionOffset> assignments) {
     this.commitId = commitId;
     this.assignments = assignments;
 
