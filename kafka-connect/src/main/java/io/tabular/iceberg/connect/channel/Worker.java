@@ -66,6 +66,10 @@ public class Worker extends Channel {
     this.writers = new HashMap<>();
     this.context = context;
     this.controlGroupId = config.getControlGroupId();
+    refreshTableListIfNeeded();
+  }
+
+  private void refreshTableListIfNeeded() {
     if (config.getDynamicTablesPrefix() != null) {
       this.dynamicTableList =
           Utilities.getDynamicTableSet(catalog, config.getDynamicTablesPrefix());
@@ -94,6 +98,8 @@ public class Worker extends Channel {
   protected void receive(Envelope envelope) {
     Event event = envelope.getEvent();
     if (event.getType() == EventType.COMMIT_REQUEST) {
+      refreshTableListIfNeeded(); // pick up any new tables that were created
+
       List<WriterResult> writeResults =
           writers.values().stream().map(IcebergWriter::complete).collect(toList());
 
