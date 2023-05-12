@@ -47,7 +47,7 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public static final String INTERNAL_TRANSACTIONAL_SUFFIX_PROP =
       "iceberg.coordinator.transactional.suffix";
-  private static final String ROUTE_VALUES = "routeValues";
+  private static final String ROUTE_REGEX = "routeRegex";
 
   private static final String CATALOG_PROP_PREFIX = "iceberg.catalog.";
   private static final String KAFKA_PROP_PREFIX = "iceberg.kafka.";
@@ -55,6 +55,7 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   private static final String CATALOG_IMPL_PROP = "iceberg.catalog";
   private static final String TABLES_PROP = "iceberg.tables";
+  private static final String TABLES_DYNAMIC_PROP = "iceberg.tables.dynamic.namePrefix";
   private static final String TABLES_ROUTE_FIELD_PROP = "iceberg.tables.routeField";
   private static final String TABLES_CDC_FIELD_PROP = "iceberg.tables.cdcField";
   private static final String TABLES_UPSERT_MODE_ENABLED_PROP = "iceberg.tables.upsertModeEnabled";
@@ -74,8 +75,6 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public static ConfigDef CONFIG_DEF = newConfigDef();
 
-  private final Map<String, Pattern> tableRouteRegexMap = new HashMap<>();
-
   public static String getVersion() {
     String kcVersion = IcebergSinkConfig.class.getPackage().getImplementationVersion();
     if (kcVersion == null) {
@@ -92,7 +91,17 @@ public class IcebergSinkConfig extends AbstractConfig {
         Importance.HIGH,
         "Comma-delimited list of source topics");
     configDef.define(
-        TABLES_PROP, Type.LIST, Importance.HIGH, "Comma-delimited list of destination tables");
+        TABLES_PROP,
+        Type.LIST,
+        null,
+        Importance.HIGH,
+        "Comma-delimited list of destination tables");
+    configDef.define(
+        TABLES_DYNAMIC_PROP,
+        Type.STRING,
+        null,
+        Importance.HIGH,
+        "Table name prefix to match for destination tables");
     configDef.define(
         TABLES_ROUTE_FIELD_PROP,
         Type.STRING,
@@ -144,6 +153,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private final Map<String, String> originalProps;
   private final Map<String, String> catalogProps;
   private final Map<String, String> kafkaProps;
+  private final Map<String, Pattern> tableRouteRegexMap = new HashMap<>();
 
   public IcebergSinkConfig(Map<String, String> originalProps) {
     super(CONFIG_DEF, originalProps);
@@ -184,15 +194,19 @@ public class IcebergSinkConfig extends AbstractConfig {
     return getList(TABLES_PROP);
   }
 
+  public String getDynamicTablesPrefix() {
+    return getString(TABLES_DYNAMIC_PROP);
+  }
+
   public String getTablesRouteField() {
     return getString(TABLES_ROUTE_FIELD_PROP);
   }
 
-  public Pattern getTableRouteValues(String tableName) {
+  public Pattern getTableRouteRegex(String tableName) {
     return tableRouteRegexMap.computeIfAbsent(
         tableName,
         notUsed -> {
-          String value = originalProps.get(TABLE_PROP_PREFIX + tableName + "." + ROUTE_VALUES);
+          String value = originalProps.get(TABLE_PROP_PREFIX + tableName + "." + ROUTE_REGEX);
           if (value == null) {
             return null;
           }

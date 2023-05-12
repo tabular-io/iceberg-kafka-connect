@@ -29,6 +29,7 @@ import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.channel.events.EventType;
+import io.tabular.iceberg.connect.data.Utilities;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Collection;
@@ -263,14 +264,19 @@ public class Coordinator extends Channel {
 
   private Map<Integer, Long> getLowWatermarkOffsets() {
     Map<Integer, Long> offsets = new HashMap<>();
-    config
-        .getTables()
-        .forEach(
-            tableName -> {
-              TableIdentifier tableIdentifier = TableIdentifier.parse(tableName);
-              getLastCommittedOffsetsForTable(tableIdentifier)
-                  .forEach((k, v) -> offsets.merge(k, v, Long::min));
-            });
+    Collection<String> tables;
+    if (config.getDynamicTablesPrefix() != null) {
+      tables = Utilities.getDynamicTableSet(catalog, config.getDynamicTablesPrefix());
+    } else {
+      tables = config.getTables();
+    }
+
+    tables.forEach(
+        tableName -> {
+          TableIdentifier tableIdentifier = TableIdentifier.parse(tableName);
+          getLastCommittedOffsetsForTable(tableIdentifier)
+              .forEach((k, v) -> offsets.merge(k, v, Long::min));
+        });
     return offsets;
   }
 

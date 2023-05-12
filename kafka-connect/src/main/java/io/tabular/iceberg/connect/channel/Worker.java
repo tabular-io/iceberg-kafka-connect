@@ -37,10 +37,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 import org.apache.iceberg.catalog.Catalog;
+import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -49,11 +51,13 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 
 public class Worker extends Channel {
+
   private final Catalog catalog;
   private final IcebergSinkConfig config;
   private final Map<String, IcebergWriter> writers;
   private final SinkTaskContext context;
   private final String controlGroupId;
+  private Set<String> dynamicTableList;
 
   public Worker(Catalog catalog, IcebergSinkConfig config, SinkTaskContext context) {
     super("worker", config);
@@ -62,6 +66,10 @@ public class Worker extends Channel {
     this.writers = new HashMap<>();
     this.context = context;
     this.controlGroupId = config.getControlGroupId();
+    if (config.getDynamicTablesPrefix() != null) {
+      this.dynamicTableList =
+          Utilities.getDynamicTableSet(catalog, config.getDynamicTablesPrefix());
+    }
   }
 
   public void syncCommitOffsets() {
@@ -142,6 +150,14 @@ public class Worker extends Channel {
   }
 
   private void save(SinkRecord record) {
+    if (config.getDynamicTablesPrefix() != null) {
+      routeRecordDynamically(record);
+    } else {
+      routeRecordStatically(record);
+    }
+  }
+
+  private void routeRecordStatically(SinkRecord record) {
     String routeField = config.getTablesRouteField();
 
     if (routeField == null) {
@@ -160,11 +176,24 @@ public class Worker extends Channel {
             .getTables()
             .forEach(
                 tableName -> {
-                  Pattern tableRouteValues = config.getTableRouteValues(tableName);
-                  if (tableRouteValues != null && tableRouteValues.matcher(routeValue).matches()) {
+                  Pattern tableRouteRegex = config.getTableRouteRegex(tableName);
+                  if (tableRouteRegex != null && tableRouteRegex.matcher(routeValue).matches()) {
                     getWriterForTable(tableName).write(record);
                   }
                 });
+      }
+    }
+  }
+
+  private void routeRecordDynamically(SinkRecord record) {
+    String routeField = config.getTablesRouteField();
+    Preconditions.checkNotNull(routeField);
+
+    String routeValue = extractRouteValue(record.value(), routeField);
+    if (routeValue != null) {
+      String tableName = config.getDynamicTablesPrefix() + routeValue.toLowerCase();
+      if (dynamicTableList.contains(tableName)) {
+        getWriterForTable(tableName).write(record);
       }
     }
   }

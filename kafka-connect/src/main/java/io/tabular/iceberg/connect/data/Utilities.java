@@ -18,6 +18,7 @@
  */
 package io.tabular.iceberg.connect.data;
 
+import static java.util.stream.Collectors.toSet;
 import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT;
 import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT_DEFAULT;
 import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES;
@@ -26,11 +27,13 @@ import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES_DE
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
+import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.data.GenericAppenderFactory;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.io.FileAppenderFactory;
@@ -77,6 +80,14 @@ public class Utilities {
       throw new UnsupportedOperationException(
           "Cannot extract value from type: " + recordValue.getClass().getName());
     }
+  }
+
+  public static Set<String> getDynamicTableSet(Catalog catalog, String prefix) {
+    TableIdentifier prefixIdentifier = TableIdentifier.parse(prefix);
+    return catalog.listTables(prefixIdentifier.namespace()).stream()
+        .filter(identifier -> identifier.name().startsWith(prefixIdentifier.name()))
+        .map(TableIdentifier::toString)
+        .collect(toSet());
   }
 
   public static TaskWriter<Record> createTableWriter(Table table, IcebergSinkConfig config) {

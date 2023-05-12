@@ -41,13 +41,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-public class IntegrationMultiTableTest extends IntegrationTestBase {
+public class IntegrationDynamicTableTest extends IntegrationTestBase {
 
   private static final String CONNECTOR_NAME = "test_connector";
   private static final String TEST_TOPIC = "test-topic";
   private static final String TEST_DB = "default";
-  private static final String TEST_TABLE1 = "foobar1";
-  private static final String TEST_TABLE2 = "foobar2";
+  private static final String TEST_TABLE_PREFIX = "tbl_";
+  private static final String TEST_TABLE1 = TEST_TABLE_PREFIX + "type1";
+  private static final String TEST_TABLE2 = TEST_TABLE_PREFIX + "type2";
   private static final TableIdentifier TABLE_IDENTIFIER1 = TableIdentifier.of(TEST_DB, TEST_TABLE1);
   private static final TableIdentifier TABLE_IDENTIFIER2 = TableIdentifier.of(TEST_DB, TEST_TABLE2);
   private static final Schema TEST_SCHEMA =
@@ -91,11 +92,8 @@ public class IntegrationMultiTableTest extends IntegrationTestBase {
             .config("value.converter", "org.apache.kafka.connect.json.JsonConverter")
             .config("value.converter.schemas.enable", false)
             .config(
-                "iceberg.tables",
-                format("%s.%s, %s.%s", TEST_DB, TEST_TABLE1, TEST_DB, TEST_TABLE2))
+                "iceberg.tables.dynamic.namePrefix", format("%s.%s", TEST_DB, TEST_TABLE_PREFIX))
             .config("iceberg.tables.routeField", "type")
-            .config(format("iceberg.table.%s.%s.routeRegex", TEST_DB, TEST_TABLE1), "type1")
-            .config(format("iceberg.table.%s.%s.routeRegex", TEST_DB, TEST_TABLE2), "type2")
             .config("iceberg.control.commitIntervalMs", 1000)
             .config("iceberg.control.commitTimeoutMs", 1000)
             .config("iceberg.catalog", RESTCatalog.class.getName())
