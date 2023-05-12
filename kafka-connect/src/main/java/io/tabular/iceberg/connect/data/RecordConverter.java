@@ -37,6 +37,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.Temporal;
 import java.util.Base64;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -325,42 +326,68 @@ public class RecordConverter {
   }
 
   protected Temporal convertTimestampValue(Object value, TimestampType type) {
-    // TODO: support non-ISO format, e.g. ' ' instead of 'T'
     if (type.shouldAdjustToUTC()) {
-      if (value instanceof Number) {
-        long l = ((Number) value).longValue();
-        return DateTimeUtil.timestamptzFromMicros(l * 1000);
-      } else if (value instanceof String) {
-        return parseOffsetDateTime((String) value);
-      } else if (value instanceof OffsetDateTime) {
-        return (OffsetDateTime) value;
-      }
-    } else {
-      if (value instanceof Number) {
-        long l = ((Number) value).longValue();
-        return DateTimeUtil.timestampFromMicros(l * 1000);
-      } else if (value instanceof String) {
-        return parseLocalDateTime((String) value);
-      } else if (value instanceof LocalDateTime) {
-        return (LocalDateTime) value;
-      }
+      return convertOffsetDateTime(value);
     }
-    throw new RuntimeException("Cannot convert timestamp: " + value);
+    return convertLocalDateTime(value);
+  }
+
+  private OffsetDateTime convertOffsetDateTime(Object value) {
+    if (value instanceof Number) {
+      long l = ((Number) value).longValue();
+      return DateTimeUtil.timestamptzFromMicros(l * 1000);
+    } else if (value instanceof String) {
+      return parseOffsetDateTime((String) value);
+    } else if (value instanceof OffsetDateTime) {
+      return (OffsetDateTime) value;
+    } else if (value instanceof LocalDateTime) {
+      return ((LocalDateTime) value).atOffset(ZoneOffset.UTC);
+    } else if (value instanceof Date) {
+      return DateTimeUtil.timestamptzFromMicros(((Date) value).getTime());
+    }
+    throw new RuntimeException(
+        "Cannot convert timestamptz: " + value + ", type: " + value.getClass());
   }
 
   private OffsetDateTime parseOffsetDateTime(String str) {
+    String dateStr = ensureIsoLiteral(str);
     try {
-      return OffsetDateTime.parse(str, ISO_OFFSET_DATE_TIME);
+      return OffsetDateTime.parse(dateStr, ISO_OFFSET_DATE_TIME);
     } catch (DateTimeParseException e) {
-      return LocalDateTime.parse(str, ISO_LOCAL_DATE_TIME).atOffset(ZoneOffset.UTC);
+      return LocalDateTime.parse(dateStr, ISO_LOCAL_DATE_TIME).atOffset(ZoneOffset.UTC);
     }
   }
 
-  private LocalDateTime parseLocalDateTime(String str) {
-    try {
-      return LocalDateTime.parse(str, ISO_LOCAL_DATE_TIME);
-    } catch (DateTimeParseException e) {
-      return OffsetDateTime.parse(str, ISO_OFFSET_DATE_TIME).toLocalDateTime();
+  private LocalDateTime convertLocalDateTime(Object value) {
+    if (value instanceof Number) {
+      long l = ((Number) value).longValue();
+      return DateTimeUtil.timestampFromMicros(l * 1000);
+    } else if (value instanceof String) {
+      return parseLocalDateTime((String) value);
+    } else if (value instanceof LocalDateTime) {
+      return (LocalDateTime) value;
+    } else if (value instanceof OffsetDateTime) {
+      return ((OffsetDateTime) value).toLocalDateTime();
+    } else if (value instanceof Date) {
+      return DateTimeUtil.timestampFromMicros(((Date) value).getTime());
     }
+    throw new RuntimeException(
+        "Cannot convert timestamp: " + value + ", type: " + value.getClass());
+  }
+
+  private LocalDateTime parseLocalDateTime(String str) {
+    String dateStr = ensureIsoLiteral(str);
+    try {
+      return LocalDateTime.parse(dateStr, ISO_LOCAL_DATE_TIME);
+    } catch (DateTimeParseException e) {
+      return OffsetDateTime.parse(dateStr, ISO_OFFSET_DATE_TIME).toLocalDateTime();
+    }
+  }
+
+  private String ensureIsoLiteral(String str) {
+    if (str.charAt(10) == ' ') {
+      return str.substring(0, 10) + 'T' + str.substring(11);
+    }
+    return str;
   }
 }
