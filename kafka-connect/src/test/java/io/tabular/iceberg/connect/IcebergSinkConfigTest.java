@@ -43,14 +43,23 @@ public class IcebergSinkConfigTest {
   }
 
   @Test
-  public void testGetDefault() {
+  public void testInvalid() {
     Map<String, String> props =
         ImmutableMap.of(
             "topics", "source-topic",
-            "iceberg.tables", "db.landing",
             "iceberg.catalog", RESTCatalog.class.getName(),
-            "iceberg.control.topic", "control-topic",
-            "iceberg.control.group.id", "control-group");
+            "iceberg.tables", "db.landing",
+            "iceberg.tables.dynamic.namePrefix", "db.tbl_");
+    assertThatExceptionOfType(ConfigException.class).isThrownBy(() -> new IcebergSinkConfig(props));
+  }
+
+  @Test
+  public void testGetDefault() {
+    Map<String, String> props =
+        ImmutableMap.of(
+            "iceberg.catalog", RESTCatalog.class.getName(),
+            "topics", "source-topic",
+            "iceberg.tables", "db.landing");
     IcebergSinkConfig config = new IcebergSinkConfig(props);
     assertEquals(300_000, config.getCommitIntervalMs());
   }

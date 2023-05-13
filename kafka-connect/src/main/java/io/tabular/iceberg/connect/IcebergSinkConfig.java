@@ -37,6 +37,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -163,6 +164,26 @@ public class IcebergSinkConfig extends AbstractConfig {
 
     this.kafkaProps = new HashMap<>(loadWorkerProps());
     kafkaProps.putAll(PropertyUtil.propertiesWithPrefix(originalProps, KAFKA_PROP_PREFIX));
+
+    validate();
+  }
+
+  private void validate() {
+    if (getTables() != null) {
+      checkState(
+          getDynamicTablesPrefix() == null, "Cannot specify both static and dynamic table names");
+    } else if (getDynamicTablesPrefix() != null) {
+      checkState(
+          getTablesRouteField() != null, "Must specify a route field if using dynamic table names");
+    } else {
+      throw new ConfigException("Must specify table name(s)");
+    }
+  }
+
+  private void checkState(boolean condition, String msg) {
+    if (!condition) {
+      throw new ConfigException(msg);
+    }
   }
 
   public String getConnectorName() {

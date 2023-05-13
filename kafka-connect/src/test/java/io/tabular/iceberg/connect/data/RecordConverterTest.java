@@ -32,6 +32,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.Temporal;
 import java.util.Base64;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -218,14 +219,24 @@ public class RecordConverterTest {
     RecordConverter converter = new RecordConverter(table);
 
     OffsetDateTime expected = OffsetDateTime.parse("2023-05-18T11:22:33Z");
+
     Temporal ts = converter.convertTimestampValue("2023-05-18T11:22:33Z", TimestampType.withZone());
+    assertEquals(expected, ts);
+
+    ts = converter.convertTimestampValue("2023-05-18 11:22:33Z", TimestampType.withZone());
     assertEquals(expected, ts);
 
     ts = converter.convertTimestampValue("2023-05-18T11:22:33", TimestampType.withZone());
     assertEquals(expected, ts);
 
+    ts = converter.convertTimestampValue("2023-05-18 11:22:33", TimestampType.withZone());
+    assertEquals(expected, ts);
+
     long epochMillis = expected.toInstant().toEpochMilli();
     ts = converter.convertTimestampValue(epochMillis, TimestampType.withZone());
+    assertEquals(expected, ts);
+
+    ts = converter.convertTimestampValue(new Date(epochMillis), TimestampType.withZone());
     assertEquals(expected, ts);
   }
 
@@ -236,14 +247,25 @@ public class RecordConverterTest {
     RecordConverter converter = new RecordConverter(table);
 
     LocalDateTime expected = LocalDateTime.parse("2023-05-18T11:22:33");
+
     Temporal ts =
         converter.convertTimestampValue("2023-05-18T11:22:33", TimestampType.withoutZone());
     assertEquals(expected, ts);
+
+    ts = converter.convertTimestampValue("2023-05-18 11:22:33", TimestampType.withoutZone());
+    assertEquals(expected, ts);
+
     ts = converter.convertTimestampValue("2023-05-18T11:22:33Z", TimestampType.withoutZone());
+    assertEquals(expected, ts);
+
+    ts = converter.convertTimestampValue("2023-05-18 11:22:33Z", TimestampType.withoutZone());
     assertEquals(expected, ts);
 
     long epochMillis = expected.atZone(ZoneOffset.UTC).toInstant().toEpochMilli();
     ts = converter.convertTimestampValue(epochMillis, TimestampType.withoutZone());
+    assertEquals(expected, ts);
+
+    ts = converter.convertTimestampValue(new Date(epochMillis), TimestampType.withoutZone());
     assertEquals(expected, ts);
   }
 
