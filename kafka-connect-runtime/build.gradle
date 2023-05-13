@@ -4,7 +4,6 @@ plugins {
 
 dependencies {
   implementation project(":iceberg-kafka-connect")
-  implementation project(":tabular-transforms")
   implementation libs.bundles.iceberg.ext
   implementation libs.bundles.aws
 
