@@ -343,7 +343,7 @@ public class RecordConverter {
     } else if (value instanceof LocalDateTime) {
       return ((LocalDateTime) value).atOffset(ZoneOffset.UTC);
     } else if (value instanceof Date) {
-      return DateTimeUtil.timestamptzFromMicros(((Date) value).getTime());
+      return DateTimeUtil.timestamptzFromMicros(((Date) value).getTime() * 1000);
     }
     throw new RuntimeException(
         "Cannot convert timestamptz: " + value + ", type: " + value.getClass());
@@ -369,7 +369,7 @@ public class RecordConverter {
     } else if (value instanceof OffsetDateTime) {
       return ((OffsetDateTime) value).toLocalDateTime();
     } else if (value instanceof Date) {
-      return DateTimeUtil.timestampFromMicros(((Date) value).getTime());
+      return DateTimeUtil.timestampFromMicros(((Date) value).getTime() * 1000);
     }
     throw new RuntimeException(
         "Cannot convert timestamp: " + value + ", type: " + value.getClass());
