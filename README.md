@@ -65,8 +65,8 @@ PARTITIONED BY (hours(ts))
 ```
 
 ## Multiple destination tables, static routing
-This example will write records with `type` set to `LIST` to the table `default.events_list`, and
-will write records with `type` set to `CREATE` to the table `default.events_create`. Other records
+This example writes records with `type` set to `list` to the table `default.events_list`, and
+writes records with `type` set to `create` to the table `default.events_create`. Other records
 will be skipped.
 
 ### Create two destination tables
@@ -105,9 +105,9 @@ PARTITIONED BY (hours(ts));
 ```
 
 ## Multiple destination tables, dynamic routing
-This example will write to tables with names based on the value in the `type` field. If a table with
-the name does not exist, then the record will be skipped. For example, if the record's `type` field
-is set to `list`, then the record will be written to the `default.events_list` table.
+This example writes to tables with names based on the value in the `type` field. If a table with
+the name does not exist, then the record will be skipped. Here, if the record's `type` field
+is set to `list`, then the record is written to the `default.events_list` table.
 
 ### Create two destination tables
 See above for creating two tables.
@@ -129,9 +129,9 @@ See above for creating two tables.
 ```
 
 ## Change data capture
-This example will apply inserts, updates, and deletes based on the value of a field in the record.
-For example, if the `_cdc_op` field is set to `I` then the record will be inserted, if `U` then it will
-be upserted, and if `D` then it will be deleted. This requires that the table be in Iceberg v2 format
+This example applies inserts, updates, and deletes based on the value of a field in the record.
+Here, if the `_cdc_op` field is set to `I` then the record is inserted, if `U` then it is upserted,
+and if `D` then it is deleted. This requires that the table be in Iceberg v2 format
 and have an identity field (or fields) defined.
 
 ### Create the destination table
