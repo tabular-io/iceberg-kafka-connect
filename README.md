@@ -67,7 +67,7 @@ PARTITIONED BY (hours(ts))
 ## Multiple destination tables, static routing
 This example writes records with `type` set to `list` to the table `default.events_list`, and
 writes records with `type` set to `create` to the table `default.events_create`. Other records
-will be skipped.
+will be skipped. This feature can be used in conjunction with multitable routing.
 
 ### Create two destination tables
 ```sql
