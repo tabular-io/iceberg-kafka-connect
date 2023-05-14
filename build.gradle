@@ -10,16 +10,17 @@ buildscript {
 subprojects {
   apply plugin: "java"
   apply plugin: "com.diffplug.spotless"
+  apply plugin: "maven-publish"
 
-  group "io.tabular.iceberg.connect"
-  version "0.1.0"
+  group "io.tabular.connect"
+  version "0.1.0-SNAPSHOT"
 
   repositories {
     mavenCentral()
   }
 
-  sourceCompatibility = '1.8'
-  targetCompatibility = '1.8'
+  sourceCompatibility = "1.8"
+  targetCompatibility = "1.8"
 
   test {
     useJUnitPlatform()
@@ -31,6 +32,17 @@ subprojects {
       googleJavaFormat("1.7")
       removeUnusedImports()
       licenseHeaderFile "$rootDir/header.txt"
+    }
+  }
+
+  publishing {
+    repositories {
+      maven {
+        authentication {
+          awsIm(AwsImAuthentication)
+        }
+        url = "s3://tabular-repository-public/releases"
+      }
     }
   }
 }

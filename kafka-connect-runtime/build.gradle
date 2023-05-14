@@ -45,10 +45,22 @@ distributions {
     }
   }
 }
-tasks.distTar.enabled = false
 
-// build the distribution first so it can be installed into kafka connect
-test.dependsOn installDist
-assemble.dependsOn installDist
+publishing {
+  publications {
+    mavenJava(MavenPublication) {
+      artifact distZip
+    }
+  }
+}
+
+tasks.distTar.enabled = false
+tasks.jar.enabled = false
+
 installDist.dependsOn processResources
 distZip.dependsOn processResources
+
+// build the install before test so it can be installed into kafka connect
+test.dependsOn installDist
+
+assemble.dependsOn distZip
