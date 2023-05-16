@@ -143,7 +143,7 @@ public abstract class Channel {
 
             LOG.debug("Received event of type: {}", event.getType().name());
             if (eventHandler.apply(new Envelope(event, record.partition(), record.offset()))) {
-              LOG.debug("Handled event of type: {}", event.getType().name());
+              LOG.info("Handled event of type: {}", event.getType().name());
             }
           });
       records = consumer.poll(pollDuration);
