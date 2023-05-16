@@ -33,7 +33,6 @@ import io.tabular.iceberg.connect.data.Utilities;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -63,7 +62,7 @@ public class Coordinator extends Channel {
   private static final String CONTROL_OFFSETS_SNAPSHOT_PREFIX = "kafka.connect.control.offsets.";
 
   private final Catalog catalog;
-  private final Map<TableIdentifier, Table> tables;
+  private final Map<TableIdentifier, Table> tableCache;
   private final IcebergSinkConfig config;
   private final List<Envelope> commitBuffer = new LinkedList<>();
   private final List<CommitReadyPayload> readyBuffer = new LinkedList<>();
@@ -75,7 +74,7 @@ public class Coordinator extends Channel {
   public Coordinator(Catalog catalog, IcebergSinkConfig config) {
     super("coordinator", config);
     this.catalog = catalog;
-    this.tables = new HashMap<>();
+    this.tableCache = new ConcurrentHashMap<>(); // TODO: LRU cache
     this.config = config;
     this.totalPartitionCount = getTotalPartitionCount();
     this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.getCommitThreads());
@@ -309,6 +308,7 @@ public class Coordinator extends Channel {
   }
 
   private Table getTable(TableIdentifier tableIdentifier) {
-    return tables.computeIfAbsent(tableIdentifier, notUsed -> catalog.loadTable(tableIdentifier));
+    return tableCache.computeIfAbsent(
+        tableIdentifier, notUsed -> catalog.loadTable(tableIdentifier));
   }
 }
