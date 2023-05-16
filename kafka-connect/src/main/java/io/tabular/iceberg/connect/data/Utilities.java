@@ -26,6 +26,8 @@ import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES_DE
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -33,6 +35,8 @@ import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
+import org.apache.iceberg.catalog.Namespace;
+import org.apache.iceberg.catalog.SupportsNamespaces;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.data.GenericAppenderFactory;
 import org.apache.iceberg.data.Record;
@@ -40,6 +44,7 @@ import org.apache.iceberg.io.FileAppenderFactory;
 import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.UnpartitionedWriter;
+import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.primitives.Ints;
 import org.apache.iceberg.util.PropertyUtil;
 import org.apache.kafka.connect.data.Struct;
@@ -83,11 +88,37 @@ public class Utilities {
   }
 
   public static Set<String> getDynamicTableSet(Catalog catalog, String prefix) {
-    TableIdentifier prefixIdentifier = TableIdentifier.parse(prefix);
-    return catalog.listTables(prefixIdentifier.namespace()).stream()
-        .filter(identifier -> identifier.name().startsWith(prefixIdentifier.name()))
-        .map(TableIdentifier::toString)
-        .collect(toSet());
+    if (prefix.isEmpty() && catalog instanceof SupportsNamespaces) {
+      // empty prefix so get all tables
+      return getNamespaces(catalog, null).stream()
+          .flatMap(nm -> catalog.listTables(nm).stream())
+          .map(TableIdentifier::toString)
+          .collect(toSet());
+    } else {
+      TableIdentifier prefixIdentifier = TableIdentifier.parse(prefix);
+      return catalog.listTables(prefixIdentifier.namespace()).stream()
+          .filter(identifier -> identifier.name().startsWith(prefixIdentifier.name()))
+          .map(TableIdentifier::toString)
+          .collect(toSet());
+    }
+  }
+
+  private static List<Namespace> getNamespaces(Catalog catalog, Namespace namespace) {
+    Preconditions.checkArgument(catalog instanceof SupportsNamespaces);
+
+    List<Namespace> result = new ArrayList<>();
+
+    List<Namespace> children;
+    if (namespace == null) {
+      children = ((SupportsNamespaces) catalog).listNamespaces();
+    } else {
+      result.add(namespace);
+      children = ((SupportsNamespaces) catalog).listNamespaces(namespace);
+    }
+
+    children.stream().flatMap(nm -> getNamespaces(catalog, nm).stream()).forEach(result::add);
+
+    return result;
   }
 
   public static TaskWriter<Record> createTableWriter(Table table, IcebergSinkConfig config) {
