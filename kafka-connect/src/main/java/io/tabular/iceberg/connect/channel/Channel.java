@@ -30,7 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Consumer;
+import java.util.function.Function;
 import org.apache.iceberg.avro.AvroEncoderUtil;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
@@ -115,7 +115,7 @@ public abstract class Channel {
     }
   }
 
-  protected abstract void receive(Envelope envelope);
+  protected abstract boolean receive(Envelope envelope);
 
   public void process() {
     consumeAvailable(this::receive, Duration.ZERO);
@@ -125,7 +125,7 @@ public abstract class Channel {
     consumeAvailable(this::receive, duration);
   }
 
-  protected void consumeAvailable(Consumer<Envelope> eventHandler, Duration pollDuration) {
+  protected void consumeAvailable(Function<Envelope, Boolean> eventHandler, Duration pollDuration) {
     ConsumerRecords<String, byte[]> records = consumer.poll(pollDuration);
     while (!records.isEmpty()) {
       records.forEach(
@@ -141,8 +141,10 @@ public abstract class Channel {
               throw new UncheckedIOException(e);
             }
 
-            LOG.info("Received event of type: {}", event.getType().name());
-            eventHandler.accept(new Envelope(event, record.partition(), record.offset()));
+            LOG.debug("Received event of type: {}", event.getType().name());
+            if (eventHandler.apply(new Envelope(event, record.partition(), record.offset()))) {
+              LOG.debug("Handled event of type: {}", event.getType().name());
+            }
           });
       records = consumer.poll(pollDuration);
     }

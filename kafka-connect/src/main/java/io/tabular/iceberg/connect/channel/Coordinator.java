@@ -103,7 +103,7 @@ public class Coordinator extends Channel {
   }
 
   @Override
-  protected void receive(Envelope envelope) {
+  protected boolean receive(Envelope envelope) {
     switch (envelope.getEvent().getType()) {
       case COMMIT_RESPONSE:
         commitBuffer.add(envelope);
@@ -111,14 +111,15 @@ public class Coordinator extends Channel {
           LOG.warn(
               "Received commit response when no commit in progress, this can happen during recovery");
         }
-        break;
+        return true;
       case COMMIT_READY:
         readyBuffer.add((CommitReadyPayload) envelope.getEvent().getPayload());
         if (isCommitComplete()) {
           commit();
         }
-        break;
+        return true;
     }
+    return false;
   }
 
   @SuppressWarnings("deprecation")

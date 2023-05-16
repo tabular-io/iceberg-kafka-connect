@@ -95,54 +95,58 @@ public class Worker extends Channel {
   }
 
   @Override
-  protected void receive(Envelope envelope) {
+  protected boolean receive(Envelope envelope) {
     Event event = envelope.getEvent();
-    if (event.getType() == EventType.COMMIT_REQUEST) {
-      refreshTableListIfNeeded(); // pick up any new tables that were created
-
-      List<WriterResult> writeResults =
-          writers.values().stream().map(IcebergWriter::complete).collect(toList());
-
-      Map<TopicPartition, Long> offsets = new HashMap<>();
-      writeResults.stream()
-          .flatMap(writerResult -> writerResult.getOffsets().entrySet().stream())
-          .forEach(entry -> offsets.merge(entry.getKey(), entry.getValue(), Long::max));
-
-      // include all assigned topic partitions even if no messages were read
-      // from a partition, as the coordinator will use that to determine
-      // when all data for a commit has been received
-      List<TopicPartitionOffset> assignments =
-          context.assignment().stream()
-              .map(
-                  tp -> {
-                    Long offset = offsets.get(tp);
-                    return new TopicPartitionOffset(tp.topic(), tp.partition(), offset);
-                  })
-              .collect(toList());
-
-      UUID commitId = ((CommitRequestPayload) event.getPayload()).getCommitId();
-
-      List<Event> events =
-          writeResults.stream()
-              .map(
-                  writeResult ->
-                      new Event(
-                          EventType.COMMIT_RESPONSE,
-                          new CommitResponsePayload(
-                              writeResult.getPartitionStruct(),
-                              commitId,
-                              TableName.of(writeResult.getTableIdentifier()),
-                              writeResult.getDataFiles(),
-                              writeResult.getDeleteFiles())))
-              .collect(toList());
-
-      Event readyEvent =
-          new Event(EventType.COMMIT_READY, new CommitReadyPayload(commitId, assignments));
-      events.add(readyEvent);
-
-      send(events, offsets);
-      context.requestCommit();
+    if (event.getType() != EventType.COMMIT_REQUEST) {
+      return false;
     }
+
+    refreshTableListIfNeeded(); // pick up any new tables that were created
+
+    List<WriterResult> writeResults =
+        writers.values().stream().map(IcebergWriter::complete).collect(toList());
+
+    Map<TopicPartition, Long> offsets = new HashMap<>();
+    writeResults.stream()
+        .flatMap(writerResult -> writerResult.getOffsets().entrySet().stream())
+        .forEach(entry -> offsets.merge(entry.getKey(), entry.getValue(), Long::max));
+
+    // include all assigned topic partitions even if no messages were read
+    // from a partition, as the coordinator will use that to determine
+    // when all data for a commit has been received
+    List<TopicPartitionOffset> assignments =
+        context.assignment().stream()
+            .map(
+                tp -> {
+                  Long offset = offsets.get(tp);
+                  return new TopicPartitionOffset(tp.topic(), tp.partition(), offset);
+                })
+            .collect(toList());
+
+    UUID commitId = ((CommitRequestPayload) event.getPayload()).getCommitId();
+
+    List<Event> events =
+        writeResults.stream()
+            .map(
+                writeResult ->
+                    new Event(
+                        EventType.COMMIT_RESPONSE,
+                        new CommitResponsePayload(
+                            writeResult.getPartitionStruct(),
+                            commitId,
+                            TableName.of(writeResult.getTableIdentifier()),
+                            writeResult.getDataFiles(),
+                            writeResult.getDeleteFiles())))
+            .collect(toList());
+
+    Event readyEvent =
+        new Event(EventType.COMMIT_READY, new CommitReadyPayload(commitId, assignments));
+    events.add(readyEvent);
+
+    send(events, offsets);
+    context.requestCommit();
+
+    return true;
   }
 
   @Override
