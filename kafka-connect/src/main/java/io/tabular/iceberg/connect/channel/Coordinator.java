@@ -38,6 +38,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import org.apache.iceberg.AppendFiles;
@@ -263,7 +264,6 @@ public class Coordinator extends Channel {
   }
 
   private Map<Integer, Long> getLowWatermarkOffsets() {
-    Map<Integer, Long> offsets = new HashMap<>();
     Collection<String> tables;
     if (config.getDynamicTablesPrefix() != null) {
       tables = Utilities.getDynamicTableSet(catalog, config.getDynamicTablesPrefix());
@@ -271,12 +271,16 @@ public class Coordinator extends Channel {
       tables = config.getTables();
     }
 
-    tables.forEach(
-        tableName -> {
-          TableIdentifier tableIdentifier = TableIdentifier.parse(tableName);
-          getLastCommittedOffsetsForTable(tableIdentifier)
-              .forEach((k, v) -> offsets.merge(k, v, Long::min));
-        });
+    Map<Integer, Long> offsets = new ConcurrentHashMap<>();
+    Tasks.foreach(tables)
+        .executeWith(exec)
+        .stopOnFailure()
+        .run(
+            tableName -> {
+              TableIdentifier tableIdentifier = TableIdentifier.parse(tableName);
+              getLastCommittedOffsetsForTable(tableIdentifier)
+                  .forEach((k, v) -> offsets.merge(k, v, Long::min));
+            });
     return offsets;
   }
 
