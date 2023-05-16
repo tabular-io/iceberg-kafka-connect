@@ -88,9 +88,9 @@ public class Utilities {
   }
 
   public static Set<String> getDynamicTableSet(Catalog catalog, String prefix) {
-    if (prefix.isEmpty() && catalog instanceof SupportsNamespaces) {
-      // empty prefix so get all tables
-      return getNamespaces(catalog, null).stream()
+    if ((prefix.isEmpty() || prefix.endsWith(".")) && catalog instanceof SupportsNamespaces) {
+      Namespace root = prefix.isEmpty() ? null : Namespace.of(prefix.split("\\."));
+      return getNamespaces(catalog, root).stream()
           .flatMap(nm -> catalog.listTables(nm).stream())
           .map(TableIdentifier::toString)
           .collect(toSet());
