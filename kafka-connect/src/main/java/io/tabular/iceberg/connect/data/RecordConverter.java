@@ -50,7 +50,6 @@ import org.apache.iceberg.mapping.MappedField;
 import org.apache.iceberg.mapping.NameMapping;
 import org.apache.iceberg.mapping.NameMappingParser;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.types.Types.DecimalType;
@@ -62,9 +61,6 @@ import org.apache.iceberg.types.Types.TimestampType;
 import org.apache.iceberg.util.DateTimeUtil;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.json.JsonConverter;
-import org.apache.kafka.connect.json.JsonConverterConfig;
-import org.apache.kafka.connect.storage.ConverterConfig;
-import org.apache.kafka.connect.storage.ConverterType;
 
 public class RecordConverter {
 
@@ -74,16 +70,10 @@ public class RecordConverter {
   private final NameMapping nameMapping;
   private final JsonConverter jsonConverter;
 
-  public RecordConverter(Table table) {
+  public RecordConverter(Table table, JsonConverter jsonConverter) {
     this.tableSchema = table.schema().asStruct();
     this.nameMapping = getNameMapping(table);
-    this.jsonConverter = new JsonConverter();
-    jsonConverter.configure(
-        ImmutableMap.of(
-            JsonConverterConfig.SCHEMAS_ENABLE_CONFIG,
-            false,
-            ConverterConfig.TYPE_CONFIG,
-            ConverterType.VALUE.getName()));
+    this.jsonConverter = jsonConverter;
   }
 
   public Record convert(Object data) {

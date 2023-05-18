@@ -50,6 +50,10 @@ import org.apache.iceberg.types.Types.TimestampType;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.json.JsonConverterConfig;
+import org.apache.kafka.connect.storage.ConverterConfig;
+import org.apache.kafka.connect.storage.ConverterType;
 import org.junit.jupiter.api.Test;
 
 public class RecordConverterTest {
@@ -120,11 +124,22 @@ public class RecordConverterTest {
   private static final List<String> LIST_VAL = ImmutableList.of("hello", "world");
   private static final Map<String, String> MAP_VAL = ImmutableMap.of("one", "1", "two", "2");
 
+  private static final JsonConverter JSON_CONVERTER = new JsonConverter();
+
+  static {
+    JSON_CONVERTER.configure(
+        ImmutableMap.of(
+            JsonConverterConfig.SCHEMAS_ENABLE_CONFIG,
+            false,
+            ConverterConfig.TYPE_CONFIG,
+            ConverterType.VALUE.getName()));
+  }
+
   @Test
   public void testMapConvert() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SCHEMA);
-    RecordConverter converter = new RecordConverter(table);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
     Map<String, Object> data = createMapData();
     Record record = converter.convert(data);
@@ -135,7 +150,7 @@ public class RecordConverterTest {
   public void testNestedMapConvert() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(NESTED_SCHEMA);
-    RecordConverter converter = new RecordConverter(table);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
     Map<String, Object> nestedData = createNestedMapData();
     Record record = converter.convert(nestedData);
@@ -147,7 +162,7 @@ public class RecordConverterTest {
   public void testMapToString() throws Exception {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SIMPLE_SCHEMA);
-    RecordConverter converter = new RecordConverter(table);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
     Map<String, Object> nestedData = createNestedMapData();
     Record record = converter.convert(nestedData);
@@ -161,7 +176,7 @@ public class RecordConverterTest {
   public void testStructConvert() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SCHEMA);
-    RecordConverter converter = new RecordConverter(table);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
     Struct data = createStructData();
     Record record = converter.convert(data);
@@ -172,7 +187,7 @@ public class RecordConverterTest {
   public void testNestedStructConvert() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(NESTED_SCHEMA);
-    RecordConverter converter = new RecordConverter(table);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
     Struct nestedData = createNestedStructData();
     Record record = converter.convert(nestedData);
@@ -184,7 +199,7 @@ public class RecordConverterTest {
   public void testStructToString() throws Exception {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SIMPLE_SCHEMA);
-    RecordConverter converter = new RecordConverter(table);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
     Struct nestedData = createNestedStructData();
     Record record = converter.convert(nestedData);
@@ -205,7 +220,7 @@ public class RecordConverterTest {
             ImmutableMap.of(
                 TableProperties.DEFAULT_NAME_MAPPING, NameMappingParser.toJson(nameMapping)));
 
-    RecordConverter converter = new RecordConverter(table);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
     Map<String, Object> data = ImmutableMap.of("renamed_ii", 123);
     Record record = converter.convert(data);
@@ -216,7 +231,7 @@ public class RecordConverterTest {
   public void testTimestampWithZoneConversion() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SIMPLE_SCHEMA);
-    RecordConverter converter = new RecordConverter(table);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
     OffsetDateTime expected = OffsetDateTime.parse("2023-05-18T11:22:33Z");
 
@@ -244,7 +259,7 @@ public class RecordConverterTest {
   public void testTimestampWithoutZoneConversion() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SIMPLE_SCHEMA);
-    RecordConverter converter = new RecordConverter(table);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
     LocalDateTime expected = LocalDateTime.parse("2023-05-18T11:22:33");
 

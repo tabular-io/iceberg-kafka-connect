@@ -38,7 +38,11 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.storage.ConverterConfig;
+import org.apache.kafka.connect.storage.ConverterType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -155,6 +159,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private final Map<String, String> catalogProps;
   private final Map<String, String> kafkaProps;
   private final Map<String, Pattern> tableRouteRegexMap = new HashMap<>();
+  private final JsonConverter jsonConverter;
 
   public IcebergSinkConfig(Map<String, String> originalProps) {
     super(CONFIG_DEF, originalProps);
@@ -164,6 +169,14 @@ public class IcebergSinkConfig extends AbstractConfig {
 
     this.kafkaProps = new HashMap<>(loadWorkerProps());
     kafkaProps.putAll(PropertyUtil.propertiesWithPrefix(originalProps, KAFKA_PROP_PREFIX));
+
+    this.jsonConverter = new JsonConverter();
+    jsonConverter.configure(
+        ImmutableMap.of(
+            JsonConverterConfig.SCHEMAS_ENABLE_CONFIG,
+            false,
+            ConverterConfig.TYPE_CONFIG,
+            ConverterType.VALUE.getName()));
 
     validate();
   }
@@ -273,6 +286,10 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public boolean isUpsertMode() {
     return getBoolean(TABLES_UPSERT_MODE_ENABLED_PROP);
+  }
+
+  public JsonConverter getJsonConverter() {
+    return jsonConverter;
   }
 
   private Map<String, String> loadWorkerProps() {
