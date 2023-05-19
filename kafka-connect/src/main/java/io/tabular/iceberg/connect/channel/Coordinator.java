@@ -66,6 +66,7 @@ public class Coordinator extends Channel {
   private long startTime;
   private UUID currentCommitId;
   private final int totalPartitionCount;
+  private final String snapshotOffsetsProp;
   private final ExecutorService exec;
 
   public Coordinator(Catalog catalog, IcebergSinkConfig config) {
@@ -76,6 +77,7 @@ public class Coordinator extends Channel {
     this.tableCache = new ConcurrentHashMap<>(); // TODO: LRU cache
     this.config = config;
     this.totalPartitionCount = getTotalPartitionCount();
+    this.snapshotOffsetsProp = CONTROL_OFFSETS_SNAPSHOT_PREFIX + config.getControlTopic();
     this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.getCommitThreads());
   }
 
@@ -182,12 +184,19 @@ public class Coordinator extends Channel {
                             .getTableName()
                             .toIdentifier()));
 
+    String offsetsJson;
+    try {
+      offsetsJson = MAPPER.writeValueAsString(getControlTopicOffsets());
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+
     Tasks.foreach(commitMap.entrySet())
         .executeWith(exec)
         .stopOnFailure()
         .run(
             entry -> {
-              commitToTable(entry.getKey(), entry.getValue());
+              commitToTable(entry.getKey(), entry.getValue(), offsetsJson);
             });
 
     commitConsumerOffsets();
@@ -196,7 +205,8 @@ public class Coordinator extends Channel {
     currentCommitId = null;
   }
 
-  private void commitToTable(TableIdentifier tableIdentifier, List<Envelope> envelopeList) {
+  private void commitToTable(
+      TableIdentifier tableIdentifier, List<Envelope> envelopeList, String offsetsJson) {
     Table table = getTable(tableIdentifier);
     table.refresh();
     Map<Integer, Long> commitedOffsets = getLastCommittedOffsetsForTable(tableIdentifier);
@@ -228,23 +238,14 @@ public class Coordinator extends Channel {
     if (dataFiles.isEmpty() && deleteFiles.isEmpty()) {
       LOG.info("Nothing to commit");
     } else {
-      String offsetsStr;
-      try {
-        offsetsStr = MAPPER.writeValueAsString(getControlTopicOffsets());
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      }
-
-      String offsetsProp = CONTROL_OFFSETS_SNAPSHOT_PREFIX + config.getControlTopic();
-
       if (deleteFiles.isEmpty()) {
         AppendFiles appendOp = table.newAppend();
-        appendOp.set(offsetsProp, offsetsStr);
+        appendOp.set(snapshotOffsetsProp, offsetsJson);
         dataFiles.forEach(appendOp::appendFile);
         appendOp.commit();
       } else {
         RowDelta deltaOp = table.newRowDelta();
-        deltaOp.set(offsetsProp, offsetsStr);
+        deltaOp.set(snapshotOffsetsProp, offsetsJson);
         dataFiles.forEach(deltaOp::addRows);
         deleteFiles.forEach(deltaOp::addDeletes);
         deltaOp.commit();

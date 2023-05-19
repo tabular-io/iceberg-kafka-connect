@@ -172,7 +172,12 @@ public abstract class Channel {
   }
 
   protected void commitConsumerOffsets() {
-    consumer.commitSync();
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
+    getControlTopicOffsets()
+        .forEach(
+            (k, v) ->
+                offsetsToCommit.put(new TopicPartition(controlTopic, k), new OffsetAndMetadata(v)));
+    consumer.commitSync(offsetsToCommit);
   }
 
   private Admin createAdmin() {
