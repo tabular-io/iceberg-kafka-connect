@@ -25,7 +25,6 @@ import io.tabular.iceberg.connect.channel.events.Event;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +36,6 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -66,13 +64,13 @@ public abstract class Channel {
   private final Map<Integer, Long> controlTopicOffsets = new HashMap<>();
   private final String producerId;
 
-  public Channel(String name, IcebergSinkConfig config) {
+  public Channel(String name, String consumerGroupId, IcebergSinkConfig config) {
     this.kafkaProps = config.getKafkaProps();
     this.controlTopic = config.getControlTopic();
     this.controlGroupId = config.getControlGroupId();
     this.transactionalId = name + config.getTransactionalSuffix();
     this.producer = createProducer();
-    this.consumer = createConsumer();
+    this.consumer = createConsumer(consumerGroupId);
     this.admin = createAdmin();
     this.producerId = UUID.randomUUID().toString();
   }
@@ -121,8 +119,8 @@ public abstract class Channel {
     consumeAvailable(this::receive, Duration.ZERO);
   }
 
-  protected void process(Duration duration) {
-    consumeAvailable(this::receive, duration);
+  public void process(Duration pollDuration) {
+    consumeAvailable(this::receive, pollDuration);
   }
 
   protected void consumeAvailable(Function<Envelope, Boolean> eventHandler, Duration pollDuration) {
@@ -150,7 +148,7 @@ public abstract class Channel {
     }
   }
 
-  protected Map<Integer, Long> controlTopicOffsets() {
+  protected Map<Integer, Long> getControlTopicOffsets() {
     return controlTopicOffsets;
   }
 
@@ -163,14 +161,23 @@ public abstract class Channel {
     return result;
   }
 
-  private KafkaConsumer<String, byte[]> createConsumer() {
+  private KafkaConsumer<String, byte[]> createConsumer(String consumerGroupId) {
     Map<String, Object> consumerProps = new HashMap<>(kafkaProps);
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
     consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
-    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "cg-control-" + UUID.randomUUID());
+    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroupId);
     return new KafkaConsumer<>(
         consumerProps, new StringDeserializer(), new ByteArrayDeserializer());
+  }
+
+  protected void commitConsumerOffsets() {
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
+    getControlTopicOffsets()
+        .forEach(
+            (k, v) ->
+                offsetsToCommit.put(new TopicPartition(controlTopic, k), new OffsetAndMetadata(v)));
+    consumer.commitSync(offsetsToCommit);
   }
 
   private Admin createAdmin() {
@@ -178,31 +185,12 @@ public abstract class Channel {
     return Admin.create(adminProps);
   }
 
-  protected void setControlTopicOffsets(Map<Integer, Long> offsets) {
-    offsets.forEach(
-        (k, v) -> consumer.seek(new TopicPartition(controlTopic, k), new OffsetAndMetadata(v)));
-  }
-
   protected Admin admin() {
     return admin;
   }
 
-  protected void initConsumerOffsets(Collection<TopicPartition> partitions) {
-    consumer.seekToEnd(partitions);
-  }
-
   public void start() {
-    consumer.subscribe(
-        ImmutableList.of(controlTopic),
-        new ConsumerRebalanceListener() {
-          @Override
-          public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
-
-          @Override
-          public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            initConsumerOffsets(partitions);
-          }
-        });
+    consumer.subscribe(ImmutableList.of(controlTopic));
 
     // initial poll with longer duration so the consumer will initialize...
     process(Duration.ofMillis(1000));

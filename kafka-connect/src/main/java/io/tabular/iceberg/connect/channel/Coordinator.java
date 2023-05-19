@@ -29,10 +29,8 @@ import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.channel.events.EventType;
-import io.tabular.iceberg.connect.data.Utilities;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -51,7 +49,6 @@ import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.util.Tasks;
 import org.apache.iceberg.util.ThreadPools;
-import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,14 +66,18 @@ public class Coordinator extends Channel {
   private long startTime;
   private UUID currentCommitId;
   private final int totalPartitionCount;
+  private final String snapshotOffsetsProp;
   private final ExecutorService exec;
 
   public Coordinator(Catalog catalog, IcebergSinkConfig config) {
-    super("coordinator", config);
+    // pass consumer group ID to which we commit low watermark offsets
+    super("coordinator", config.getControlGroupId() + "-coord", config);
+
     this.catalog = catalog;
     this.tableCache = new ConcurrentHashMap<>(); // TODO: LRU cache
     this.config = config;
     this.totalPartitionCount = getTotalPartitionCount();
+    this.snapshotOffsetsProp = CONTROL_OFFSETS_SNAPSHOT_PREFIX + config.getControlTopic();
     this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.getCommitThreads());
   }
 
@@ -183,20 +184,30 @@ public class Coordinator extends Channel {
                             .getTableName()
                             .toIdentifier()));
 
+    String offsetsJson;
+    try {
+      offsetsJson = MAPPER.writeValueAsString(getControlTopicOffsets());
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+
     Tasks.foreach(commitMap.entrySet())
         .executeWith(exec)
         .stopOnFailure()
         .run(
             entry -> {
-              commitToTable(entry.getKey(), entry.getValue());
+              commitToTable(entry.getKey(), entry.getValue(), offsetsJson);
             });
 
+    // we should only get here if all tables committed successfully...
+    commitConsumerOffsets();
     commitBuffer.clear();
     readyBuffer.clear();
     currentCommitId = null;
   }
 
-  private void commitToTable(TableIdentifier tableIdentifier, List<Envelope> envelopeList) {
+  private void commitToTable(
+      TableIdentifier tableIdentifier, List<Envelope> envelopeList, String offsetsJson) {
     Table table = getTable(tableIdentifier);
     table.refresh();
     Map<Integer, Long> commitedOffsets = getLastCommittedOffsetsForTable(tableIdentifier);
@@ -228,23 +239,14 @@ public class Coordinator extends Channel {
     if (dataFiles.isEmpty() && deleteFiles.isEmpty()) {
       LOG.info("Nothing to commit");
     } else {
-      String offsetsStr;
-      try {
-        offsetsStr = MAPPER.writeValueAsString(controlTopicOffsets());
-      } catch (IOException e) {
-        throw new UncheckedIOException(e);
-      }
-
-      String offsetsProp = CONTROL_OFFSETS_SNAPSHOT_PREFIX + config.getControlTopic();
-
       if (deleteFiles.isEmpty()) {
         AppendFiles appendOp = table.newAppend();
-        appendOp.set(offsetsProp, offsetsStr);
+        appendOp.set(snapshotOffsetsProp, offsetsJson);
         dataFiles.forEach(appendOp::appendFile);
         appendOp.commit();
       } else {
         RowDelta deltaOp = table.newRowDelta();
-        deltaOp.set(offsetsProp, offsetsStr);
+        deltaOp.set(snapshotOffsetsProp, offsetsJson);
         dataFiles.forEach(deltaOp::addRows);
         deleteFiles.forEach(deltaOp::addDeletes);
         deltaOp.commit();
@@ -252,36 +254,6 @@ public class Coordinator extends Channel {
 
       LOG.info("Iceberg commit complete");
     }
-  }
-
-  @Override
-  protected void initConsumerOffsets(Collection<TopicPartition> partitions) {
-    super.initConsumerOffsets(partitions);
-    Map<Integer, Long> controlTopicOffsets = getLowWatermarkOffsets();
-    if (!controlTopicOffsets.isEmpty()) {
-      setControlTopicOffsets(controlTopicOffsets);
-    }
-  }
-
-  private Map<Integer, Long> getLowWatermarkOffsets() {
-    Collection<String> tables;
-    if (config.getDynamicTablesPrefix() != null) {
-      tables = Utilities.getDynamicTableSet(catalog, config.getDynamicTablesPrefix());
-    } else {
-      tables = config.getTables();
-    }
-
-    Map<Integer, Long> offsets = new ConcurrentHashMap<>();
-    Tasks.foreach(tables)
-        .executeWith(exec)
-        .stopOnFailure()
-        .run(
-            tableName -> {
-              TableIdentifier tableIdentifier = TableIdentifier.parse(tableName);
-              getLastCommittedOffsetsForTable(tableIdentifier)
-                  .forEach((k, v) -> offsets.merge(k, v, Long::min));
-            });
-    return offsets;
   }
 
   private Map<Integer, Long> getLastCommittedOffsetsForTable(TableIdentifier tableIdentifier) {

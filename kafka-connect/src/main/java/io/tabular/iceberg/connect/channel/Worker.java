@@ -18,6 +18,7 @@
  */
 package io.tabular.iceberg.connect.channel;
 
+import static io.tabular.iceberg.connect.IcebergSinkConfig.DEFAULT_CONTROL_GROUP_PREFIX;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
@@ -37,11 +38,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 import org.apache.iceberg.catalog.Catalog;
+import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -54,26 +55,19 @@ public class Worker extends Channel {
 
   private final Catalog catalog;
   private final IcebergSinkConfig config;
-  private final Map<String, IcebergWriter> writers;
+  private final Map<String, IcebergWriter> writers = new HashMap<>();
   private final SinkTaskContext context;
   private final String controlGroupId;
-  private Set<String> dynamicTableList;
+  private final Map<String, Boolean> tableExistsMap = new HashMap<>();
 
   public Worker(Catalog catalog, IcebergSinkConfig config, SinkTaskContext context) {
-    super("worker", config);
+    // pass transient consumer group ID to which we never commit offsets
+    super("worker", DEFAULT_CONTROL_GROUP_PREFIX + UUID.randomUUID(), config);
+
     this.catalog = catalog;
     this.config = config;
-    this.writers = new HashMap<>();
     this.context = context;
     this.controlGroupId = config.getControlGroupId();
-    refreshTableListIfNeeded();
-  }
-
-  private void refreshTableListIfNeeded() {
-    if (config.getDynamicTablesPrefix() != null) {
-      this.dynamicTableList =
-          Utilities.getDynamicTableSet(catalog, config.getDynamicTablesPrefix());
-    }
   }
 
   public void syncCommitOffsets() {
@@ -101,7 +95,7 @@ public class Worker extends Channel {
       return false;
     }
 
-    refreshTableListIfNeeded(); // pick up any new tables that were created
+    tableExistsMap.clear(); // refresh in case of new or dropped tables
 
     List<WriterResult> writeResults =
         writers.values().stream().map(IcebergWriter::complete).collect(toList());
@@ -202,10 +196,15 @@ public class Worker extends Channel {
     String routeValue = extractRouteValue(record.value(), routeField);
     if (routeValue != null) {
       String tableName = config.getDynamicTablesPrefix() + routeValue.toLowerCase();
-      if (dynamicTableList.contains(tableName)) {
+      if (tableExists(tableName)) {
         getWriterForTable(tableName).write(record);
       }
     }
+  }
+
+  private boolean tableExists(String tableName) {
+    return tableExistsMap.computeIfAbsent(
+        tableName, notUsed -> catalog.tableExists(TableIdentifier.parse(tableName)));
   }
 
   private String extractRouteValue(Object recordValue, String routeField) {

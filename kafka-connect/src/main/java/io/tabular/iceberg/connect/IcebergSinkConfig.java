@@ -76,7 +76,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String BOOTSTRAP_SERVERS_PROP = "bootstrap.servers";
 
   private static final String DEFAULT_CONTROL_TOPIC_PREFIX = "control-";
-  private static final String DEFAULT_CONTROL_GROUP_PREFIX = "cg-control-";
+  public static final String DEFAULT_CONTROL_GROUP_PREFIX = "cg-control-";
 
   public static ConfigDef CONFIG_DEF = newConfigDef();
 
