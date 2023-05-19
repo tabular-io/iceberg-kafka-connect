@@ -29,10 +29,8 @@ import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.channel.events.EventType;
-import io.tabular.iceberg.connect.data.Utilities;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -51,7 +49,6 @@ import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.util.Tasks;
 import org.apache.iceberg.util.ThreadPools;
-import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,7 +69,9 @@ public class Coordinator extends Channel {
   private final ExecutorService exec;
 
   public Coordinator(Catalog catalog, IcebergSinkConfig config) {
-    super("coordinator", config);
+    // pass consumer group ID to which we commit low watermark offsets
+    super("coordinator", config.getControlGroupId() + "-coord", config);
+
     this.catalog = catalog;
     this.tableCache = new ConcurrentHashMap<>(); // TODO: LRU cache
     this.config = config;
@@ -191,6 +190,7 @@ public class Coordinator extends Channel {
               commitToTable(entry.getKey(), entry.getValue());
             });
 
+    commitConsumerOffsets();
     commitBuffer.clear();
     readyBuffer.clear();
     currentCommitId = null;
@@ -230,7 +230,7 @@ public class Coordinator extends Channel {
     } else {
       String offsetsStr;
       try {
-        offsetsStr = MAPPER.writeValueAsString(controlTopicOffsets());
+        offsetsStr = MAPPER.writeValueAsString(getControlTopicOffsets());
       } catch (IOException e) {
         throw new UncheckedIOException(e);
       }
@@ -252,36 +252,6 @@ public class Coordinator extends Channel {
 
       LOG.info("Iceberg commit complete");
     }
-  }
-
-  @Override
-  protected void initConsumerOffsets(Collection<TopicPartition> partitions) {
-    super.initConsumerOffsets(partitions);
-    Map<Integer, Long> controlTopicOffsets = getLowWatermarkOffsets();
-    if (!controlTopicOffsets.isEmpty()) {
-      setControlTopicOffsets(controlTopicOffsets);
-    }
-  }
-
-  private Map<Integer, Long> getLowWatermarkOffsets() {
-    Collection<String> tables;
-    if (config.getDynamicTablesPrefix() != null) {
-      tables = Utilities.getDynamicTableSet(catalog, config.getDynamicTablesPrefix());
-    } else {
-      tables = config.getTables();
-    }
-
-    Map<Integer, Long> offsets = new ConcurrentHashMap<>();
-    Tasks.foreach(tables)
-        .executeWith(exec)
-        .stopOnFailure()
-        .run(
-            tableName -> {
-              TableIdentifier tableIdentifier = TableIdentifier.parse(tableName);
-              getLastCommittedOffsetsForTable(tableIdentifier)
-                  .forEach((k, v) -> offsets.merge(k, v, Long::min));
-            });
-    return offsets;
   }
 
   private Map<Integer, Long> getLastCommittedOffsetsForTable(TableIdentifier tableIdentifier) {
