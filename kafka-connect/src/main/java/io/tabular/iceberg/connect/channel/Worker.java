@@ -18,6 +18,7 @@
  */
 package io.tabular.iceberg.connect.channel;
 
+import static io.tabular.iceberg.connect.IcebergSinkConfig.DEFAULT_CONTROL_GROUP_PREFIX;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
@@ -61,7 +62,7 @@ public class Worker extends Channel {
 
   public Worker(Catalog catalog, IcebergSinkConfig config, SinkTaskContext context) {
     // pass transient consumer group ID to which we never commit offsets
-    super("worker", "cg-control-" + UUID.randomUUID(), config);
+    super("worker", DEFAULT_CONTROL_GROUP_PREFIX + UUID.randomUUID(), config);
 
     this.catalog = catalog;
     this.config = config;
