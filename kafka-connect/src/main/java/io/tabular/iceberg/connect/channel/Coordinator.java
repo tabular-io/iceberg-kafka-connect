@@ -199,6 +199,7 @@ public class Coordinator extends Channel {
               commitToTable(entry.getKey(), entry.getValue(), offsetsJson);
             });
 
+    // we should only get here if all tables committed successfully...
     commitConsumerOffsets();
     commitBuffer.clear();
     readyBuffer.clear();
