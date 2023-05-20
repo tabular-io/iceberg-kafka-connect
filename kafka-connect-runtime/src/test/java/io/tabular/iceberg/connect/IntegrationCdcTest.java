@@ -85,7 +85,6 @@ public class IntegrationCdcTest extends IntegrationTestBase {
   @Test
   public void testIcebergSink() throws Exception {
     // set offset reset to earliest so we don't miss any test messages
-    // TODO: get bootstrap.servers from worker properties?
     KafkaConnectContainer.Config connectorConfig =
         new KafkaConnectContainer.Config(CONNECTOR_NAME)
             .config("topics", TEST_TOPIC)

@@ -105,20 +105,12 @@ public class IcebergWriter implements Closeable {
       throw new UncheckedIOException(e);
     }
 
-    WriterResult result =
-        new WriterResult(
-            tableIdentifier,
-            Arrays.asList(writeResult.dataFiles()),
-            Arrays.asList(writeResult.deleteFiles()),
-            table.spec().partitionType(),
-            offsets);
-
-    table.refresh();
-    recordConverter = new RecordConverter(table, config.getJsonConverter());
-    writer = Utilities.createTableWriter(table, config);
-    offsets = new HashMap<>();
-
-    return result;
+    return new WriterResult(
+        tableIdentifier,
+        Arrays.asList(writeResult.dataFiles()),
+        Arrays.asList(writeResult.deleteFiles()),
+        table.spec().partitionType(),
+        offsets);
   }
 
   @Override

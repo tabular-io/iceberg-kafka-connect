@@ -55,10 +55,10 @@ public class Worker extends Channel {
 
   private final Catalog catalog;
   private final IcebergSinkConfig config;
-  private final Map<String, IcebergWriter> writers = new HashMap<>();
   private final SinkTaskContext context;
   private final String controlGroupId;
-  private final Map<String, Boolean> tableExistsMap = new HashMap<>();
+  private final Map<String, IcebergWriter> writers;
+  private final Map<String, Boolean> tableExistsMap;
 
   public Worker(Catalog catalog, IcebergSinkConfig config, SinkTaskContext context) {
     // pass transient consumer group ID to which we never commit offsets
@@ -68,6 +68,8 @@ public class Worker extends Channel {
     this.config = config;
     this.context = context;
     this.controlGroupId = config.getControlGroupId();
+    this.writers = new HashMap<>();
+    this.tableExistsMap = new HashMap<>();
   }
 
   public void syncCommitOffsets() {
@@ -95,10 +97,11 @@ public class Worker extends Channel {
       return false;
     }
 
-    tableExistsMap.clear(); // refresh in case of new or dropped tables
-
     List<WriterResult> writeResults =
         writers.values().stream().map(IcebergWriter::complete).collect(toList());
+
+    tableExistsMap.clear();
+    writers.clear();
 
     Map<TopicPartition, Long> offsets = new HashMap<>();
     writeResults.stream()

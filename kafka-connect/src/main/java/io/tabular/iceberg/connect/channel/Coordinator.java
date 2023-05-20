@@ -31,11 +31,11 @@ import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.channel.events.EventType;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.time.Duration;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import org.apache.iceberg.AppendFiles;
@@ -59,7 +59,6 @@ public class Coordinator extends Channel {
   private static final String CONTROL_OFFSETS_SNAPSHOT_PREFIX = "kafka.connect.control.offsets.";
 
   private final Catalog catalog;
-  private final Map<TableIdentifier, Table> tableCache;
   private final IcebergSinkConfig config;
   private final List<Envelope> commitBuffer = new LinkedList<>();
   private final List<CommitReadyPayload> readyBuffer = new LinkedList<>();
@@ -69,12 +68,13 @@ public class Coordinator extends Channel {
   private final String snapshotOffsetsProp;
   private final ExecutorService exec;
 
+  private static final Duration CACHE_TTL = Duration.ofMinutes(60);
+
   public Coordinator(Catalog catalog, IcebergSinkConfig config) {
     // pass consumer group ID to which we commit low watermark offsets
     super("coordinator", config.getControlGroupId() + "-coord", config);
 
     this.catalog = catalog;
-    this.tableCache = new ConcurrentHashMap<>(); // TODO: LRU cache
     this.config = config;
     this.totalPartitionCount = getTotalPartitionCount();
     this.snapshotOffsetsProp = CONTROL_OFFSETS_SNAPSHOT_PREFIX + config.getControlTopic();
@@ -208,9 +208,8 @@ public class Coordinator extends Channel {
 
   private void commitToTable(
       TableIdentifier tableIdentifier, List<Envelope> envelopeList, String offsetsJson) {
-    Table table = getTable(tableIdentifier);
-    table.refresh();
-    Map<Integer, Long> commitedOffsets = getLastCommittedOffsetsForTable(tableIdentifier);
+    Table table = catalog.loadTable(tableIdentifier);
+    Map<Integer, Long> commitedOffsets = getLastCommittedOffsetsForTable(table);
 
     List<CommitResponsePayload> payloads =
         envelopeList.stream()
@@ -256,11 +255,10 @@ public class Coordinator extends Channel {
     }
   }
 
-  private Map<Integer, Long> getLastCommittedOffsetsForTable(TableIdentifier tableIdentifier) {
+  private Map<Integer, Long> getLastCommittedOffsetsForTable(Table table) {
     // TODO: support branches
 
     String offsetsProp = CONTROL_OFFSETS_SNAPSHOT_PREFIX + config.getControlTopic();
-    Table table = getTable(tableIdentifier);
     Snapshot snapshot = table.currentSnapshot();
 
     while (snapshot != null) {
@@ -278,10 +276,5 @@ public class Coordinator extends Channel {
       snapshot = parentSnapshotId != null ? table.snapshot(parentSnapshotId) : null;
     }
     return ImmutableMap.of();
-  }
-
-  private Table getTable(TableIdentifier tableIdentifier) {
-    return tableCache.computeIfAbsent(
-        tableIdentifier, notUsed -> catalog.loadTable(tableIdentifier));
   }
 }
