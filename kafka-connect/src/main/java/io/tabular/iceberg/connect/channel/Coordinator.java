@@ -31,7 +31,6 @@ import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.channel.events.EventType;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.time.Duration;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -67,8 +66,6 @@ public class Coordinator extends Channel {
   private final int totalPartitionCount;
   private final String snapshotOffsetsProp;
   private final ExecutorService exec;
-
-  private static final Duration CACHE_TTL = Duration.ofMinutes(60);
 
   public Coordinator(Catalog catalog, IcebergSinkConfig config) {
     // pass consumer group ID to which we commit low watermark offsets
