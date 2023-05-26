@@ -46,9 +46,8 @@ public class IntegrationDynamicTableTest extends IntegrationTestBase {
   private static final String CONNECTOR_NAME = "test_connector";
   private static final String TEST_TOPIC = "test-topic";
   private static final String TEST_DB = "default";
-  private static final String TEST_TABLE_PREFIX = "tbl_";
-  private static final String TEST_TABLE1 = TEST_TABLE_PREFIX + "type1";
-  private static final String TEST_TABLE2 = TEST_TABLE_PREFIX + "type2";
+  private static final String TEST_TABLE1 = "tbl1";
+  private static final String TEST_TABLE2 = "tbl2";
   private static final TableIdentifier TABLE_IDENTIFIER1 = TableIdentifier.of(TEST_DB, TEST_TABLE1);
   private static final TableIdentifier TABLE_IDENTIFIER2 = TableIdentifier.of(TEST_DB, TEST_TABLE2);
   private static final Schema TEST_SCHEMA =
@@ -90,9 +89,8 @@ public class IntegrationDynamicTableTest extends IntegrationTestBase {
             .config("key.converter.schemas.enable", false)
             .config("value.converter", "org.apache.kafka.connect.json.JsonConverter")
             .config("value.converter.schemas.enable", false)
-            .config(
-                "iceberg.tables.dynamic.namePrefix", format("%s.%s", TEST_DB, TEST_TABLE_PREFIX))
-            .config("iceberg.tables.routeField", "type")
+            .config("iceberg.tables.dynamic.enabled", true)
+            .config("iceberg.tables.routeField", "payload")
             .config("iceberg.control.commitIntervalMs", 1000)
             .config("iceberg.control.commitTimeoutMs", 1000)
             .config("iceberg.catalog", RESTCatalog.class.getName())
@@ -126,9 +124,9 @@ public class IntegrationDynamicTableTest extends IntegrationTestBase {
   }
 
   private void runTest() {
-    String event1 = format(RECORD_FORMAT, 1, "type1", System.currentTimeMillis(), "hello world!");
-    String event2 = format(RECORD_FORMAT, 2, "type2", System.currentTimeMillis(), "having fun?");
-    String event3 = format(RECORD_FORMAT, 3, "type3", System.currentTimeMillis(), "ignore me");
+    String event1 = format(RECORD_FORMAT, 1, "type1", System.currentTimeMillis(), "default.tbl1");
+    String event2 = format(RECORD_FORMAT, 2, "type2", System.currentTimeMillis(), "default.tbl2");
+    String event3 = format(RECORD_FORMAT, 3, "type3", System.currentTimeMillis(), "default.tbl3");
 
     producer.send(new ProducerRecord<>(TEST_TOPIC, event1));
     producer.send(new ProducerRecord<>(TEST_TOPIC, event2));

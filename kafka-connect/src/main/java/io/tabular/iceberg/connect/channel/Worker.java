@@ -157,7 +157,7 @@ public class Worker extends Channel {
   }
 
   private void save(SinkRecord record) {
-    if (config.getDynamicTablesPrefix() != null) {
+    if (config.getDynamicTablesEnabled()) {
       routeRecordDynamically(record);
     } else {
       routeRecordStatically(record);
@@ -198,7 +198,7 @@ public class Worker extends Channel {
 
     String routeValue = extractRouteValue(record.value(), routeField);
     if (routeValue != null) {
-      String tableName = config.getDynamicTablesPrefix() + routeValue.toLowerCase();
+      String tableName = routeValue.toLowerCase();
       if (tableExists(tableName)) {
         getWriterForTable(tableName).write(record);
       }
