@@ -60,7 +60,7 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   private static final String CATALOG_IMPL_PROP = "iceberg.catalog";
   private static final String TABLES_PROP = "iceberg.tables";
-  private static final String TABLES_DYNAMIC_PROP = "iceberg.tables.dynamic.namePrefix";
+  private static final String TABLES_DYNAMIC_PROP = "iceberg.tables.dynamic.enabled";
   private static final String TABLES_ROUTE_FIELD_PROP = "iceberg.tables.routeField";
   private static final String TABLES_CDC_FIELD_PROP = "iceberg.tables.cdcField";
   private static final String TABLES_UPSERT_MODE_ENABLED_PROP = "iceberg.tables.upsertModeEnabled";
@@ -103,10 +103,10 @@ public class IcebergSinkConfig extends AbstractConfig {
         "Comma-delimited list of destination tables");
     configDef.define(
         TABLES_DYNAMIC_PROP,
-        Type.STRING,
-        null,
-        Importance.HIGH,
-        "Table name prefix to match for destination tables");
+        Type.BOOLEAN,
+        false,
+        Importance.MEDIUM,
+        "Enable dynamic routing to tables based on a record value");
     configDef.define(
         TABLES_ROUTE_FIELD_PROP,
         Type.STRING,
@@ -183,9 +183,8 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   private void validate() {
     if (getTables() != null) {
-      checkState(
-          getDynamicTablesPrefix() == null, "Cannot specify both static and dynamic table names");
-    } else if (getDynamicTablesPrefix() != null) {
+      checkState(!getDynamicTablesEnabled(), "Cannot specify both static and dynamic table names");
+    } else if (getDynamicTablesEnabled()) {
       checkState(
           getTablesRouteField() != null, "Must specify a route field if using dynamic table names");
     } else {
@@ -228,8 +227,8 @@ public class IcebergSinkConfig extends AbstractConfig {
     return getList(TABLES_PROP);
   }
 
-  public String getDynamicTablesPrefix() {
-    return getString(TABLES_DYNAMIC_PROP);
+  public boolean getDynamicTablesEnabled() {
+    return getBoolean(TABLES_DYNAMIC_PROP);
   }
 
   public String getTablesRouteField() {

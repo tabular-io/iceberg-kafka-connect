@@ -111,9 +111,9 @@ PARTITIONED BY (hours(ts));
 ```
 
 ## Multi-table fan-out, dynamic routing
-This example writes to tables with names based on the value in the `type` field. If a table with
-the name does not exist, then the record will be skipped. For example, if the record's `type` field
-is set to `list`, then the record is written to the `default.events_list` table.
+This example writes to tables with names from the value in the `db_table` field. If a table with
+the name does not exist, then the record will be skipped. For example, if the record's `db_table`
+field is set to `default.events_list`, then the record is written to the `default.events_list` table.
 
 ### Create two destination tables
 See above for creating two tables.
@@ -126,8 +126,8 @@ See above for creating two tables.
     "connector.class": "io.tabular.iceberg.connect.IcebergSinkConnector",
     "tasks.max": "2",
     "topics": "events",
-    "iceberg.tables.dynamic.namePrefix": "default.events_",
-    "iceberg.tables.routeField": "type",
+    "iceberg.tables.dynamic.enabled": "true",
+    "iceberg.tables.routeField": "db_table",
     "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
     "iceberg.catalog.uri": ...
     }

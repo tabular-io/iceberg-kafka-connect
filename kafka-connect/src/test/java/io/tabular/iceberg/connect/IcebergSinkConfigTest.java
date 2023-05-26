@@ -49,7 +49,7 @@ public class IcebergSinkConfigTest {
             "topics", "source-topic",
             "iceberg.catalog", RESTCatalog.class.getName(),
             "iceberg.tables", "db.landing",
-            "iceberg.tables.dynamic.namePrefix", "db.tbl_");
+            "iceberg.tables.dynamic.enabled", "true");
     assertThatExceptionOfType(ConfigException.class).isThrownBy(() -> new IcebergSinkConfig(props));
   }
 
