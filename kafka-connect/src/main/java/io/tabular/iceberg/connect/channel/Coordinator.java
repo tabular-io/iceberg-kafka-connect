@@ -67,9 +67,9 @@ public class Coordinator extends Channel {
   private final String snapshotOffsetsProp;
   private final ExecutorService exec;
 
-  public Coordinator(Catalog catalog, IcebergSinkConfig config) {
+  public Coordinator(Catalog catalog, IcebergSinkConfig config, KafkaClientFactory clientFactory) {
     // pass consumer group ID to which we commit low watermark offsets
-    super("coordinator", config.getControlGroupId() + "-coord", config);
+    super("coordinator", config.getControlGroupId() + "-coord", config, clientFactory);
 
     this.catalog = catalog;
     this.config = config;

@@ -60,9 +60,13 @@ public class Worker extends Channel {
   private final Map<String, IcebergWriter> writers;
   private final Map<String, Boolean> tableExistsMap;
 
-  public Worker(Catalog catalog, IcebergSinkConfig config, SinkTaskContext context) {
+  public Worker(
+      Catalog catalog,
+      IcebergSinkConfig config,
+      KafkaClientFactory clientFactory,
+      SinkTaskContext context) {
     // pass transient consumer group ID to which we never commit offsets
-    super("worker", DEFAULT_CONTROL_GROUP_PREFIX + UUID.randomUUID(), config);
+    super("worker", DEFAULT_CONTROL_GROUP_PREFIX + UUID.randomUUID(), config, clientFactory);
 
     this.catalog = catalog;
     this.config = config;
