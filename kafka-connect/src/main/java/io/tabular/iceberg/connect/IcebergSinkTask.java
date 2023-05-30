@@ -19,6 +19,7 @@
 package io.tabular.iceberg.connect;
 
 import io.tabular.iceberg.connect.channel.Coordinator;
+import io.tabular.iceberg.connect.channel.IcebergWriterFactory;
 import io.tabular.iceberg.connect.channel.KafkaClientFactory;
 import io.tabular.iceberg.connect.channel.Worker;
 import io.tabular.iceberg.connect.data.Utilities;
@@ -62,8 +63,10 @@ public class IcebergSinkTask extends SinkTask {
       coordinator = new Coordinator(catalog, config, clientFactory);
       coordinator.start();
     }
+
     LOG.info("Starting commit worker");
-    worker = new Worker(catalog, config, clientFactory, context);
+    IcebergWriterFactory writerFactory = new IcebergWriterFactory(catalog, config);
+    worker = new Worker(catalog, config, clientFactory, writerFactory, context);
     worker.syncCommitOffsets();
     worker.start();
   }

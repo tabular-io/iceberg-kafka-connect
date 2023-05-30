@@ -21,10 +21,12 @@ package io.tabular.iceberg.connect.channel;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import org.apache.iceberg.AppendFiles;
+import org.apache.iceberg.RowDelta;
+import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
@@ -35,16 +37,20 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 public class ChannelTestBase {
   protected static final String SRC_TOPIC_NAME = "src-topic";
+  protected static final String CTL_TOPIC_NAME = "ctl-topic";
 
   protected Catalog catalog;
+  protected Table table;
+  protected AppendFiles appendOp;
+  protected RowDelta deltaOp;
   protected IcebergSinkConfig config;
   protected KafkaClientFactory clientFactory;
   protected MockProducer<String, byte[]> producer;
@@ -53,10 +59,18 @@ public class ChannelTestBase {
 
   @BeforeEach
   public void setup() {
+    appendOp = mock(AppendFiles.class);
+    deltaOp = mock(RowDelta.class);
+
+    table = mock(Table.class);
+    when(table.newAppend()).thenReturn(appendOp);
+    when(table.newRowDelta()).thenReturn(deltaOp);
+
     catalog = mock(Catalog.class);
+    when(catalog.loadTable(any())).thenReturn(table);
 
     config = mock(IcebergSinkConfig.class);
-    when(config.getControlTopic()).thenReturn("ctl-topic");
+    when(config.getControlTopic()).thenReturn(CTL_TOPIC_NAME);
     when(config.getControlGroupId()).thenReturn("group");
     when(config.getCommitThreads()).thenReturn(1);
 
@@ -82,11 +96,9 @@ public class ChannelTestBase {
     when(clientFactory.createAdmin()).thenReturn(admin);
   }
 
-  @AfterEach
-  public void tearDown() {
-    reset(admin);
-    reset(clientFactory);
-    reset(config);
-    reset(catalog);
+  protected void initConsumer() {
+    TopicPartition tp = new TopicPartition(CTL_TOPIC_NAME, 0);
+    consumer.rebalance(ImmutableList.of(tp));
+    consumer.updateBeginningOffsets(ImmutableMap.of(tp, 0L));
   }
 }

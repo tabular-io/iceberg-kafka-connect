@@ -55,6 +55,7 @@ public class Worker extends Channel {
 
   private final Catalog catalog;
   private final IcebergSinkConfig config;
+  private final IcebergWriterFactory writerFactory;
   private final SinkTaskContext context;
   private final String controlGroupId;
   private final Map<String, IcebergWriter> writers;
@@ -64,12 +65,14 @@ public class Worker extends Channel {
       Catalog catalog,
       IcebergSinkConfig config,
       KafkaClientFactory clientFactory,
+      IcebergWriterFactory writerFactory,
       SinkTaskContext context) {
     // pass transient consumer group ID to which we never commit offsets
     super("worker", DEFAULT_CONTROL_GROUP_PREFIX + UUID.randomUUID(), config, clientFactory);
 
     this.catalog = catalog;
     this.config = config;
+    this.writerFactory = writerFactory;
     this.context = context;
     this.controlGroupId = config.getControlGroupId();
     this.writers = new HashMap<>();
@@ -223,7 +226,6 @@ public class Worker extends Channel {
   }
 
   private IcebergWriter getWriterForTable(String tableName) {
-    return writers.computeIfAbsent(
-        tableName, notUsed -> new IcebergWriter(catalog, tableName, config));
+    return writers.computeIfAbsent(tableName, notUsed -> writerFactory.createWriter(tableName));
   }
 }
