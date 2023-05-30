@@ -18,6 +18,9 @@
  */
 package io.tabular.iceberg.connect;
 
+import static io.tabular.iceberg.connect.TestConstants.AWS_ACCESS_KEY;
+import static io.tabular.iceberg.connect.TestConstants.AWS_REGION;
+import static io.tabular.iceberg.connect.TestConstants.AWS_SECRET_KEY;
 import static java.lang.String.format;
 import static org.apache.iceberg.TableProperties.FORMAT_VERSION;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.DataFile;
@@ -49,8 +53,8 @@ import org.junit.jupiter.api.Test;
 
 public class IntegrationCdcTest extends IntegrationTestBase {
 
-  private static final String CONNECTOR_NAME = "test_connector";
-  private static final String TEST_TOPIC = "test-topic";
+  private static final String CONNECTOR_NAME = "test_connector-" + UUID.randomUUID();
+  private static final String TEST_TOPIC = "test-topic-" + UUID.randomUUID();
   private static final String TEST_DB = "default";
   private static final String TEST_TABLE = "foobar";
   private static final TableIdentifier TABLE_IDENTIFIER = TableIdentifier.of(TEST_DB, TEST_TABLE);
@@ -77,6 +81,7 @@ public class IntegrationCdcTest extends IntegrationTestBase {
 
   @AfterEach
   public void teardown() {
+    context.stopConnector(CONNECTOR_NAME);
     deleteTopic(TEST_TOPIC);
     catalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE));
     catalog.dropNamespace(Namespace.of(TEST_DB));
@@ -115,8 +120,7 @@ public class IntegrationCdcTest extends IntegrationTestBase {
     catalog.createTable(
         TABLE_IDENTIFIER, TEST_SCHEMA, TEST_SPEC, ImmutableMap.of(FORMAT_VERSION, "2"));
 
-    kafkaConnect.registerConnector(connectorConfig);
-    kafkaConnect.ensureConnectorRunning(CONNECTOR_NAME);
+    context.startConnector(connectorConfig);
 
     runTest();
 

@@ -18,11 +18,15 @@
  */
 package io.tabular.iceberg.connect;
 
+import static io.tabular.iceberg.connect.TestConstants.AWS_ACCESS_KEY;
+import static io.tabular.iceberg.connect.TestConstants.AWS_REGION;
+import static io.tabular.iceberg.connect.TestConstants.AWS_SECRET_KEY;
 import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.DataFile;
@@ -43,8 +47,8 @@ import org.junit.jupiter.api.Test;
 
 public class IntegrationDynamicTableTest extends IntegrationTestBase {
 
-  private static final String CONNECTOR_NAME = "test_connector";
-  private static final String TEST_TOPIC = "test-topic";
+  private static final String CONNECTOR_NAME = "test_connector-" + UUID.randomUUID();
+  private static final String TEST_TOPIC = "test-topic-" + UUID.randomUUID();
   private static final String TEST_DB = "default";
   private static final String TEST_TABLE1 = "tbl1";
   private static final String TEST_TABLE2 = "tbl2";
@@ -70,6 +74,7 @@ public class IntegrationDynamicTableTest extends IntegrationTestBase {
 
   @AfterEach
   public void teardown() {
+    context.stopConnector(CONNECTOR_NAME);
     deleteTopic(TEST_TOPIC);
     catalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE1));
     catalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE2));
@@ -109,8 +114,7 @@ public class IntegrationDynamicTableTest extends IntegrationTestBase {
     // unpartitioned table
     catalog.createTable(TABLE_IDENTIFIER2, TEST_SCHEMA);
 
-    kafkaConnect.registerConnector(connectorConfig);
-    kafkaConnect.ensureConnectorRunning(CONNECTOR_NAME);
+    context.startConnector(connectorConfig);
 
     runTest();
 

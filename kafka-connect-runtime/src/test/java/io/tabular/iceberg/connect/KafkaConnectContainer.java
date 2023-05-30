@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.hc.client5.http.classic.HttpClient;
+import org.apache.hc.client5.http.classic.methods.HttpDelete;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
@@ -89,7 +90,7 @@ public class KafkaConnectContainer extends GenericContainer<KafkaConnectContaine
             .withStartupTimeout(Duration.ofSeconds(30)));
   }
 
-  public void registerConnector(Config config) {
+  public void startConnector(Config config) {
     try {
       HttpPost request =
           new HttpPost(String.format("http://localhost:%d/connectors", getMappedPort(PORT)));
@@ -124,5 +125,16 @@ public class KafkaConnectContainer extends GenericContainer<KafkaConnectContaine
                       }
                       return false;
                     }));
+  }
+
+  public void stopConnector(String name) {
+    try {
+      HttpDelete request =
+          new HttpDelete(
+              String.format("http://localhost:%d/connectors/%s", getMappedPort(PORT), name));
+      HTTP.execute(request, response -> null);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 }

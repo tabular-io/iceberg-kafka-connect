@@ -58,6 +58,7 @@ public class ChannelTestBase {
   protected Admin admin;
 
   @BeforeEach
+  @SuppressWarnings("deprecation")
   public void setup() {
     appendOp = mock(AppendFiles.class);
     deltaOp = mock(RowDelta.class);
