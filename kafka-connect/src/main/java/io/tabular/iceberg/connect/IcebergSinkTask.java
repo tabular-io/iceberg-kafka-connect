@@ -24,6 +24,7 @@ import io.tabular.iceberg.connect.data.Utilities;
 import java.util.Collection;
 import java.util.Map;
 import org.apache.iceberg.catalog.Catalog;
+import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -65,7 +66,8 @@ public class IcebergSinkTask extends SinkTask {
     worker.start();
   }
 
-  private boolean isLeader(Collection<TopicPartition> partitions) {
+  @VisibleForTesting
+  boolean isLeader(Collection<TopicPartition> partitions) {
     // there should only be one worker assigned partition 0 of the first
     // topic, so elect that one the leader
     String firstTopic = config.getTopics().first();
