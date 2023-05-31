@@ -5,8 +5,7 @@ dependencies {
   implementation libs.slf4j
   compileOnly libs.bundles.kafka.connect
 
-  // REST catalog needs this when loading the FileIO
-  // TODO: move to runtime with upgrade to Iceberg 1.3
+  // ResolvingFileIO needs this...
   runtimeOnly libs.hadoop.common
 
   testImplementation libs.junit.api
