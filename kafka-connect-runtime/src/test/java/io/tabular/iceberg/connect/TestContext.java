@@ -28,8 +28,8 @@ import java.net.URISyntaxException;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.apache.iceberg.CatalogProperties;
-import org.apache.iceberg.aws.AwsProperties;
 import org.apache.iceberg.aws.s3.S3FileIO;
+import org.apache.iceberg.aws.s3.S3FileIOProperties;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.kafka.clients.admin.Admin;
@@ -65,7 +65,7 @@ public class TestContext {
   private static final String MINIO_IMAGE = "minio/minio";
   private static final String KAFKA_IMAGE = "confluentinc/cp-kafka:7.4.0";
   private static final String CONNECT_IMAGE = "confluentinc/cp-kafka-connect:7.4.0";
-  private static final String REST_CATALOG_IMAGE = "tabulario/iceberg-rest:0.4.0";
+  private static final String REST_CATALOG_IMAGE = "tabulario/iceberg-rest:0.5.0";
 
   private TestContext() {
     network = Network.newNetwork();
@@ -164,11 +164,10 @@ public class TestContext {
         ImmutableMap.<String, String>builder()
             .put(CatalogProperties.URI, localCatalogUri)
             .put(CatalogProperties.FILE_IO_IMPL, S3FileIO.class.getName())
-            .put(AwsProperties.S3FILEIO_ENDPOINT, "http://localhost:" + getLocalMinioPort())
-            .put(AwsProperties.S3FILEIO_ACCESS_KEY_ID, AWS_ACCESS_KEY)
-            .put(AwsProperties.S3FILEIO_SECRET_ACCESS_KEY, AWS_SECRET_KEY)
-            .put(AwsProperties.S3FILEIO_PATH_STYLE_ACCESS, "true")
-            .put(AwsProperties.HTTP_CLIENT_TYPE, AwsProperties.HTTP_CLIENT_TYPE_APACHE)
+            .put(S3FileIOProperties.ENDPOINT, "http://localhost:" + getLocalMinioPort())
+            .put(S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
+            .put(S3FileIOProperties.SECRET_ACCESS_KEY, AWS_SECRET_KEY)
+            .put(S3FileIOProperties.PATH_STYLE_ACCESS, "true")
             .build());
     return result;
   }

@@ -33,7 +33,8 @@ import org.apache.iceberg.DataFile;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
-import org.apache.iceberg.aws.AwsProperties;
+import org.apache.iceberg.aws.AwsClientProperties;
+import org.apache.iceberg.aws.s3.S3FileIOProperties;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
@@ -104,14 +105,11 @@ public class IntegrationMultiTableTest extends IntegrationTestBase {
             .config("iceberg.control.commitTimeoutMs", 1000)
             .config("iceberg.catalog", RESTCatalog.class.getName())
             .config("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
-            .config("iceberg.catalog." + AwsProperties.S3FILEIO_ENDPOINT, "http://minio:9000")
-            .config("iceberg.catalog." + AwsProperties.S3FILEIO_ACCESS_KEY_ID, AWS_ACCESS_KEY)
-            .config("iceberg.catalog." + AwsProperties.S3FILEIO_SECRET_ACCESS_KEY, AWS_SECRET_KEY)
-            .config("iceberg.catalog." + AwsProperties.S3FILEIO_PATH_STYLE_ACCESS, true)
-            .config("iceberg.catalog." + AwsProperties.CLIENT_REGION, AWS_REGION)
-            .config(
-                "iceberg.catalog." + AwsProperties.HTTP_CLIENT_TYPE,
-                AwsProperties.HTTP_CLIENT_TYPE_APACHE);
+            .config("iceberg.catalog." + S3FileIOProperties.ENDPOINT, "http://minio:9000")
+            .config("iceberg.catalog." + S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
+            .config("iceberg.catalog." + S3FileIOProperties.SECRET_ACCESS_KEY, AWS_SECRET_KEY)
+            .config("iceberg.catalog." + S3FileIOProperties.PATH_STYLE_ACCESS, true)
+            .config("iceberg.catalog." + AwsClientProperties.CLIENT_REGION, AWS_REGION);
 
     // partitioned table
     catalog.createTable(TABLE_IDENTIFIER1, TEST_SCHEMA, TEST_SPEC);
