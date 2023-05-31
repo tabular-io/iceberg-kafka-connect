@@ -2,10 +2,18 @@ plugins {
   id "distribution"
 }
 
+configurations.all {
+  resolutionStrategy.force "net.minidev:json-smart:2.4.11"
+  resolutionStrategy.force "org.codehaus.jettison:jettison:1.5.4"
+}
+
 dependencies {
   implementation project(":iceberg-kafka-connect")
   implementation libs.bundles.iceberg.ext
   implementation libs.bundles.aws
+  implementation(libs.hadoop.common) {
+    exclude group: "log4j", module: "log4j"
+  }
 
   testImplementation libs.bundles.iceberg
   testImplementation libs.bundles.aws
