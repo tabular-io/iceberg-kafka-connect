@@ -30,6 +30,7 @@ import org.apache.iceberg.Metrics;
 import org.apache.iceberg.PartitionData;
 import org.apache.iceberg.common.DynConstructors;
 import org.apache.iceberg.common.DynConstructors.Ctor;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Types.StringType;
 import org.apache.iceberg.types.Types.StructType;
@@ -82,6 +83,7 @@ public class EventTestUtil {
                 Metrics.class,
                 int[].class,
                 Integer.class,
+                List.class,
                 ByteBuffer.class)
             .build();
 
@@ -100,6 +102,7 @@ public class EventTestUtil {
         metrics,
         new int[] {1},
         1,
+        ImmutableList.of(1L),
         ByteBuffer.wrap(new byte[] {0}));
   }
 }
