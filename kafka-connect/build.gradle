@@ -5,9 +5,6 @@ dependencies {
   implementation libs.slf4j
   compileOnly libs.bundles.kafka.connect
 
-  // ResolvingFileIO needs this...
-  runtimeOnly libs.hadoop.common
-
   testImplementation libs.junit.api
   testRuntimeOnly libs.junit.engine
 

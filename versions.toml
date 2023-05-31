@@ -4,7 +4,7 @@ avro-ver = "1.11.1"
 awaitility-ver = "4.2.0"
 aws-ver = "2.20.18"
 http-client-ver = "5.2.1"
-hadoop-ver = "3.3.2"
+hadoop-ver = "3.3.3"
 iceberg-ver = "1.3.0"
 jackson-ver = "2.14.2"
 junit-ver = "5.9.2"
@@ -20,14 +20,15 @@ aws-glue = { module = "software.amazon.awssdk:glue", version.ref = "aws-ver" }
 aws-kms = { module = "software.amazon.awssdk:kms", version.ref = "aws-ver" }
 aws-s3 = { module = "software.amazon.awssdk:s3", version.ref = "aws-ver" }
 aws-sts = { module = "software.amazon.awssdk:sts", version.ref = "aws-ver" }
+hadoop-annotations = { module = "org.apache.hadoop:hadoop-annotations", version.ref = "hadoop-ver" }
 hadoop-common = { module = "org.apache.hadoop:hadoop-common", version.ref = "hadoop-ver" }
+hadoop-guava = "org.apache.hadoop.thirdparty:hadoop-shaded-guava:1.1.1"
 iceberg-api = { module = "org.apache.iceberg:iceberg-api", version.ref = "iceberg-ver" }
 iceberg-aws = { module = "org.apache.iceberg:iceberg-aws", version.ref = "iceberg-ver" }
 iceberg-common = { module = "org.apache.iceberg:iceberg-common", version.ref = "iceberg-ver" }
 iceberg-core = { module = "org.apache.iceberg:iceberg-core", version.ref = "iceberg-ver" }
 iceberg-data = { module = "org.apache.iceberg:iceberg-data", version.ref = "iceberg-ver" }
 iceberg-guava = { module = "org.apache.iceberg:iceberg-bundled-guava", version.ref = "iceberg-ver" }
-iceberg-hive-metastore = { module = "org.apache.iceberg:iceberg-hive-metastore", version.ref = "iceberg-ver" }
 iceberg-nessie = { module = "org.apache.iceberg:iceberg-nessie", version.ref = "iceberg-ver" }
 iceberg-orc = { module = "org.apache.iceberg:iceberg-orc", version.ref = "iceberg-ver" }
 iceberg-parquet = { module = "org.apache.iceberg:iceberg-parquet", version.ref = "iceberg-ver" }
@@ -52,7 +53,8 @@ testcontainers-kafka = { module = "org.testcontainers:kafka", version.ref = "tes
 
 [bundles]
 aws = ["aws-dynamodb", "aws-glue", "aws-kms", "aws-s3", "aws-sts"]
+hadoop = ["hadoop-annotations", "hadoop-common", "hadoop-guava"]
 iceberg = ["iceberg-api", "iceberg-common", "iceberg-core", "iceberg-data", "iceberg-guava", "iceberg-orc", "iceberg-parquet"]
-iceberg-ext = ["iceberg-aws", "iceberg-hive-metastore", "iceberg-nessie", "iceberg-snowflake"]
+iceberg-ext = ["iceberg-aws", "iceberg-nessie", "iceberg-snowflake"]
 jackson = ["jackson-core", "jackson-databind"]
 kafka-connect = ["kafka-clients", "kafka-connect-api", "kafka-connect-json"]

@@ -6,6 +6,9 @@ dependencies {
   implementation project(":iceberg-kafka-connect")
   implementation libs.bundles.iceberg.ext
   implementation libs.bundles.aws
+  implementation(libs.bundles.hadoop) {
+    transitive = false
+  }
 
   testImplementation libs.bundles.iceberg
   testImplementation libs.bundles.aws
