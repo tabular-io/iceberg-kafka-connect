@@ -40,6 +40,7 @@ public class IcebergSinkTask extends SinkTask {
   private static final Logger LOG = LoggerFactory.getLogger(IcebergSinkTask.class);
 
   private IcebergSinkConfig config;
+  private Catalog catalog;
   private Coordinator coordinator;
   private Worker worker;
 
@@ -55,7 +56,7 @@ public class IcebergSinkTask extends SinkTask {
 
   @Override
   public void open(Collection<TopicPartition> partitions) {
-    Catalog catalog = Utilities.loadCatalog(config);
+    catalog = Utilities.loadCatalog(config);
     KafkaClientFactory clientFactory = new KafkaClientFactory(config.getKafkaProps());
 
     if (isLeader(partitions)) {
@@ -87,9 +88,21 @@ public class IcebergSinkTask extends SinkTask {
       worker.stop();
       worker = null;
     }
+
     if (coordinator != null) {
       coordinator.stop();
       coordinator = null;
+    }
+
+    if (catalog != null) {
+      if (catalog instanceof AutoCloseable) {
+        try {
+          ((AutoCloseable) catalog).close();
+        } catch (Exception e) {
+          LOG.warn("An error occurred closing catalog instance, ignoring...", e);
+        }
+      }
+      catalog = null;
     }
   }
 
