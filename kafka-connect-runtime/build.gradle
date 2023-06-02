@@ -12,7 +12,9 @@ dependencies {
   implementation libs.bundles.iceberg.ext
   implementation libs.bundles.aws
   implementation(libs.hadoop.common) {
-    exclude group: "log4j", module: "log4j"
+    exclude group: "log4j"
+    exclude group: "org.slf4j"
+    exclude group: "ch.qos.reload4j"
   }
 
   testImplementation libs.bundles.iceberg
