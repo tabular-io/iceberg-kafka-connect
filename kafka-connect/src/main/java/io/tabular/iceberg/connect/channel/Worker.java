@@ -31,6 +31,7 @@ import io.tabular.iceberg.connect.channel.events.EventType;
 import io.tabular.iceberg.connect.channel.events.TableName;
 import io.tabular.iceberg.connect.channel.events.TopicPartitionOffset;
 import io.tabular.iceberg.connect.data.IcebergWriter;
+import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.data.Utilities;
 import io.tabular.iceberg.connect.data.WriterResult;
 import java.util.Collection;
@@ -110,10 +111,13 @@ public class Worker extends Channel {
     tableExistsMap.clear();
     writers.clear();
 
-    Map<TopicPartition, Long> offsets = new HashMap<>();
+    Map<TopicPartition, Offset> offsets = new HashMap<>();
     writeResults.stream()
         .flatMap(writerResult -> writerResult.getOffsets().entrySet().stream())
-        .forEach(entry -> offsets.merge(entry.getKey(), entry.getValue(), Long::max));
+        .forEach(
+            entry ->
+                offsets.merge(
+                    entry.getKey(), entry.getValue(), (o1, o2) -> o1.compareTo(o2) >= 0 ? o1 : o2));
 
     // include all assigned topic partitions even if no messages were read
     // from a partition, as the coordinator will use that to determine
@@ -122,8 +126,12 @@ public class Worker extends Channel {
         context.assignment().stream()
             .map(
                 tp -> {
-                  Long offset = offsets.get(tp);
-                  return new TopicPartitionOffset(tp.topic(), tp.partition(), offset);
+                  Offset offset = offsets.get(tp);
+                  if (offset == null) {
+                    offset = Offset.NULL_OFFSET;
+                  }
+                  return new TopicPartitionOffset(
+                      tp.topic(), tp.partition(), offset.getOffset(), offset.getTimestamp());
                 })
             .collect(toList());
 

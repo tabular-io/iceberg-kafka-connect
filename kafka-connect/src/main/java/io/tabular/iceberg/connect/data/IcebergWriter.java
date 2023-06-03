@@ -38,9 +38,9 @@ public class IcebergWriter implements Closeable {
   private final Table table;
   private final TableIdentifier tableIdentifier;
   private final IcebergSinkConfig config;
-  private RecordConverter recordConverter;
-  private TaskWriter<Record> writer;
-  private Map<TopicPartition, Long> offsets;
+  private final RecordConverter recordConverter;
+  private final TaskWriter<Record> writer;
+  private final Map<TopicPartition, Offset> offsets;
 
   public IcebergWriter(Catalog catalog, String tableName, IcebergSinkConfig config) {
     this.tableIdentifier = TableIdentifier.parse(tableName);
@@ -55,7 +55,8 @@ public class IcebergWriter implements Closeable {
     // the consumer stores the offsets that corresponds to the next record to consume,
     // so increment the record offset by one
     offsets.put(
-        new TopicPartition(record.topic(), record.kafkaPartition()), record.kafkaOffset() + 1);
+        new TopicPartition(record.topic(), record.kafkaPartition()),
+        new Offset(record.kafkaOffset() + 1, record.timestamp()));
     try {
       // TODO: config to handle tombstones instead of always ignoring?
       if (record.value() != null) {

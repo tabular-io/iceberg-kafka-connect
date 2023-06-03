@@ -28,6 +28,7 @@ public class TopicPartitionOffset implements Element {
   private String topic;
   private Integer partition;
   private Long offset;
+  private Long timestamp;
   private Schema avroSchema;
 
   public static final Schema AVRO_SCHEMA =
@@ -50,16 +51,23 @@ public class TopicPartitionOffset implements Element {
           .nullable()
           .longType()
           .noDefault()
+          .name("timestamp")
+          .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+          .type()
+          .nullable()
+          .longType()
+          .noDefault()
           .endRecord();
 
   public TopicPartitionOffset(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }
 
-  public TopicPartitionOffset(String topic, int partition, Long offset) {
+  public TopicPartitionOffset(String topic, int partition, Long offset, Long timestamp) {
     this.topic = topic;
     this.partition = partition;
     this.offset = offset;
+    this.timestamp = timestamp;
     this.avroSchema = AVRO_SCHEMA;
   }
 
@@ -73,6 +81,10 @@ public class TopicPartitionOffset implements Element {
 
   public Long getOffset() {
     return offset;
+  }
+
+  public Long getTimestamp() {
+    return timestamp;
   }
 
   @Override
@@ -92,6 +104,9 @@ public class TopicPartitionOffset implements Element {
       case 2:
         this.offset = (Long) v;
         return;
+      case 3:
+        this.timestamp = (Long) v;
+        return;
       default:
         // ignore the object, it must be from a newer version of the format
     }
@@ -106,6 +121,8 @@ public class TopicPartitionOffset implements Element {
         return partition;
       case 2:
         return offset;
+      case 3:
+        return timestamp;
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
     }
