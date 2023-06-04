@@ -78,8 +78,8 @@ public class EventTest {
             new CommitReadyPayload(
                 commitId,
                 ImmutableList.of(
-                    new TopicPartitionOffset("topic", 1, 1L),
-                    new TopicPartitionOffset("topic", 2, null))));
+                    new TopicPartitionOffset("topic", 1, 1L, 1L),
+                    new TopicPartitionOffset("topic", 2, null, null))));
 
     byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
     Event result = AvroEncoderUtil.decode(data);

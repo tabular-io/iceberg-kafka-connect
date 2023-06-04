@@ -30,6 +30,7 @@ import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.channel.events.EventType;
 import io.tabular.iceberg.connect.data.IcebergWriter;
+import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.data.WriterResult;
 import java.io.IOException;
 import java.util.Map;
@@ -77,7 +78,7 @@ public class WorkerTest extends ChannelTestBase {
             ImmutableList.of(createDataFile()),
             ImmutableList.of(),
             StructType.of(),
-            ImmutableMap.of(new TopicPartition(SRC_TOPIC_NAME, 0), 0L));
+            ImmutableMap.of(new TopicPartition(SRC_TOPIC_NAME, 0), new Offset(0L, 0L)));
     IcebergWriter writer = mock(IcebergWriter.class);
     when(writer.complete()).thenReturn(writeResult);
 

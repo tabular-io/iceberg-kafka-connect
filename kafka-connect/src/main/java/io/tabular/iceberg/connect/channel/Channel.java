@@ -22,6 +22,7 @@ import static java.util.stream.Collectors.toList;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.channel.events.Event;
+import io.tabular.iceberg.connect.data.Offset;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
@@ -76,9 +77,9 @@ public abstract class Channel {
     send(ImmutableList.of(event), ImmutableMap.of());
   }
 
-  protected void send(List<Event> events, Map<TopicPartition, Long> sourceOffsets) {
+  protected void send(List<Event> events, Map<TopicPartition, Offset> sourceOffsets) {
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
-    sourceOffsets.forEach((k, v) -> offsetsToCommit.put(k, new OffsetAndMetadata(v)));
+    sourceOffsets.forEach((k, v) -> offsetsToCommit.put(k, new OffsetAndMetadata(v.getOffset())));
 
     List<ProducerRecord<String, byte[]>> recordList =
         events.stream()

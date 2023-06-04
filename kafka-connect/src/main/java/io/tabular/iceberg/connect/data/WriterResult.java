@@ -32,14 +32,14 @@ public class WriterResult {
   private final List<DataFile> dataFiles;
   private final List<DeleteFile> deleteFiles;
   private final StructType partitionStruct;
-  private final Map<TopicPartition, Long> offsets;
+  private final Map<TopicPartition, Offset> offsets;
 
   public WriterResult(
       TableIdentifier tableIdentifier,
       List<DataFile> dataFiles,
       List<DeleteFile> deleteFiles,
       StructType partitionStruct,
-      Map<TopicPartition, Long> offsets) {
+      Map<TopicPartition, Offset> offsets) {
     this.tableIdentifier = tableIdentifier;
     this.dataFiles = dataFiles;
     this.deleteFiles = deleteFiles;
@@ -63,7 +63,7 @@ public class WriterResult {
     return partitionStruct;
   }
 
-  public Map<TopicPartition, Long> getOffsets() {
+  public Map<TopicPartition, Offset> getOffsets() {
     return offsets;
   }
 }

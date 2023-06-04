@@ -98,7 +98,7 @@ public class CoordinatorTest extends ChannelTestBase {
         new Event(
             EventType.COMMIT_READY,
             new CommitReadyPayload(
-                commitId, ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L))));
+                commitId, ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, 1L))));
     bytes = AvroEncoderUtil.encode(commitReady, commitReady.getSchema());
     consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, 2, "key", bytes));
 
