@@ -24,18 +24,22 @@ import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 
-public class CommitEndPayload implements Payload {
+public class CommitTablePayload implements Payload {
 
   private UUID commitId;
+  private TableName tableName;
+  private Long snapshotId;
   private Long vtts;
   private Schema avroSchema;
 
-  public CommitEndPayload(Schema avroSchema) {
+  public CommitTablePayload(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }
 
-  public CommitEndPayload(UUID commitId, Long vtts) {
+  public CommitTablePayload(UUID commitId, TableName tableName, Long snapshotId, Long vtts) {
     this.commitId = commitId;
+    this.tableName = tableName;
+    this.snapshotId = snapshotId;
     this.vtts = vtts;
 
     this.avroSchema =
@@ -45,6 +49,16 @@ public class CommitEndPayload implements Payload {
             .name("commitId")
             .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
             .type(UUID_SCHEMA)
+            .noDefault()
+            .name("tableName")
+            .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+            .type(TableName.AVRO_SCHEMA)
+            .noDefault()
+            .name("snapshotId")
+            .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+            .type()
+            .nullable()
+            .longType()
             .noDefault()
             .name("vtts")
             .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
@@ -57,6 +71,14 @@ public class CommitEndPayload implements Payload {
 
   public UUID getCommitId() {
     return commitId;
+  }
+
+  public TableName getTableName() {
+    return tableName;
+  }
+
+  public Long getSnapshotId() {
+    return snapshotId;
   }
 
   public Long getVtts() {
@@ -76,6 +98,12 @@ public class CommitEndPayload implements Payload {
         this.commitId = (UUID) v;
         return;
       case 1:
+        this.tableName = (TableName) v;
+        return;
+      case 2:
+        this.snapshotId = (Long) v;
+        return;
+      case 3:
         this.vtts = (Long) v;
         return;
       default:
@@ -89,6 +117,10 @@ public class CommitEndPayload implements Payload {
       case 0:
         return commitId;
       case 1:
+        return tableName;
+      case 2:
+        return snapshotId;
+      case 3:
         return vtts;
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);

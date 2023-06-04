@@ -27,10 +27,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.channel.events.CommitCompletePayload;
-import io.tabular.iceberg.connect.channel.events.CommitEndPayload;
 import io.tabular.iceberg.connect.channel.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
+import io.tabular.iceberg.connect.channel.events.CommitTablePayload;
 import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.channel.events.EventType;
 import io.tabular.iceberg.connect.channel.events.TableName;
@@ -113,19 +113,19 @@ public class CoordinatorTest extends ChannelTestBase {
     assertEquals(3, producer.history().size());
 
     bytes = producer.history().get(1).value();
+    Event commitTable = AvroEncoderUtil.decode(bytes);
+    assertEquals(EventType.COMMIT_TABLE, commitTable.getType());
+    CommitTablePayload commitTablePayload = (CommitTablePayload) commitTable.getPayload();
+    assertEquals(commitId, commitTablePayload.getCommitId());
+    assertEquals("db.tbl", commitTablePayload.getTableName().toIdentifier().toString());
+    assertEquals(ts, commitTablePayload.getVtts());
+
+    bytes = producer.history().get(2).value();
     Event commitComplete = AvroEncoderUtil.decode(bytes);
     assertEquals(EventType.COMMIT_COMPLETE, commitComplete.getType());
     CommitCompletePayload commitCompletePayload =
         (CommitCompletePayload) commitComplete.getPayload();
     assertEquals(commitId, commitCompletePayload.getCommitId());
-    assertEquals("db.tbl", commitCompletePayload.getTableName().toIdentifier().toString());
     assertEquals(ts, commitCompletePayload.getVtts());
-
-    bytes = producer.history().get(2).value();
-    Event commitEnd = AvroEncoderUtil.decode(bytes);
-    assertEquals(EventType.COMMIT_END, commitEnd.getType());
-    CommitEndPayload commitEndPayload = (CommitEndPayload) commitEnd.getPayload();
-    assertEquals(commitId, commitEndPayload.getCommitId());
-    assertEquals(ts, commitEndPayload.getVtts());
   }
 }

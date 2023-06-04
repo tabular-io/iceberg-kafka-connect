@@ -94,19 +94,18 @@ public class EventTest {
   }
 
   @Test
-  public void testCommitCompleteSerialization() throws Exception {
+  public void testCommitTableSerialization() throws Exception {
     UUID commitId = UUID.randomUUID();
     Event event =
         new Event(
-            EventType.COMMIT_COMPLETE,
-            new CommitCompletePayload(
-                commitId, new TableName(ImmutableList.of("db"), "tbl"), 1L, 2L));
+            EventType.COMMIT_TABLE,
+            new CommitTablePayload(commitId, new TableName(ImmutableList.of("db"), "tbl"), 1L, 2L));
 
     byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
     Event result = AvroEncoderUtil.decode(data);
 
     assertEquals(event.getType(), result.getType());
-    CommitCompletePayload payload = (CommitCompletePayload) result.getPayload();
+    CommitTablePayload payload = (CommitTablePayload) result.getPayload();
     assertEquals(commitId, payload.getCommitId());
     assertEquals(TableIdentifier.parse("db.tbl"), payload.getTableName().toIdentifier());
     assertEquals(1L, payload.getSnapshotId());
@@ -114,15 +113,15 @@ public class EventTest {
   }
 
   @Test
-  public void testCommitEndSerialization() throws Exception {
+  public void testCommitCompleteSerialization() throws Exception {
     UUID commitId = UUID.randomUUID();
-    Event event = new Event(EventType.COMMIT_END, new CommitEndPayload(commitId, 2L));
+    Event event = new Event(EventType.COMMIT_COMPLETE, new CommitCompletePayload(commitId, 2L));
 
     byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
     Event result = AvroEncoderUtil.decode(data);
 
     assertEquals(event.getType(), result.getType());
-    CommitEndPayload payload = (CommitEndPayload) result.getPayload();
+    CommitCompletePayload payload = (CommitCompletePayload) result.getPayload();
     assertEquals(commitId, payload.getCommitId());
     assertEquals(2L, payload.getVtts());
   }
