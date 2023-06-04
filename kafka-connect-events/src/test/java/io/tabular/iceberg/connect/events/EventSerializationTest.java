@@ -16,21 +16,20 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.channel.events;
+package io.tabular.iceberg.connect.events;
 
-import static io.tabular.iceberg.connect.channel.EventTestUtil.createDataFile;
-import static io.tabular.iceberg.connect.channel.EventTestUtil.createDeleteFile;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.UUID;
 import org.apache.iceberg.avro.AvroEncoderUtil;
 import org.apache.iceberg.catalog.TableIdentifier;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.types.Types.StructType;
 import org.junit.jupiter.api.Test;
 
-public class EventTest {
+public class EventSerializationTest {
 
   @Test
   public void testCommitRequestSerialization() throws Exception {
@@ -54,9 +53,9 @@ public class EventTest {
             new CommitResponsePayload(
                 StructType.of(),
                 commitId,
-                new TableName(ImmutableList.of("db"), "tbl"),
-                ImmutableList.of(createDataFile(), createDataFile()),
-                ImmutableList.of(createDeleteFile(), createDeleteFile())));
+                new TableName(Collections.singletonList("db"), "tbl"),
+                Arrays.asList(EventTestUtil.createDataFile(), EventTestUtil.createDataFile()),
+                Arrays.asList(EventTestUtil.createDeleteFile(), EventTestUtil.createDeleteFile())));
 
     byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
     Event result = AvroEncoderUtil.decode(data);
@@ -79,7 +78,7 @@ public class EventTest {
             EventType.COMMIT_READY,
             new CommitReadyPayload(
                 commitId,
-                ImmutableList.of(
+                Arrays.asList(
                     new TopicPartitionOffset("topic", 1, 1L, 1L),
                     new TopicPartitionOffset("topic", 2, null, null))));
 
@@ -99,7 +98,8 @@ public class EventTest {
     Event event =
         new Event(
             EventType.COMMIT_TABLE,
-            new CommitTablePayload(commitId, new TableName(ImmutableList.of("db"), "tbl"), 1L, 2L));
+            new CommitTablePayload(
+                commitId, new TableName(Collections.singletonList("db"), "tbl"), 1L, 2L));
 
     byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
     Event result = AvroEncoderUtil.decode(data);

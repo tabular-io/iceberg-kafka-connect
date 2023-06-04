@@ -16,22 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.channel.events;
+package io.tabular.iceberg.connect.events;
 
-public enum EventType {
-  COMMIT_REQUEST(0),
-  COMMIT_RESPONSE(1),
-  COMMIT_READY(2),
-  COMMIT_TABLE(3),
-  COMMIT_COMPLETE(4);
-
-  private final int id;
-
-  EventType(int id) {
-    this.id = id;
-  }
-
-  public int getId() {
-    return id;
-  }
-}
+public interface Payload extends Element {}

@@ -18,23 +18,23 @@
  */
 package io.tabular.iceberg.connect.channel;
 
-import static io.tabular.iceberg.connect.channel.EventTestUtil.createDataFile;
-import static io.tabular.iceberg.connect.channel.EventTestUtil.createDeleteFile;
+import static io.tabular.iceberg.connect.events.EventTestUtil.createDataFile;
+import static io.tabular.iceberg.connect.events.EventTestUtil.createDeleteFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.tabular.iceberg.connect.channel.events.CommitCompletePayload;
-import io.tabular.iceberg.connect.channel.events.CommitReadyPayload;
-import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
-import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
-import io.tabular.iceberg.connect.channel.events.CommitTablePayload;
-import io.tabular.iceberg.connect.channel.events.Event;
-import io.tabular.iceberg.connect.channel.events.EventType;
-import io.tabular.iceberg.connect.channel.events.TableName;
-import io.tabular.iceberg.connect.channel.events.TopicPartitionOffset;
+import io.tabular.iceberg.connect.events.CommitCompletePayload;
+import io.tabular.iceberg.connect.events.CommitReadyPayload;
+import io.tabular.iceberg.connect.events.CommitRequestPayload;
+import io.tabular.iceberg.connect.events.CommitResponsePayload;
+import io.tabular.iceberg.connect.events.CommitTablePayload;
+import io.tabular.iceberg.connect.events.Event;
+import io.tabular.iceberg.connect.events.EventType;
+import io.tabular.iceberg.connect.events.TableName;
+import io.tabular.iceberg.connect.events.TopicPartitionOffset;
 import java.io.IOException;
 import java.util.List;
 import java.util.UUID;

@@ -1,9 +1,12 @@
 dependencies {
+  implementation project(":iceberg-kafka-connect-events")
   implementation libs.bundles.iceberg
   implementation libs.bundles.jackson
   implementation libs.avro
   implementation libs.slf4j
   compileOnly libs.bundles.kafka.connect
+
+  testImplementation(testFixtures(project(":iceberg-kafka-connect-events")))
 
   testImplementation libs.junit.api
   testRuntimeOnly libs.junit.engine

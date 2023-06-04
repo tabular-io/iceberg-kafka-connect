@@ -16,11 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.channel;
+package io.tabular.iceberg.connect.events;
 
-import static org.apache.iceberg.types.Types.NestedField.required;
+import static java.util.Collections.emptyMap;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.List;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
@@ -30,8 +31,7 @@ import org.apache.iceberg.Metrics;
 import org.apache.iceberg.PartitionData;
 import org.apache.iceberg.common.DynConstructors;
 import org.apache.iceberg.common.DynConstructors.Ctor;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.types.Types.NestedField;
 import org.apache.iceberg.types.Types.StringType;
 import org.apache.iceberg.types.Types.StructType;
 
@@ -53,9 +53,8 @@ public class EventTestUtil {
             .build();
 
     PartitionData partitionData =
-        new PartitionData(StructType.of(required(999, "type", StringType.get())));
-    Metrics metrics =
-        new Metrics(1L, ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of());
+        new PartitionData(StructType.of(NestedField.required(999, "type", StringType.get())));
+    Metrics metrics = new Metrics(1L, emptyMap(), emptyMap(), emptyMap(), emptyMap());
 
     return ctor.newInstance(
         1,
@@ -88,9 +87,8 @@ public class EventTestUtil {
             .build();
 
     PartitionData partitionData =
-        new PartitionData(StructType.of(required(999, "type", StringType.get())));
-    Metrics metrics =
-        new Metrics(1L, ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of());
+        new PartitionData(StructType.of(NestedField.required(999, "type", StringType.get())));
+    Metrics metrics = new Metrics(1L, emptyMap(), emptyMap(), emptyMap(), emptyMap());
 
     return ctor.newInstance(
         1,
@@ -102,7 +100,7 @@ public class EventTestUtil {
         metrics,
         new int[] {1},
         1,
-        ImmutableList.of(1L),
+        Collections.singletonList(1L),
         ByteBuffer.wrap(new byte[] {0}));
   }
 }

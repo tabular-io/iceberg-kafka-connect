@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.channel.events;
+package io.tabular.iceberg.connect.events;
 
 import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
 
@@ -24,63 +24,65 @@ import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 
-public class Event implements Element {
+public class CommitTablePayload implements Payload {
 
-  private UUID id;
-  private EventType type;
-  private Long timestamp;
-  private Payload payload;
+  private UUID commitId;
+  private TableName tableName;
+  private Long snapshotId;
+  private Long vtts;
   private Schema avroSchema;
 
-  public Event(Schema avroSchema) {
+  public CommitTablePayload(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }
 
-  public Event(EventType type, Payload payload) {
-    this.id = UUID.randomUUID();
-    this.type = type;
-    this.timestamp = System.currentTimeMillis();
-    this.payload = payload;
+  public CommitTablePayload(UUID commitId, TableName tableName, Long snapshotId, Long vtts) {
+    this.commitId = commitId;
+    this.tableName = tableName;
+    this.snapshotId = snapshotId;
+    this.vtts = vtts;
 
     this.avroSchema =
         SchemaBuilder.builder()
             .record(getClass().getName())
             .fields()
-            .name("id")
+            .name("commitId")
             .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
             .type(UUID_SCHEMA)
             .noDefault()
-            .name("type")
+            .name("tableName")
             .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
-            .type()
-            .intType()
+            .type(TableName.AVRO_SCHEMA)
             .noDefault()
-            .name("timestamp")
+            .name("snapshotId")
             .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
             .type()
+            .nullable()
             .longType()
             .noDefault()
-            .name("payload")
+            .name("vtts")
             .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
-            .type(payload.getSchema())
+            .type()
+            .nullable()
+            .longType()
             .noDefault()
             .endRecord();
   }
 
-  public UUID getId() {
-    return id;
+  public UUID getCommitId() {
+    return commitId;
   }
 
-  public EventType getType() {
-    return type;
+  public TableName getTableName() {
+    return tableName;
   }
 
-  public Long getTimestamp() {
-    return timestamp;
+  public Long getSnapshotId() {
+    return snapshotId;
   }
 
-  public Payload getPayload() {
-    return payload;
+  public Long getVtts() {
+    return vtts;
   }
 
   @Override
@@ -89,19 +91,20 @@ public class Event implements Element {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public void put(int i, Object v) {
     switch (i) {
       case 0:
-        this.id = (UUID) v;
+        this.commitId = (UUID) v;
         return;
       case 1:
-        this.type = v == null ? null : EventType.values()[(Integer) v];
+        this.tableName = (TableName) v;
         return;
       case 2:
-        this.timestamp = (Long) v;
+        this.snapshotId = (Long) v;
         return;
       case 3:
-        this.payload = (Payload) v;
+        this.vtts = (Long) v;
         return;
       default:
         // ignore the object, it must be from a newer version of the format
@@ -112,13 +115,13 @@ public class Event implements Element {
   public Object get(int i) {
     switch (i) {
       case 0:
-        return id;
+        return commitId;
       case 1:
-        return type == null ? null : type.getId();
+        return tableName;
       case 2:
-        return timestamp;
+        return snapshotId;
       case 3:
-        return payload;
+        return vtts;
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
     }

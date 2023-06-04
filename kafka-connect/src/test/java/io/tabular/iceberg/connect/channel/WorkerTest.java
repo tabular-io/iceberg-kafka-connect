@@ -18,20 +18,20 @@
  */
 package io.tabular.iceberg.connect.channel;
 
-import static io.tabular.iceberg.connect.channel.EventTestUtil.createDataFile;
+import static io.tabular.iceberg.connect.events.EventTestUtil.createDataFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.tabular.iceberg.connect.channel.events.CommitReadyPayload;
-import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
-import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
-import io.tabular.iceberg.connect.channel.events.Event;
-import io.tabular.iceberg.connect.channel.events.EventType;
 import io.tabular.iceberg.connect.data.IcebergWriter;
 import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.data.WriterResult;
+import io.tabular.iceberg.connect.events.CommitReadyPayload;
+import io.tabular.iceberg.connect.events.CommitRequestPayload;
+import io.tabular.iceberg.connect.events.CommitResponsePayload;
+import io.tabular.iceberg.connect.events.Event;
+import io.tabular.iceberg.connect.events.EventType;
 import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;

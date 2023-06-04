@@ -21,17 +21,14 @@ package io.tabular.iceberg.connect.channel;
 import static java.util.stream.Collectors.toList;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.data.Offset;
-import java.io.IOException;
-import java.io.UncheckedIOException;
+import io.tabular.iceberg.connect.events.Event;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
-import org.apache.iceberg.avro.AvroEncoderUtil;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.kafka.clients.admin.Admin;
@@ -86,13 +83,9 @@ public abstract class Channel {
             .map(
                 event -> {
                   LOG.info("Sending event of type: {}", event.getType().name());
-                  try {
-                    byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
-                    // key by producer ID to keep event order
-                    return new ProducerRecord<>(controlTopic, producerId, data);
-                  } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                  }
+                  byte[] data = Event.encode(event);
+                  // key by producer ID to keep event order
+                  return new ProducerRecord<>(controlTopic, producerId, data);
                 })
             .collect(toList());
 
@@ -130,12 +123,7 @@ public abstract class Channel {
             // so increment the record offset by one
             controlTopicOffsets.put(record.partition(), record.offset() + 1);
 
-            Event event;
-            try {
-              event = AvroEncoderUtil.decode(record.value());
-            } catch (IOException e) {
-              throw new UncheckedIOException(e);
-            }
+            Event event = Event.decode(record.value());
 
             LOG.debug("Received event of type: {}", event.getType().name());
             if (eventHandler.apply(new Envelope(event, record.partition(), record.offset()))) {
