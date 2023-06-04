@@ -112,4 +112,18 @@ public class EventTest {
     assertEquals(1L, payload.getSnapshotId());
     assertEquals(2L, payload.getVtts());
   }
+
+  @Test
+  public void testCommitEndSerialization() throws Exception {
+    UUID commitId = UUID.randomUUID();
+    Event event = new Event(EventType.COMMIT_END, new CommitEndPayload(commitId, 2L));
+
+    byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
+    Event result = AvroEncoderUtil.decode(data);
+
+    assertEquals(event.getType(), result.getType());
+    CommitEndPayload payload = (CommitEndPayload) result.getPayload();
+    assertEquals(commitId, payload.getCommitId());
+    assertEquals(2L, payload.getVtts());
+  }
 }

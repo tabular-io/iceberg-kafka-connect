@@ -22,7 +22,8 @@ public enum EventType {
   COMMIT_REQUEST(0),
   COMMIT_RESPONSE(1),
   COMMIT_READY(2),
-  COMMIT_COMPLETE(3);
+  COMMIT_COMPLETE(3),
+  COMMIT_END(4);
 
   private final int id;
 

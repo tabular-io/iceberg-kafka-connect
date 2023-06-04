@@ -25,6 +25,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.channel.events.CommitCompletePayload;
+import io.tabular.iceberg.connect.channel.events.CommitEndPayload;
 import io.tabular.iceberg.connect.channel.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
@@ -156,12 +157,16 @@ public class Coordinator extends Channel {
             .sum();
 
     if (receivedPartitionCount >= totalPartitionCount) {
-      LOG.info("Commit ready, received responses for all {} partitions", receivedPartitionCount);
+      LOG.info(
+          "Commit {} ready, received responses for all {} partitions",
+          currentCommitId,
+          receivedPartitionCount);
       return true;
     }
 
     LOG.info(
-        "Commit not ready, received responses for {} of {} partitions, waiting for more",
+        "Commit {} not ready, received responses for {} of {} partitions, waiting for more",
+        currentCommitId,
         receivedPartitionCount,
         totalPartitionCount);
 
@@ -202,6 +207,15 @@ public class Coordinator extends Channel {
     commitBuffer.clear();
     readyBuffer.clear();
     currentCommitId = null;
+
+    Event event = new Event(EventType.COMMIT_END, new CommitEndPayload(currentCommitId, vtts));
+    send(event);
+
+    LOG.info(
+        "Commit {} complete, commited to {} table(s), vtts {}",
+        currentCommitId,
+        commitMap.size(),
+        vtts);
   }
 
   private String getOffsetsJson() {
@@ -263,7 +277,7 @@ public class Coordinator extends Channel {
             .collect(toList());
 
     if (dataFiles.isEmpty() && deleteFiles.isEmpty()) {
-      LOG.info("Nothing to commit");
+      LOG.info("Nothing to commit to table {}, skipping", tableIdentifier);
     } else {
       if (deleteFiles.isEmpty()) {
         AppendFiles appendOp = table.newAppend();
@@ -286,6 +300,7 @@ public class Coordinator extends Channel {
         deltaOp.commit();
       }
 
+      Long snapshotId = table.currentSnapshot().snapshotId();
       Event event =
           new Event(
               EventType.COMMIT_COMPLETE,
@@ -296,7 +311,12 @@ public class Coordinator extends Channel {
                   vtts));
       send(event);
 
-      LOG.info("Iceberg commit complete");
+      LOG.info(
+          "Commit complete to table {}, snapshot {}, commit ID {}, vtts {}",
+          tableIdentifier,
+          snapshotId,
+          currentCommitId,
+          vtts);
     }
   }
 
