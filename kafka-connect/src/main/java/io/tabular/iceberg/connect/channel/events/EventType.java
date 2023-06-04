@@ -21,7 +21,9 @@ package io.tabular.iceberg.connect.channel.events;
 public enum EventType {
   COMMIT_REQUEST(0),
   COMMIT_RESPONSE(1),
-  COMMIT_READY(2);
+  COMMIT_READY(2),
+  COMMIT_TABLE(3),
+  COMMIT_COMPLETE(4);
 
   private final int id;
 

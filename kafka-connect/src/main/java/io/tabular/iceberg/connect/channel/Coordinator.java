@@ -24,11 +24,15 @@ import static java.util.stream.Collectors.toList;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import io.tabular.iceberg.connect.channel.events.CommitCompletePayload;
 import io.tabular.iceberg.connect.channel.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
+import io.tabular.iceberg.connect.channel.events.CommitTablePayload;
 import io.tabular.iceberg.connect.channel.events.Event;
 import io.tabular.iceberg.connect.channel.events.EventType;
+import io.tabular.iceberg.connect.channel.events.TableName;
+import io.tabular.iceberg.connect.channel.events.TopicPartitionOffset;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.LinkedList;
@@ -56,6 +60,8 @@ public class Coordinator extends Channel {
   private static final Logger LOG = LoggerFactory.getLogger(Coordinator.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String CONTROL_OFFSETS_SNAPSHOT_PREFIX = "kafka.connect.control.offsets.";
+  private static final String COMMIT_ID_SNAPSHOT_PROP = "kafka.connect.commitId";
+  private static final String VTTS_SNAPSHOT_PROP = "kafka.connect.vtts";
 
   private final Catalog catalog;
   private final IcebergSinkConfig config;
@@ -96,7 +102,7 @@ public class Coordinator extends Channel {
     super.process();
 
     if (currentCommitId != null && isCommitTimedOut()) {
-      commit();
+      commit(true);
     }
   }
 
@@ -112,8 +118,8 @@ public class Coordinator extends Channel {
         return true;
       case COMMIT_READY:
         readyBuffer.add((CommitReadyPayload) envelope.getEvent().getPayload());
-        if (isCommitComplete()) {
-          commit();
+        if (isCommitReady()) {
+          commit(false);
         }
         return true;
     }
@@ -143,7 +149,7 @@ public class Coordinator extends Channel {
     return false;
   }
 
-  private boolean isCommitComplete() {
+  private boolean isCommitReady() {
     int receivedPartitionCount =
         readyBuffer.stream()
             .filter(payload -> payload.getCommitId().equals(currentCommitId))
@@ -151,27 +157,31 @@ public class Coordinator extends Channel {
             .sum();
 
     if (receivedPartitionCount >= totalPartitionCount) {
-      LOG.info("Commit ready, received responses for all {} partitions", receivedPartitionCount);
+      LOG.info(
+          "Commit {} ready, received responses for all {} partitions",
+          currentCommitId,
+          receivedPartitionCount);
       return true;
     }
 
     LOG.info(
-        "Commit not ready, received responses for {} of {} partitions, waiting for more",
+        "Commit {} not ready, received responses for {} of {} partitions, waiting for more",
+        currentCommitId,
         receivedPartitionCount,
         totalPartitionCount);
 
     return false;
   }
 
-  private void commit() {
+  private void commit(boolean partialCommit) {
     try {
-      doCommit();
+      doCommit(partialCommit);
     } catch (Exception e) {
       LOG.warn("Commit failed, will try again next cycle", e);
     }
   }
 
-  private void doCommit() {
+  private void doCommit(boolean partialCommit) {
     Map<TableIdentifier, List<Envelope>> commitMap =
         commitBuffer.stream()
             .collect(
@@ -181,30 +191,65 @@ public class Coordinator extends Channel {
                             .getTableName()
                             .toIdentifier()));
 
-    String offsetsJson;
-    try {
-      offsetsJson = MAPPER.writeValueAsString(getControlTopicOffsets());
-    } catch (IOException e) {
-      throw new UncheckedIOException(e);
-    }
+    String offsetsJson = getOffsetsJson();
+    Long vtts = getVtts(partialCommit);
 
     Tasks.foreach(commitMap.entrySet())
         .executeWith(exec)
         .stopOnFailure()
         .run(
             entry -> {
-              commitToTable(entry.getKey(), entry.getValue(), offsetsJson);
+              commitToTable(entry.getKey(), entry.getValue(), offsetsJson, vtts);
             });
 
     // we should only get here if all tables committed successfully...
     commitConsumerOffsets();
     commitBuffer.clear();
     readyBuffer.clear();
+    UUID commitId = currentCommitId;
     currentCommitId = null;
+
+    Event event = new Event(EventType.COMMIT_COMPLETE, new CommitCompletePayload(commitId, vtts));
+    send(event);
+
+    LOG.info(
+        "Commit {} complete, commited to {} table(s), vtts {}",
+        currentCommitId,
+        commitMap.size(),
+        vtts);
+  }
+
+  private String getOffsetsJson() {
+    try {
+      return MAPPER.writeValueAsString(getControlTopicOffsets());
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
+  private Long getVtts(boolean partialCommit) {
+    boolean validVtts =
+        !partialCommit
+            && readyBuffer.stream()
+                .flatMap(event -> event.getAssignments().stream())
+                .allMatch(offset -> offset.getTimestamp() != null);
+
+    Long result;
+    if (validVtts) {
+      result =
+          readyBuffer.stream()
+              .flatMap(event -> event.getAssignments().stream())
+              .mapToLong(TopicPartitionOffset::getTimestamp)
+              .min()
+              .getAsLong();
+    } else {
+      result = null;
+    }
+    return result;
   }
 
   private void commitToTable(
-      TableIdentifier tableIdentifier, List<Envelope> envelopeList, String offsetsJson) {
+      TableIdentifier tableIdentifier, List<Envelope> envelopeList, String offsetsJson, Long vtts) {
     Table table = catalog.loadTable(tableIdentifier);
     Map<Integer, Long> commitedOffsets = getLastCommittedOffsetsForTable(table);
 
@@ -233,22 +278,46 @@ public class Coordinator extends Channel {
             .collect(toList());
 
     if (dataFiles.isEmpty() && deleteFiles.isEmpty()) {
-      LOG.info("Nothing to commit");
+      LOG.info("Nothing to commit to table {}, skipping", tableIdentifier);
     } else {
       if (deleteFiles.isEmpty()) {
         AppendFiles appendOp = table.newAppend();
         appendOp.set(snapshotOffsetsProp, offsetsJson);
+        appendOp.set(COMMIT_ID_SNAPSHOT_PROP, currentCommitId.toString());
+        if (vtts != null) {
+          appendOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts));
+        }
         dataFiles.forEach(appendOp::appendFile);
         appendOp.commit();
       } else {
         RowDelta deltaOp = table.newRowDelta();
         deltaOp.set(snapshotOffsetsProp, offsetsJson);
+        deltaOp.set(COMMIT_ID_SNAPSHOT_PROP, currentCommitId.toString());
+        if (vtts != null) {
+          deltaOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts));
+        }
         dataFiles.forEach(deltaOp::addRows);
         deleteFiles.forEach(deltaOp::addDeletes);
         deltaOp.commit();
       }
 
-      LOG.info("Iceberg commit complete");
+      Long snapshotId = table.currentSnapshot().snapshotId();
+      Event event =
+          new Event(
+              EventType.COMMIT_TABLE,
+              new CommitTablePayload(
+                  currentCommitId,
+                  TableName.of(tableIdentifier),
+                  table.currentSnapshot().snapshotId(),
+                  vtts));
+      send(event);
+
+      LOG.info(
+          "Commit complete to table {}, snapshot {}, commit ID {}, vtts {}",
+          tableIdentifier,
+          snapshotId,
+          currentCommitId,
+          vtts);
     }
   }
 
