@@ -26,6 +26,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.tabular.iceberg.connect.channel.events.CommitCompletePayload;
+import io.tabular.iceberg.connect.channel.events.CommitEndPayload;
 import io.tabular.iceberg.connect.channel.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.channel.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.channel.events.CommitResponsePayload;
@@ -62,7 +64,7 @@ public class CoordinatorTest extends ChannelTestBase {
   private void coordinatorTest(List<DataFile> dataFiles, List<DeleteFile> deleteFiles)
       throws IOException {
     when(config.getCommitIntervalMs()).thenReturn(0);
-    when(config.getCommitTimeoutMs()).thenReturn(5000);
+    when(config.getCommitTimeoutMs()).thenReturn(Integer.MAX_VALUE);
 
     Coordinator coordinator = new Coordinator(catalog, config, clientFactory);
     coordinator.start();
@@ -82,6 +84,8 @@ public class CoordinatorTest extends ChannelTestBase {
     assertEquals(EventType.COMMIT_REQUEST, commitRequest.getType());
 
     UUID commitId = ((CommitRequestPayload) commitRequest.getPayload()).getCommitId();
+    long ts = System.currentTimeMillis();
+
     Event commitResponse =
         new Event(
             EventType.COMMIT_RESPONSE,
@@ -98,12 +102,30 @@ public class CoordinatorTest extends ChannelTestBase {
         new Event(
             EventType.COMMIT_READY,
             new CommitReadyPayload(
-                commitId, ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, 1L))));
+                commitId, ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))));
     bytes = AvroEncoderUtil.encode(commitReady, commitReady.getSchema());
     consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, 2, "key", bytes));
 
     when(config.getCommitIntervalMs()).thenReturn(0);
 
     coordinator.process();
+
+    assertEquals(3, producer.history().size());
+
+    bytes = producer.history().get(1).value();
+    Event commitComplete = AvroEncoderUtil.decode(bytes);
+    assertEquals(EventType.COMMIT_COMPLETE, commitComplete.getType());
+    CommitCompletePayload commitCompletePayload =
+        (CommitCompletePayload) commitComplete.getPayload();
+    assertEquals(commitId, commitCompletePayload.getCommitId());
+    assertEquals("db.tbl", commitCompletePayload.getTableName().toIdentifier().toString());
+    assertEquals(ts, commitCompletePayload.getVtts());
+
+    bytes = producer.history().get(2).value();
+    Event commitEnd = AvroEncoderUtil.decode(bytes);
+    assertEquals(EventType.COMMIT_END, commitEnd.getType());
+    CommitEndPayload commitEndPayload = (CommitEndPayload) commitEnd.getPayload();
+    assertEquals(commitId, commitEndPayload.getCommitId());
+    assertEquals(ts, commitEndPayload.getVtts());
   }
 }

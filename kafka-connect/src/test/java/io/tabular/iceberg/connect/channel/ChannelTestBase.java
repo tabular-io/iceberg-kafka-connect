@@ -26,6 +26,7 @@ import static org.mockito.Mockito.when;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.RowDelta;
+import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
@@ -60,10 +61,14 @@ public class ChannelTestBase {
   @BeforeEach
   @SuppressWarnings("deprecation")
   public void setup() {
+    Snapshot snapshot = mock(Snapshot.class);
+    when(snapshot.snapshotId()).thenReturn(1L);
+
     appendOp = mock(AppendFiles.class);
     deltaOp = mock(RowDelta.class);
 
     table = mock(Table.class);
+    when(table.currentSnapshot()).thenReturn(snapshot);
     when(table.newAppend()).thenReturn(appendOp);
     when(table.newRowDelta()).thenReturn(deltaOp);
 

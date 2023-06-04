@@ -206,9 +206,10 @@ public class Coordinator extends Channel {
     commitConsumerOffsets();
     commitBuffer.clear();
     readyBuffer.clear();
+    UUID commitId = currentCommitId;
     currentCommitId = null;
 
-    Event event = new Event(EventType.COMMIT_END, new CommitEndPayload(currentCommitId, vtts));
+    Event event = new Event(EventType.COMMIT_END, new CommitEndPayload(commitId, vtts));
     send(event);
 
     LOG.info(
