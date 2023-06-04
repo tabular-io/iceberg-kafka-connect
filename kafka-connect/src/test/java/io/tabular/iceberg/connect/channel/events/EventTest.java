@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.UUID;
 import org.apache.iceberg.avro.AvroEncoderUtil;
+import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.types.Types.StructType;
 import org.junit.jupiter.api.Test;
@@ -63,6 +64,7 @@ public class EventTest {
     assertEquals(event.getType(), result.getType());
     CommitResponsePayload payload = (CommitResponsePayload) result.getPayload();
     assertEquals(commitId, payload.getCommitId());
+    assertEquals(TableIdentifier.parse("db.tbl"), payload.getTableName().toIdentifier());
     assertThat(payload.getDataFiles()).hasSize(2);
     assertThat(payload.getDataFiles()).allMatch(f -> f.specId() == 1);
     assertThat(payload.getDeleteFiles()).hasSize(2);
@@ -89,5 +91,25 @@ public class EventTest {
     assertEquals(commitId, payload.getCommitId());
     assertThat(payload.getAssignments()).hasSize(2);
     assertThat(payload.getAssignments()).allMatch(tp -> tp.getTopic().equals("topic"));
+  }
+
+  @Test
+  public void testCommitCompleteSerialization() throws Exception {
+    UUID commitId = UUID.randomUUID();
+    Event event =
+        new Event(
+            EventType.COMMIT_COMPLETE,
+            new CommitCompletePayload(
+                commitId, new TableName(ImmutableList.of("db"), "tbl"), 1L, 2L));
+
+    byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
+    Event result = AvroEncoderUtil.decode(data);
+
+    assertEquals(event.getType(), result.getType());
+    CommitCompletePayload payload = (CommitCompletePayload) result.getPayload();
+    assertEquals(commitId, payload.getCommitId());
+    assertEquals(TableIdentifier.parse("db.tbl"), payload.getTableName().toIdentifier());
+    assertEquals(1L, payload.getSnapshotId());
+    assertEquals(2L, payload.getVtts());
   }
 }
