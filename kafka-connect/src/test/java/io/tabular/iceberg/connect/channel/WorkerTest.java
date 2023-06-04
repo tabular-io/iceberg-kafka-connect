@@ -35,7 +35,6 @@ import io.tabular.iceberg.connect.events.EventType;
 import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
-import org.apache.iceberg.avro.AvroEncoderUtil;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
@@ -97,19 +96,19 @@ public class WorkerTest extends ChannelTestBase {
 
     UUID commitId = UUID.randomUUID();
     Event commitRequest = new Event(EventType.COMMIT_REQUEST, new CommitRequestPayload(commitId));
-    byte[] bytes = AvroEncoderUtil.encode(commitRequest, commitRequest.getSchema());
+    byte[] bytes = Event.encode(commitRequest);
     consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, 1, "key", bytes));
 
     worker.process();
 
     assertEquals(2, producer.history().size());
 
-    Event event = AvroEncoderUtil.decode(producer.history().get(0).value());
+    Event event = Event.decode(producer.history().get(0).value());
     assertEquals(EventType.COMMIT_RESPONSE, event.getType());
     CommitResponsePayload responsePayload = (CommitResponsePayload) event.getPayload();
     assertEquals(commitId, responsePayload.getCommitId());
 
-    event = AvroEncoderUtil.decode(producer.history().get(1).value());
+    event = Event.decode(producer.history().get(1).value());
     assertEquals(EventType.COMMIT_READY, event.getType());
     CommitReadyPayload readyPayload = (CommitReadyPayload) event.getPayload();
     assertEquals(commitId, readyPayload.getCommitId());

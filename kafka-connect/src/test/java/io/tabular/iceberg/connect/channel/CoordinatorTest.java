@@ -40,7 +40,6 @@ import java.util.List;
 import java.util.UUID;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
-import org.apache.iceberg.avro.AvroEncoderUtil;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -80,7 +79,7 @@ public class CoordinatorTest extends ChannelTestBase {
     verify(deltaOp, times(0)).commit();
 
     byte[] bytes = producer.history().get(0).value();
-    Event commitRequest = AvroEncoderUtil.decode(bytes);
+    Event commitRequest = Event.decode(bytes);
     assertEquals(EventType.COMMIT_REQUEST, commitRequest.getType());
 
     UUID commitId = ((CommitRequestPayload) commitRequest.getPayload()).getCommitId();
@@ -95,7 +94,7 @@ public class CoordinatorTest extends ChannelTestBase {
                 new TableName(ImmutableList.of("db"), "tbl"),
                 dataFiles,
                 deleteFiles));
-    bytes = AvroEncoderUtil.encode(commitResponse, commitResponse.getSchema());
+    bytes = Event.encode(commitResponse);
     consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, 1, "key", bytes));
 
     Event commitReady =
@@ -103,7 +102,7 @@ public class CoordinatorTest extends ChannelTestBase {
             EventType.COMMIT_READY,
             new CommitReadyPayload(
                 commitId, ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))));
-    bytes = AvroEncoderUtil.encode(commitReady, commitReady.getSchema());
+    bytes = Event.encode(commitReady);
     consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, 2, "key", bytes));
 
     when(config.getCommitIntervalMs()).thenReturn(0);
@@ -113,7 +112,7 @@ public class CoordinatorTest extends ChannelTestBase {
     assertEquals(3, producer.history().size());
 
     bytes = producer.history().get(1).value();
-    Event commitTable = AvroEncoderUtil.decode(bytes);
+    Event commitTable = Event.decode(bytes);
     assertEquals(EventType.COMMIT_TABLE, commitTable.getType());
     CommitTablePayload commitTablePayload = (CommitTablePayload) commitTable.getPayload();
     assertEquals(commitId, commitTablePayload.getCommitId());
@@ -121,7 +120,7 @@ public class CoordinatorTest extends ChannelTestBase {
     assertEquals(ts, commitTablePayload.getVtts());
 
     bytes = producer.history().get(2).value();
-    Event commitComplete = AvroEncoderUtil.decode(bytes);
+    Event commitComplete = Event.decode(bytes);
     assertEquals(EventType.COMMIT_COMPLETE, commitComplete.getType());
     CommitCompletePayload commitCompletePayload =
         (CommitCompletePayload) commitComplete.getPayload();

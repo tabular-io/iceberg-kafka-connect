@@ -24,7 +24,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.UUID;
-import org.apache.iceberg.avro.AvroEncoderUtil;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.types.Types.StructType;
 import org.junit.jupiter.api.Test;
@@ -32,12 +31,12 @@ import org.junit.jupiter.api.Test;
 public class EventSerializationTest {
 
   @Test
-  public void testCommitRequestSerialization() throws Exception {
+  public void testCommitRequestSerialization() {
     UUID commitId = UUID.randomUUID();
     Event event = new Event(EventType.COMMIT_REQUEST, new CommitRequestPayload(commitId));
 
-    byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
-    Event result = AvroEncoderUtil.decode(data);
+    byte[] data = Event.encode(event);
+    Event result = Event.decode(data);
 
     assertEquals(event.getType(), result.getType());
     CommitRequestPayload payload = (CommitRequestPayload) result.getPayload();
@@ -45,7 +44,7 @@ public class EventSerializationTest {
   }
 
   @Test
-  public void testCommitResponseSerialization() throws Exception {
+  public void testCommitResponseSerialization() {
     UUID commitId = UUID.randomUUID();
     Event event =
         new Event(
@@ -57,8 +56,8 @@ public class EventSerializationTest {
                 Arrays.asList(EventTestUtil.createDataFile(), EventTestUtil.createDataFile()),
                 Arrays.asList(EventTestUtil.createDeleteFile(), EventTestUtil.createDeleteFile())));
 
-    byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
-    Event result = AvroEncoderUtil.decode(data);
+    byte[] data = Event.encode(event);
+    Event result = Event.decode(data);
 
     assertEquals(event.getType(), result.getType());
     CommitResponsePayload payload = (CommitResponsePayload) result.getPayload();
@@ -71,7 +70,7 @@ public class EventSerializationTest {
   }
 
   @Test
-  public void testCommitReadySerialization() throws Exception {
+  public void testCommitReadySerialization() {
     UUID commitId = UUID.randomUUID();
     Event event =
         new Event(
@@ -82,8 +81,8 @@ public class EventSerializationTest {
                     new TopicPartitionOffset("topic", 1, 1L, 1L),
                     new TopicPartitionOffset("topic", 2, null, null))));
 
-    byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
-    Event result = AvroEncoderUtil.decode(data);
+    byte[] data = Event.encode(event);
+    Event result = Event.decode(data);
 
     assertEquals(event.getType(), result.getType());
     CommitReadyPayload payload = (CommitReadyPayload) result.getPayload();
@@ -93,7 +92,7 @@ public class EventSerializationTest {
   }
 
   @Test
-  public void testCommitTableSerialization() throws Exception {
+  public void testCommitTableSerialization() {
     UUID commitId = UUID.randomUUID();
     Event event =
         new Event(
@@ -101,8 +100,8 @@ public class EventSerializationTest {
             new CommitTablePayload(
                 commitId, new TableName(Collections.singletonList("db"), "tbl"), 1L, 2L));
 
-    byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
-    Event result = AvroEncoderUtil.decode(data);
+    byte[] data = Event.encode(event);
+    Event result = Event.decode(data);
 
     assertEquals(event.getType(), result.getType());
     CommitTablePayload payload = (CommitTablePayload) result.getPayload();
@@ -113,12 +112,12 @@ public class EventSerializationTest {
   }
 
   @Test
-  public void testCommitCompleteSerialization() throws Exception {
+  public void testCommitCompleteSerialization() {
     UUID commitId = UUID.randomUUID();
     Event event = new Event(EventType.COMMIT_COMPLETE, new CommitCompletePayload(commitId, 2L));
 
-    byte[] data = AvroEncoderUtil.encode(event, event.getSchema());
-    Event result = AvroEncoderUtil.decode(data);
+    byte[] data = Event.encode(event);
+    Event result = Event.decode(data);
 
     assertEquals(event.getType(), result.getType());
     CommitCompletePayload payload = (CommitCompletePayload) result.getPayload();
