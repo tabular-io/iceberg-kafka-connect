@@ -16,10 +16,9 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.channel;
+package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.data.IcebergWriter;
 import org.apache.iceberg.catalog.Catalog;
 
 public class IcebergWriterFactory {

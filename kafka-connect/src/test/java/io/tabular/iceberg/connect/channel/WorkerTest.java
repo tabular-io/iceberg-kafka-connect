@@ -25,6 +25,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.data.IcebergWriter;
+import io.tabular.iceberg.connect.data.IcebergWriterFactory;
 import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.data.WriterResult;
 import io.tabular.iceberg.connect.events.CommitReadyPayload;
@@ -32,7 +33,6 @@ import io.tabular.iceberg.connect.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.events.Event;
 import io.tabular.iceberg.connect.events.EventType;
-import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.iceberg.catalog.TableIdentifier;
@@ -52,14 +52,14 @@ public class WorkerTest extends ChannelTestBase {
   private static final String FIELD_NAME = "fld";
 
   @Test
-  public void testStaticRoute() throws IOException {
+  public void testStaticRoute() {
     when(config.getTables()).thenReturn(ImmutableList.of(TABLE_NAME));
     Map<String, Object> value = ImmutableMap.of(FIELD_NAME, "val");
     workerTest(value);
   }
 
   @Test
-  public void testDynamicRoute() throws IOException {
+  public void testDynamicRoute() {
     when(config.getDynamicTablesEnabled()).thenReturn(true);
     when(config.getTablesRouteField()).thenReturn(FIELD_NAME);
     when(catalog.tableExists(any())).thenReturn(true);
@@ -67,7 +67,7 @@ public class WorkerTest extends ChannelTestBase {
     workerTest(value);
   }
 
-  private void workerTest(Map<String, Object> value) throws IOException {
+  private void workerTest(Map<String, Object> value) {
     SinkTaskContext context = mock(SinkTaskContext.class);
     when(context.assignment()).thenReturn(ImmutableSet.of(new TopicPartition(SRC_TOPIC_NAME, 0)));
 
