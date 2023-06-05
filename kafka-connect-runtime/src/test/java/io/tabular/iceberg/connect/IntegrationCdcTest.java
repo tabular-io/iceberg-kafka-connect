@@ -46,7 +46,6 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.iceberg.types.Types;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +55,7 @@ public class IntegrationCdcTest extends IntegrationTestBase {
 
   private static final String CONNECTOR_NAME = "test_connector-" + UUID.randomUUID();
   private static final String TEST_TOPIC = "test-topic-" + UUID.randomUUID();
+  private static final int TEST_TOPIC_PARTITIONS = 2;
   private static final String TEST_DB = "default";
   private static final String TEST_TABLE = "foobar";
   private static final TableIdentifier TABLE_IDENTIFIER = TableIdentifier.of(TEST_DB, TEST_TABLE);
@@ -76,7 +76,7 @@ public class IntegrationCdcTest extends IntegrationTestBase {
 
   @BeforeEach
   public void setup() {
-    createTopic(TEST_TOPIC, 2);
+    createTopic(TEST_TOPIC, TEST_TOPIC_PARTITIONS);
     catalog.createNamespace(Namespace.of(TEST_DB));
   }
 
@@ -104,7 +104,7 @@ public class IntegrationCdcTest extends IntegrationTestBase {
             .config("iceberg.tables", format("%s.%s", TEST_DB, TEST_TABLE))
             .config("iceberg.tables.cdcField", "op")
             .config("iceberg.control.commitIntervalMs", 1000)
-            .config("iceberg.control.commitTimeoutMs", 1000)
+            .config("iceberg.control.commitTimeoutMs", Integer.MAX_VALUE)
             .config("iceberg.catalog", RESTCatalog.class.getName())
             .config("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
             .config("iceberg.catalog." + S3FileIOProperties.ENDPOINT, "http://minio:9000")
@@ -122,14 +122,14 @@ public class IntegrationCdcTest extends IntegrationTestBase {
     runTest();
 
     List<DataFile> files = getDataFiles();
-    assertThat(files).hasSize(2);
-    assertEquals(2, files.get(0).recordCount());
-    assertEquals(2, files.get(1).recordCount());
+    assertThat(files).hasSize(3);
+    assertEquals(4, files.stream().mapToLong(DataFile::recordCount).sum());
 
     List<DeleteFile> deleteFiles = getDeleteFiles();
     assertThat(deleteFiles).hasSize(2);
-    assertEquals(1, deleteFiles.get(0).recordCount());
-    assertEquals(1, deleteFiles.get(1).recordCount());
+    assertEquals(2, deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum());
+
+    assertSnapshotProps(TABLE_IDENTIFIER);
 
     // unpartitioned table
 
@@ -142,12 +142,14 @@ public class IntegrationCdcTest extends IntegrationTestBase {
     runTest();
 
     files = getDataFiles();
-    assertThat(files).hasSize(1);
-    assertEquals(4, files.get(0).recordCount());
+    assertThat(files).hasSize(2);
+    assertEquals(4, files.stream().mapToLong(DataFile::recordCount).sum());
 
     deleteFiles = getDeleteFiles();
-    assertThat(deleteFiles).hasSize(1);
-    assertEquals(2, deleteFiles.get(0).recordCount());
+    assertThat(deleteFiles).hasSize(2);
+    assertEquals(2, deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum());
+
+    assertSnapshotProps(TABLE_IDENTIFIER);
   }
 
   private void runTest() {
@@ -166,12 +168,12 @@ public class IntegrationCdcTest extends IntegrationTestBase {
         format(RECORD_FORMAT, 1, "type1", System.currentTimeMillis(), "hello world!", "D");
     String event5 = format(RECORD_FORMAT, 3, "type3", threeDaysAgo, "updated!", "U");
 
-    producer.send(new ProducerRecord<>(TEST_TOPIC, event1));
-    producer.send(new ProducerRecord<>(TEST_TOPIC, event2));
-    producer.send(new ProducerRecord<>(TEST_TOPIC, event3));
-    producer.send(new ProducerRecord<>(TEST_TOPIC, event4));
-    producer.send(new ProducerRecord<>(TEST_TOPIC, event5));
-    producer.flush();
+    send(TEST_TOPIC, TEST_TOPIC_PARTITIONS, event1);
+    send(TEST_TOPIC, TEST_TOPIC_PARTITIONS, event2);
+    send(TEST_TOPIC, TEST_TOPIC_PARTITIONS, event3);
+    send(TEST_TOPIC, TEST_TOPIC_PARTITIONS, event4);
+    send(TEST_TOPIC, TEST_TOPIC_PARTITIONS, event5);
+    flush();
 
     Awaitility.await().atMost(15, TimeUnit.SECONDS).untilAsserted(this::assertSnapshotAdded);
   }

@@ -18,15 +18,22 @@
  */
 package io.tabular.iceberg.connect;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.io.IOException;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -34,11 +41,13 @@ import software.amazon.awssdk.services.s3.S3Client;
 public class IntegrationTestBase {
 
   protected final TestContext context = TestContext.INSTANCE;
+  protected final AtomicInteger cnt = new AtomicInteger(0);
 
   protected S3Client s3;
   protected RESTCatalog catalog;
-  protected KafkaProducer<String, String> producer;
   protected Admin admin;
+
+  private KafkaProducer<String, String> producer;
 
   @BeforeEach
   public void baseSetup() {
@@ -60,6 +69,20 @@ public class IntegrationTestBase {
     s3.close();
   }
 
+  protected void assertSnapshotProps(TableIdentifier tableIdentifier) {
+    Map<String, String> props = catalog.loadTable(tableIdentifier).currentSnapshot().summary();
+    assertThat(props)
+        .hasKeySatisfying(
+            new Condition<String>() {
+              @Override
+              public boolean matches(String str) {
+                return str.startsWith("kafka.connect.control.offsets.");
+              }
+            });
+    assertThat(props).containsKey("kafka.connect.commitId");
+    assertThat(props).containsKey("kafka.connect.vtts");
+  }
+
   protected void createTopic(String topicName, int partitions) {
     try {
       admin
@@ -77,5 +100,14 @@ public class IntegrationTestBase {
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  protected void send(String topicName, int totalPartitions, String event) {
+    producer.send(
+        new ProducerRecord<>(topicName, cnt.getAndIncrement() % totalPartitions, null, event));
+  }
+
+  protected void flush() {
+    producer.flush();
   }
 }

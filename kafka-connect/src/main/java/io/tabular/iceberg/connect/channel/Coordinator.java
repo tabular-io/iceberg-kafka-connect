@@ -216,10 +216,7 @@ public class Coordinator extends Channel {
     send(event);
 
     LOG.info(
-        "Commit {} complete, commited to {} table(s), vtts {}",
-        currentCommitId,
-        commitMap.size(),
-        vtts);
+        "Commit {} complete, commited to {} table(s), vtts {}", commitId, commitMap.size(), vtts);
   }
 
   private String getOffsetsJson() {
