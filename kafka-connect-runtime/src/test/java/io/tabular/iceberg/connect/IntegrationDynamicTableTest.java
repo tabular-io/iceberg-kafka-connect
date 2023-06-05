@@ -40,7 +40,6 @@ import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.iceberg.types.Types;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +49,7 @@ public class IntegrationDynamicTableTest extends IntegrationTestBase {
 
   private static final String CONNECTOR_NAME = "test_connector-" + UUID.randomUUID();
   private static final String TEST_TOPIC = "test-topic-" + UUID.randomUUID();
+  private static final int TEST_TOPIC_PARTITIONS = 2;
   private static final String TEST_DB = "default";
   private static final String TEST_TABLE1 = "tbl1";
   private static final String TEST_TABLE2 = "tbl2";
@@ -69,7 +69,7 @@ public class IntegrationDynamicTableTest extends IntegrationTestBase {
 
   @BeforeEach
   public void setup() {
-    createTopic(TEST_TOPIC, 2);
+    createTopic(TEST_TOPIC, TEST_TOPIC_PARTITIONS);
     catalog.createNamespace(Namespace.of(TEST_DB));
   }
 
@@ -98,7 +98,7 @@ public class IntegrationDynamicTableTest extends IntegrationTestBase {
             .config("iceberg.tables.dynamic.enabled", true)
             .config("iceberg.tables.routeField", "payload")
             .config("iceberg.control.commitIntervalMs", 1000)
-            .config("iceberg.control.commitTimeoutMs", 1000)
+            .config("iceberg.control.commitTimeoutMs", Integer.MAX_VALUE)
             .config("iceberg.catalog", RESTCatalog.class.getName())
             .config("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
             .config("iceberg.catalog." + S3FileIOProperties.ENDPOINT, "http://minio:9000")
@@ -119,10 +119,12 @@ public class IntegrationDynamicTableTest extends IntegrationTestBase {
     List<DataFile> files = getDataFiles(TABLE_IDENTIFIER1);
     assertThat(files).hasSize(1);
     assertEquals(1, files.get(0).recordCount());
+    assertSnapshotProps(TABLE_IDENTIFIER1);
 
     files = getDataFiles(TABLE_IDENTIFIER2);
     assertThat(files).hasSize(1);
     assertEquals(1, files.get(0).recordCount());
+    assertSnapshotProps(TABLE_IDENTIFIER2);
   }
 
   private void runTest() {
@@ -130,10 +132,10 @@ public class IntegrationDynamicTableTest extends IntegrationTestBase {
     String event2 = format(RECORD_FORMAT, 2, "type2", System.currentTimeMillis(), "default.tbl2");
     String event3 = format(RECORD_FORMAT, 3, "type3", System.currentTimeMillis(), "default.tbl3");
 
-    producer.send(new ProducerRecord<>(TEST_TOPIC, event1));
-    producer.send(new ProducerRecord<>(TEST_TOPIC, event2));
-    producer.send(new ProducerRecord<>(TEST_TOPIC, event3));
-    producer.flush();
+    send(TEST_TOPIC, TEST_TOPIC_PARTITIONS, event1);
+    send(TEST_TOPIC, TEST_TOPIC_PARTITIONS, event2);
+    send(TEST_TOPIC, TEST_TOPIC_PARTITIONS, event3);
+    flush();
 
     Awaitility.await().atMost(15, TimeUnit.SECONDS).untilAsserted(this::assertSnapshotAdded);
   }

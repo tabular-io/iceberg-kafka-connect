@@ -41,7 +41,6 @@ import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.iceberg.types.Types;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,6 +50,7 @@ public class IntegrationTest extends IntegrationTestBase {
 
   private static final String CONNECTOR_NAME = "test_connector-" + UUID.randomUUID();
   private static final String TEST_TOPIC = "test-topic-" + UUID.randomUUID();
+  private static final int TEST_TOPIC_PARTITIONS = 2;
   private static final String TEST_DB = "default";
   private static final String TEST_TABLE = "foobar";
   private static final TableIdentifier TABLE_IDENTIFIER = TableIdentifier.of(TEST_DB, TEST_TABLE);
@@ -68,7 +68,7 @@ public class IntegrationTest extends IntegrationTestBase {
 
   @BeforeEach
   public void setup() {
-    createTopic(TEST_TOPIC, 2);
+    createTopic(TEST_TOPIC, TEST_TOPIC_PARTITIONS);
     catalog.createNamespace(Namespace.of(TEST_DB));
   }
 
@@ -95,7 +95,7 @@ public class IntegrationTest extends IntegrationTestBase {
             .config("value.converter.schemas.enable", false)
             .config("iceberg.tables", format("%s.%s", TEST_DB, TEST_TABLE))
             .config("iceberg.control.commitIntervalMs", 1000)
-            .config("iceberg.control.commitTimeoutMs", 1000)
+            .config("iceberg.control.commitTimeoutMs", Integer.MAX_VALUE)
             .config("iceberg.catalog", RESTCatalog.class.getName())
             .config("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
             .config("iceberg.catalog." + S3FileIOProperties.ENDPOINT, "http://minio:9000")
@@ -115,6 +115,7 @@ public class IntegrationTest extends IntegrationTestBase {
     assertThat(files).hasSize(2);
     assertEquals(1, files.get(0).recordCount());
     assertEquals(1, files.get(1).recordCount());
+    assertSnapshotProps(TABLE_IDENTIFIER);
 
     // unpartitioned table
 
@@ -127,8 +128,9 @@ public class IntegrationTest extends IntegrationTestBase {
     runTest();
 
     files = getDataFiles();
-    assertThat(files).hasSize(1);
-    assertEquals(2, files.get(0).recordCount());
+    assertThat(files).hasSize(2);
+    assertEquals(2, files.stream().mapToLong(DataFile::recordCount).sum());
+    assertSnapshotProps(TABLE_IDENTIFIER);
   }
 
   private void runTest() {
@@ -137,9 +139,9 @@ public class IntegrationTest extends IntegrationTestBase {
     long threeDaysAgo = System.currentTimeMillis() - Duration.ofDays(3).toMillis();
     String event2 = format(RECORD_FORMAT, 2, "type2", threeDaysAgo, "having fun?");
 
-    producer.send(new ProducerRecord<>(TEST_TOPIC, event1));
-    producer.send(new ProducerRecord<>(TEST_TOPIC, event2));
-    producer.flush();
+    send(TEST_TOPIC, TEST_TOPIC_PARTITIONS, event1);
+    send(TEST_TOPIC, TEST_TOPIC_PARTITIONS, event2);
+    flush();
 
     Awaitility.await().atMost(15, TimeUnit.SECONDS).untilAsserted(this::assertSnapshotAdded);
   }
