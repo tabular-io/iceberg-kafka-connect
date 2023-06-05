@@ -24,6 +24,7 @@ import static java.util.stream.Collectors.toMap;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.IcebergWriter;
+import io.tabular.iceberg.connect.data.IcebergWriterFactory;
 import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.data.Utilities;
 import io.tabular.iceberg.connect.data.WriterResult;

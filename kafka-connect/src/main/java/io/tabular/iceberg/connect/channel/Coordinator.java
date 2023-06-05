@@ -49,6 +49,7 @@ import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.util.Tasks;
 import org.apache.iceberg.util.ThreadPools;
@@ -118,7 +119,7 @@ public class Coordinator extends Channel {
         return true;
       case COMMIT_READY:
         readyBuffer.add((CommitReadyPayload) envelope.getEvent().getPayload());
-        if (isCommitReady()) {
+        if (isCommitReady(currentCommitId, totalPartitionCount, readyBuffer)) {
           commit(false);
         }
         return true;
@@ -149,26 +150,28 @@ public class Coordinator extends Channel {
     return false;
   }
 
-  private boolean isCommitReady() {
+  @VisibleForTesting
+  static boolean isCommitReady(
+      UUID commitId, int expectedPartitionCount, List<CommitReadyPayload> buffer) {
     int receivedPartitionCount =
-        readyBuffer.stream()
-            .filter(payload -> payload.getCommitId().equals(currentCommitId))
+        buffer.stream()
+            .filter(payload -> payload.getCommitId().equals(commitId))
             .mapToInt(payload -> payload.getAssignments().size())
             .sum();
 
-    if (receivedPartitionCount >= totalPartitionCount) {
+    if (receivedPartitionCount >= expectedPartitionCount) {
       LOG.info(
           "Commit {} ready, received responses for all {} partitions",
-          currentCommitId,
+          commitId,
           receivedPartitionCount);
       return true;
     }
 
     LOG.info(
         "Commit {} not ready, received responses for {} of {} partitions, waiting for more",
-        currentCommitId,
+        commitId,
         receivedPartitionCount,
-        totalPartitionCount);
+        expectedPartitionCount);
 
     return false;
   }
@@ -192,7 +195,7 @@ public class Coordinator extends Channel {
                             .toIdentifier()));
 
     String offsetsJson = getOffsetsJson();
-    Long vtts = getVtts(partialCommit);
+    Long vtts = getVtts(partialCommit, readyBuffer);
 
     Tasks.foreach(commitMap.entrySet())
         .executeWith(exec)
@@ -227,17 +230,18 @@ public class Coordinator extends Channel {
     }
   }
 
-  private Long getVtts(boolean partialCommit) {
+  @VisibleForTesting
+  static Long getVtts(boolean partialCommit, List<CommitReadyPayload> buffer) {
     boolean validVtts =
         !partialCommit
-            && readyBuffer.stream()
+            && buffer.stream()
                 .flatMap(event -> event.getAssignments().stream())
                 .allMatch(offset -> offset.getTimestamp() != null);
 
     Long result;
     if (validVtts) {
       result =
-          readyBuffer.stream()
+          buffer.stream()
               .flatMap(event -> event.getAssignments().stream())
               .mapToLong(TopicPartitionOffset::getTimestamp)
               .min()

@@ -19,9 +19,9 @@
 package io.tabular.iceberg.connect;
 
 import io.tabular.iceberg.connect.channel.Coordinator;
-import io.tabular.iceberg.connect.channel.IcebergWriterFactory;
 import io.tabular.iceberg.connect.channel.KafkaClientFactory;
 import io.tabular.iceberg.connect.channel.Worker;
+import io.tabular.iceberg.connect.data.IcebergWriterFactory;
 import io.tabular.iceberg.connect.data.Utilities;
 import java.util.Collection;
 import java.util.Map;
