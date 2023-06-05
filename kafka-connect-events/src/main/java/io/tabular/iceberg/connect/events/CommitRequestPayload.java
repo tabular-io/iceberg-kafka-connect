@@ -16,53 +16,40 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.channel.events;
+package io.tabular.iceberg.connect.events;
 
 import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
 
-import java.util.List;
 import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 
-public class CommitReadyPayload implements Payload {
+public class CommitRequestPayload implements Payload {
 
   private UUID commitId;
-  private List<TopicPartitionOffset> assignments;
   private Schema avroSchema;
 
-  public CommitReadyPayload(Schema avroSchema) {
+  public static final Schema AVRO_SCHEMA =
+      SchemaBuilder.builder()
+          .record(CommitRequestPayload.class.getName())
+          .fields()
+          .name("commitId")
+          .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+          .type(UUID_SCHEMA)
+          .noDefault()
+          .endRecord();
+
+  public CommitRequestPayload(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }
 
-  public CommitReadyPayload(UUID commitId, List<TopicPartitionOffset> assignments) {
+  public CommitRequestPayload(UUID commitId) {
     this.commitId = commitId;
-    this.assignments = assignments;
-
-    this.avroSchema =
-        SchemaBuilder.builder()
-            .record(getClass().getName())
-            .fields()
-            .name("commitId")
-            .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
-            .type(UUID_SCHEMA)
-            .noDefault()
-            .name("assignments")
-            .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
-            .type()
-            .nullable()
-            .array()
-            .items(TopicPartitionOffset.AVRO_SCHEMA)
-            .noDefault()
-            .endRecord();
+    this.avroSchema = AVRO_SCHEMA;
   }
 
   public UUID getCommitId() {
     return commitId;
-  }
-
-  public List<TopicPartitionOffset> getAssignments() {
-    return assignments;
   }
 
   @Override
@@ -71,14 +58,10 @@ public class CommitReadyPayload implements Payload {
   }
 
   @Override
-  @SuppressWarnings("unchecked")
   public void put(int i, Object v) {
     switch (i) {
       case 0:
         this.commitId = (UUID) v;
-        return;
-      case 1:
-        this.assignments = (List<TopicPartitionOffset>) v;
         return;
       default:
         // ignore the object, it must be from a newer version of the format
@@ -90,8 +73,6 @@ public class CommitReadyPayload implements Payload {
     switch (i) {
       case 0:
         return commitId;
-      case 1:
-        return assignments;
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
     }

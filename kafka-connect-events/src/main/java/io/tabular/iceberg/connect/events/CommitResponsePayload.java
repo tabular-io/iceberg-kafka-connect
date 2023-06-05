@@ -16,18 +16,19 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.channel.events;
+package io.tabular.iceberg.connect.events;
 
 import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.avro.AvroSchemaUtil;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Types.StructType;
 
 public class CommitResponsePayload implements Payload {
@@ -54,18 +55,16 @@ public class CommitResponsePayload implements Payload {
     this.deleteFiles = deleteFiles;
 
     StructType dataFileStruct = DataFile.getType(partitionType);
-    Schema dataFileSchema =
-        AvroSchemaUtil.convert(
-            dataFileStruct,
-            ImmutableMap.of(
-                dataFileStruct, "org.apache.iceberg.GenericDataFile",
-                partitionType, "org.apache.iceberg.PartitionData"));
-    Schema deleteFileSchema =
-        AvroSchemaUtil.convert(
-            dataFileStruct,
-            ImmutableMap.of(
-                dataFileStruct, "org.apache.iceberg.GenericDeleteFile",
-                partitionType, "org.apache.iceberg.PartitionData"));
+
+    Map<StructType, String> dataFileNames = new HashMap<>();
+    dataFileNames.put(dataFileStruct, "org.apache.iceberg.GenericDataFile");
+    dataFileNames.put(partitionType, "org.apache.iceberg.PartitionData");
+    Schema dataFileSchema = AvroSchemaUtil.convert(dataFileStruct, dataFileNames);
+
+    Map<StructType, String> deleteFileNames = new HashMap<>();
+    deleteFileNames.put(dataFileStruct, "org.apache.iceberg.GenericDeleteFile");
+    deleteFileNames.put(partitionType, "org.apache.iceberg.PartitionData");
+    Schema deleteFileSchema = AvroSchemaUtil.convert(dataFileStruct, deleteFileNames);
 
     this.avroSchema =
         SchemaBuilder.builder()

@@ -16,61 +16,75 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.channel.events;
+package io.tabular.iceberg.connect.events;
 
-import static java.util.stream.Collectors.toList;
 import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
 
-import java.util.Arrays;
-import java.util.List;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
-import org.apache.avro.util.Utf8;
-import org.apache.iceberg.catalog.Namespace;
-import org.apache.iceberg.catalog.TableIdentifier;
 
-public class TableName implements Element {
+public class TopicPartitionOffset implements Element {
 
-  private List<String> namespace;
-  private String name;
+  private String topic;
+  private Integer partition;
+  private Long offset;
+  private Long timestamp;
   private Schema avroSchema;
 
   public static final Schema AVRO_SCHEMA =
       SchemaBuilder.builder()
-          .record(TableName.class.getName())
+          .record(TopicPartitionOffset.class.getName())
           .fields()
-          .name("namespace")
+          .name("topic")
           .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
           .type()
-          .array()
-          .items()
           .stringType()
           .noDefault()
-          .name("name")
+          .name("partition")
           .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
           .type()
-          .stringType()
+          .intType()
+          .noDefault()
+          .name("offset")
+          .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+          .type()
+          .nullable()
+          .longType()
+          .noDefault()
+          .name("timestamp")
+          .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+          .type()
+          .nullable()
+          .longType()
           .noDefault()
           .endRecord();
 
-  public static TableName of(TableIdentifier tableIdentifier) {
-    return new TableName(
-        Arrays.asList(tableIdentifier.namespace().levels()), tableIdentifier.name());
-  }
-
-  public TableName(Schema avroSchema) {
+  public TopicPartitionOffset(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }
 
-  public TableName(List<String> namespace, String name) {
-    this.namespace = namespace;
-    this.name = name;
+  public TopicPartitionOffset(String topic, int partition, Long offset, Long timestamp) {
+    this.topic = topic;
+    this.partition = partition;
+    this.offset = offset;
+    this.timestamp = timestamp;
     this.avroSchema = AVRO_SCHEMA;
   }
 
-  public TableIdentifier toIdentifier() {
-    Namespace icebergNamespace = Namespace.of(namespace.toArray(new String[0]));
-    return TableIdentifier.of(icebergNamespace, name);
+  public String getTopic() {
+    return topic;
+  }
+
+  public Integer getPartition() {
+    return partition;
+  }
+
+  public Long getOffset() {
+    return offset;
+  }
+
+  public Long getTimestamp() {
+    return timestamp;
   }
 
   @Override
@@ -79,15 +93,19 @@ public class TableName implements Element {
   }
 
   @Override
-  @SuppressWarnings("unchecked")
   public void put(int i, Object v) {
     switch (i) {
       case 0:
-        this.namespace =
-            v == null ? null : ((List<Utf8>) v).stream().map(Utf8::toString).collect(toList());
+        this.topic = v == null ? null : v.toString();
         return;
       case 1:
-        this.name = v == null ? null : v.toString();
+        this.partition = (Integer) v;
+        return;
+      case 2:
+        this.offset = (Long) v;
+        return;
+      case 3:
+        this.timestamp = (Long) v;
         return;
       default:
         // ignore the object, it must be from a newer version of the format
@@ -98,9 +116,13 @@ public class TableName implements Element {
   public Object get(int i) {
     switch (i) {
       case 0:
-        return namespace;
+        return topic;
       case 1:
-        return name;
+        return partition;
+      case 2:
+        return offset;
+      case 3:
+        return timestamp;
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
     }

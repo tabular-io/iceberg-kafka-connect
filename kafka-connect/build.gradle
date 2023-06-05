@@ -1,28 +1,18 @@
 dependencies {
+  implementation project(":iceberg-kafka-connect-events")
   implementation libs.bundles.iceberg
   implementation libs.bundles.jackson
   implementation libs.avro
   implementation libs.slf4j
   compileOnly libs.bundles.kafka.connect
 
+  testImplementation(testFixtures(project(":iceberg-kafka-connect-events")))
+
   testImplementation libs.junit.api
   testRuntimeOnly libs.junit.engine
 
   testImplementation libs.mockito
   testImplementation libs.assertj
-}
-
-jar {
-  manifest {
-    attributes(
-        "Implementation-Title": project.name,
-        "Implementation-Version": project.version,
-        "Implementation-Vendor": "Tabular Technologies, Inc.",
-        "Build-Timestamp": java.time.Instant.now().toString(),
-        "Build-JDK": "${System.properties['java.version']} (${System.properties['java.vendor']} ${System.properties['java.vm.version']})",
-        "Build-OS": "${System.properties['os.name']} ${System.properties['os.arch']} ${System.properties['os.version']}",
-    )
-  }
 }
 
 configurations {

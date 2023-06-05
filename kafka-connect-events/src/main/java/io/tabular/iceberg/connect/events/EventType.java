@@ -16,19 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.channel.events;
+package io.tabular.iceberg.connect.events;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.avro.specific.SpecificData.SchemaConstructable;
+public enum EventType {
+  COMMIT_REQUEST(0),
+  COMMIT_RESPONSE(1),
+  COMMIT_READY(2),
+  COMMIT_TABLE(3),
+  COMMIT_COMPLETE(4);
 
-public interface Element extends IndexedRecord, SchemaConstructable {
-  // this is required by Iceberg's Avro deserializer to check for special metadata
-  // fields, but we aren't using any
-  String DUMMY_FIELD_ID = "-1";
+  private final int id;
 
-  Schema UUID_SCHEMA =
-      LogicalTypes.uuid().addToSchema(SchemaBuilder.builder().fixed("uuid").size(16));
+  EventType(int id) {
+    this.id = id;
+  }
+
+  public int getId() {
+    return id;
+  }
 }
