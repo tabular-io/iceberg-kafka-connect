@@ -20,6 +20,7 @@ package io.tabular.iceberg.connect.channel;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -42,6 +43,7 @@ public class KafkaClientFactory {
   public Producer<String, byte[]> createProducer(String transactionalId) {
     Map<String, Object> producerProps = new HashMap<>(kafkaProps);
     producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
+    producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, UUID.randomUUID().toString());
     KafkaProducer<String, byte[]> result =
         new KafkaProducer<>(producerProps, new StringSerializer(), new ByteArraySerializer());
     result.initTransactions();
@@ -54,6 +56,7 @@ public class KafkaClientFactory {
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
     consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroupId);
+    consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, UUID.randomUUID().toString());
     return new KafkaConsumer<>(
         consumerProps, new StringDeserializer(), new ByteArrayDeserializer());
   }
