@@ -49,6 +49,7 @@ import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.util.Tasks;
@@ -181,6 +182,9 @@ public class Coordinator extends Channel {
       doCommit(partialCommit);
     } catch (Exception e) {
       LOG.warn("Commit failed, will try again next cycle", e);
+    } finally {
+      readyBuffer.clear();
+      currentCommitId = null;
     }
   }
 
@@ -208,15 +212,16 @@ public class Coordinator extends Channel {
     // we should only get here if all tables committed successfully...
     commitConsumerOffsets();
     commitBuffer.clear();
-    readyBuffer.clear();
-    UUID commitId = currentCommitId;
-    currentCommitId = null;
 
-    Event event = new Event(EventType.COMMIT_COMPLETE, new CommitCompletePayload(commitId, vtts));
+    Event event =
+        new Event(EventType.COMMIT_COMPLETE, new CommitCompletePayload(currentCommitId, vtts));
     send(event);
 
     LOG.info(
-        "Commit {} complete, commited to {} table(s), vtts {}", commitId, commitMap.size(), vtts);
+        "Commit {} complete, commited to {} table(s), vtts {}",
+        currentCommitId,
+        commitMap.size(),
+        vtts);
   }
 
   private String getOffsetsJson() {
@@ -251,7 +256,14 @@ public class Coordinator extends Channel {
 
   private void commitToTable(
       TableIdentifier tableIdentifier, List<Envelope> envelopeList, String offsetsJson, Long vtts) {
-    Table table = catalog.loadTable(tableIdentifier);
+    Table table;
+    try {
+      table = catalog.loadTable(tableIdentifier);
+    } catch (NoSuchTableException e) {
+      LOG.warn("Table not found, skipping commit: {}", tableIdentifier);
+      return;
+    }
+
     Map<Integer, Long> commitedOffsets = getLastCommittedOffsetsForTable(table);
 
     List<CommitResponsePayload> payloads =
