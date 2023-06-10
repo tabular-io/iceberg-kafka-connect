@@ -35,6 +35,7 @@ import io.tabular.iceberg.connect.events.TableName;
 import io.tabular.iceberg.connect.events.TopicPartitionOffset;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.time.Duration;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +65,7 @@ public class Coordinator extends Channel {
   private static final String CONTROL_OFFSETS_SNAPSHOT_PREFIX = "kafka.connect.control.offsets.";
   private static final String COMMIT_ID_SNAPSHOT_PROP = "kafka.connect.commitId";
   private static final String VTTS_SNAPSHOT_PROP = "kafka.connect.vtts";
+  private static final Duration POLL_DURATION = Duration.ofMillis(1000);
 
   private final Catalog catalog;
   private final IcebergSinkConfig config;
@@ -86,7 +88,6 @@ public class Coordinator extends Channel {
     this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.getCommitThreads());
   }
 
-  @Override
   public void process() {
     if (startTime == 0) {
       startTime = System.currentTimeMillis();
@@ -101,7 +102,7 @@ public class Coordinator extends Channel {
       startTime = System.currentTimeMillis();
     }
 
-    super.process();
+    consumeAvailable(POLL_DURATION);
 
     if (currentCommitId != null && isCommitTimedOut()) {
       commit(true);
