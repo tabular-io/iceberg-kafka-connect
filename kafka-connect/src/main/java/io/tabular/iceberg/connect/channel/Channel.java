@@ -89,18 +89,24 @@ public abstract class Channel {
                 })
             .collect(toList());
 
-    producer.beginTransaction();
-    try {
-      recordList.forEach(producer::send);
-      if (!sourceOffsets.isEmpty()) {
-        // TODO: this doesn't fence zombies
-        producer.sendOffsetsToTransaction(
-            offsetsToCommit, new ConsumerGroupMetadata(controlGroupId));
+    synchronized (producer) {
+      producer.beginTransaction();
+      try {
+        recordList.forEach(producer::send);
+        if (!sourceOffsets.isEmpty()) {
+          // TODO: this doesn't fence zombies
+          producer.sendOffsetsToTransaction(
+              offsetsToCommit, new ConsumerGroupMetadata(controlGroupId));
+        }
+        producer.commitTransaction();
+      } catch (Exception e) {
+        try {
+          producer.abortTransaction();
+        } catch (Exception ex) {
+          LOG.warn("Error aborting producer transaction", ex);
+        }
+        throw e;
       }
-      producer.commitTransaction();
-    } catch (Exception e) {
-      producer.abortTransaction();
-      throw e;
     }
   }
 
