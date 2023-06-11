@@ -28,7 +28,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Function;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.kafka.clients.admin.Admin;
@@ -112,15 +111,7 @@ public abstract class Channel {
 
   protected abstract boolean receive(Envelope envelope);
 
-  public void process() {
-    consumeAvailable(this::receive, Duration.ZERO);
-  }
-
-  public void process(Duration pollDuration) {
-    consumeAvailable(this::receive, pollDuration);
-  }
-
-  protected void consumeAvailable(Function<Envelope, Boolean> eventHandler, Duration pollDuration) {
+  protected void consumeAvailable(Duration pollDuration) {
     ConsumerRecords<String, byte[]> records = consumer.poll(pollDuration);
     while (!records.isEmpty()) {
       records.forEach(
@@ -132,7 +123,7 @@ public abstract class Channel {
             Event event = Event.decode(record.value());
 
             LOG.debug("Received event of type: {}", event.getType().name());
-            if (eventHandler.apply(new Envelope(event, record.partition(), record.offset()))) {
+            if (receive(new Envelope(event, record.partition(), record.offset()))) {
               LOG.info("Handled event of type: {}", event.getType().name());
             }
           });
@@ -161,7 +152,7 @@ public abstract class Channel {
     consumer.subscribe(ImmutableList.of(controlTopic));
 
     // initial poll with longer duration so the consumer will initialize...
-    process(Duration.ofMillis(1000));
+    consumeAvailable(Duration.ofMillis(1000));
   }
 
   public void stop() {

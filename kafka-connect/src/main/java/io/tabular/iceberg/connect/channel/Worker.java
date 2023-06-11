@@ -35,6 +35,7 @@ import io.tabular.iceberg.connect.events.Event;
 import io.tabular.iceberg.connect.events.EventType;
 import io.tabular.iceberg.connect.events.TableName;
 import io.tabular.iceberg.connect.events.TopicPartitionOffset;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -97,6 +98,10 @@ public class Worker extends Channel {
     } catch (InterruptedException | ExecutionException e) {
       throw new ConnectException(e);
     }
+  }
+
+  public void process() {
+    consumeAvailable(Duration.ZERO);
   }
 
   @Override

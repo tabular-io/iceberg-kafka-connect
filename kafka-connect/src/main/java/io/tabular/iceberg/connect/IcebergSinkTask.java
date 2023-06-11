@@ -19,6 +19,7 @@
 package io.tabular.iceberg.connect;
 
 import io.tabular.iceberg.connect.channel.Coordinator;
+import io.tabular.iceberg.connect.channel.CoordinatorThread;
 import io.tabular.iceberg.connect.channel.KafkaClientFactory;
 import io.tabular.iceberg.connect.channel.Worker;
 import io.tabular.iceberg.connect.data.IcebergWriterFactory;
@@ -41,7 +42,7 @@ public class IcebergSinkTask extends SinkTask {
 
   private IcebergSinkConfig config;
   private Catalog catalog;
-  private Coordinator coordinator;
+  private CoordinatorThread coordinatorThread;
   private Worker worker;
 
   @Override
@@ -61,8 +62,9 @@ public class IcebergSinkTask extends SinkTask {
 
     if (isLeader(partitions)) {
       LOG.info("Task elected leader, starting commit coordinator");
-      coordinator = new Coordinator(catalog, config, clientFactory);
-      coordinator.start();
+      Coordinator coordinator = new Coordinator(catalog, config, clientFactory);
+      coordinatorThread = new CoordinatorThread(coordinator);
+      coordinatorThread.start();
     }
 
     LOG.info("Starting commit worker");
@@ -84,14 +86,18 @@ public class IcebergSinkTask extends SinkTask {
 
   @Override
   public void close(Collection<TopicPartition> partitions) {
+    close();
+  }
+
+  private void close() {
     if (worker != null) {
       worker.stop();
       worker = null;
     }
 
-    if (coordinator != null) {
-      coordinator.stop();
-      coordinator = null;
+    if (coordinatorThread != null) {
+      coordinatorThread.terminate();
+      coordinatorThread = null;
     }
 
     if (catalog != null) {
@@ -108,15 +114,19 @@ public class IcebergSinkTask extends SinkTask {
 
   @Override
   public void put(Collection<SinkRecord> sinkRecords) {
-    if (sinkRecords != null && !sinkRecords.isEmpty() && worker != null) {
-      worker.save(sinkRecords);
+    if (worker != null) {
+      if (sinkRecords != null && !sinkRecords.isEmpty()) {
+        worker.save(sinkRecords);
+      }
+      worker.process();
     }
-    coordinate();
   }
 
   @Override
   public void flush(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
-    coordinate();
+    if (worker != null) {
+      worker.process();
+    }
   }
 
   @Override
@@ -128,22 +138,8 @@ public class IcebergSinkTask extends SinkTask {
     return worker.getCommitOffsets();
   }
 
-  private void coordinate() {
-    if (worker != null) {
-      worker.process();
-    }
-    if (coordinator != null) {
-      coordinator.process();
-    }
-  }
-
   @Override
   public void stop() {
-    if (worker != null) {
-      worker.stop();
-    }
-    if (coordinator != null) {
-      coordinator.stop();
-    }
+    close();
   }
 }
