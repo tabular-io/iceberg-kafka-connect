@@ -18,28 +18,23 @@
  */
 package io.tabular.iceberg.connect.channel;
 
-import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.events.CommitCompletePayload;
-import io.tabular.iceberg.connect.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.events.CommitTablePayload;
 import io.tabular.iceberg.connect.events.Event;
 import io.tabular.iceberg.connect.events.EventType;
 import io.tabular.iceberg.connect.events.TableName;
-import io.tabular.iceberg.connect.events.TopicPartitionOffset;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import org.apache.iceberg.AppendFiles;
@@ -51,7 +46,6 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.NoSuchTableException;
-import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.util.Tasks;
 import org.apache.iceberg.util.ThreadPools;
@@ -69,13 +63,10 @@ public class Coordinator extends Channel {
 
   private final Catalog catalog;
   private final IcebergSinkConfig config;
-  private final List<Envelope> commitBuffer = new LinkedList<>();
-  private final List<CommitReadyPayload> readyBuffer = new LinkedList<>();
-  private long startTime;
-  private UUID currentCommitId;
   private final int totalPartitionCount;
   private final String snapshotOffsetsProp;
   private final ExecutorService exec;
+  private final CommitState commitState;
 
   public Coordinator(Catalog catalog, IcebergSinkConfig config, KafkaClientFactory clientFactory) {
     // pass consumer group ID to which we commit low watermark offsets
@@ -86,25 +77,22 @@ public class Coordinator extends Channel {
     this.totalPartitionCount = getTotalPartitionCount();
     this.snapshotOffsetsProp = CONTROL_OFFSETS_SNAPSHOT_PREFIX + config.getControlTopic();
     this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.getCommitThreads());
+    this.commitState = new CommitState();
   }
 
   public void process() {
-    if (startTime == 0) {
-      startTime = System.currentTimeMillis();
-    }
-
-    // send out begin commit
-    if (currentCommitId == null
-        && System.currentTimeMillis() - startTime >= config.getCommitIntervalMs()) {
-      currentCommitId = UUID.randomUUID();
-      Event event = new Event(EventType.COMMIT_REQUEST, new CommitRequestPayload(currentCommitId));
+    if (commitState.isCommitIntervalReached(config.getCommitIntervalMs())) {
+      // send out begin commit
+      commitState.startNewCommit();
+      Event event =
+          new Event(
+              EventType.COMMIT_REQUEST, new CommitRequestPayload(commitState.getCurrentCommitId()));
       send(event);
-      startTime = System.currentTimeMillis();
     }
 
     consumeAvailable(POLL_DURATION);
 
-    if (currentCommitId != null && isCommitTimedOut()) {
+    if (commitState.isCommitTimedOut(config.getCommitTimeoutMs())) {
       commit(true);
     }
   }
@@ -113,15 +101,11 @@ public class Coordinator extends Channel {
   protected boolean receive(Envelope envelope) {
     switch (envelope.getEvent().getType()) {
       case COMMIT_RESPONSE:
-        commitBuffer.add(envelope);
-        if (currentCommitId == null) {
-          LOG.warn(
-              "Received commit response when no commit in progress, this can happen during recovery");
-        }
+        commitState.addResponse(envelope);
         return true;
       case COMMIT_READY:
-        readyBuffer.add((CommitReadyPayload) envelope.getEvent().getPayload());
-        if (isCommitReady(currentCommitId, totalPartitionCount, readyBuffer)) {
+        commitState.addReady(envelope);
+        if (commitState.isCommitReady(totalPartitionCount)) {
           commit(false);
         }
         return true;
@@ -144,63 +128,21 @@ public class Coordinator extends Channel {
         .sum();
   }
 
-  private boolean isCommitTimedOut() {
-    if (System.currentTimeMillis() - startTime > config.getCommitTimeoutMs()) {
-      LOG.info("Commit timeout reached");
-      return true;
-    }
-    return false;
-  }
-
-  @VisibleForTesting
-  static boolean isCommitReady(
-      UUID commitId, int expectedPartitionCount, List<CommitReadyPayload> buffer) {
-    int receivedPartitionCount =
-        buffer.stream()
-            .filter(payload -> payload.getCommitId().equals(commitId))
-            .mapToInt(payload -> payload.getAssignments().size())
-            .sum();
-
-    if (receivedPartitionCount >= expectedPartitionCount) {
-      LOG.info(
-          "Commit {} ready, received responses for all {} partitions",
-          commitId,
-          receivedPartitionCount);
-      return true;
-    }
-
-    LOG.info(
-        "Commit {} not ready, received responses for {} of {} partitions, waiting for more",
-        commitId,
-        receivedPartitionCount,
-        expectedPartitionCount);
-
-    return false;
-  }
-
   private void commit(boolean partialCommit) {
     try {
       doCommit(partialCommit);
     } catch (Exception e) {
       LOG.warn("Commit failed, will try again next cycle", e);
     } finally {
-      readyBuffer.clear();
-      currentCommitId = null;
+      commitState.endCurrentCommit();
     }
   }
 
   private void doCommit(boolean partialCommit) {
-    Map<TableIdentifier, List<Envelope>> commitMap =
-        commitBuffer.stream()
-            .collect(
-                groupingBy(
-                    envelope ->
-                        ((CommitResponsePayload) envelope.getEvent().getPayload())
-                            .getTableName()
-                            .toIdentifier()));
+    Map<TableIdentifier, List<Envelope>> commitMap = commitState.getTableCommitMap();
 
     String offsetsJson = getOffsetsJson();
-    Long vtts = getVtts(partialCommit, readyBuffer);
+    Long vtts = commitState.getVtts(partialCommit);
 
     Tasks.foreach(commitMap.entrySet())
         .executeWith(exec)
@@ -212,15 +154,17 @@ public class Coordinator extends Channel {
 
     // we should only get here if all tables committed successfully...
     commitConsumerOffsets();
-    commitBuffer.clear();
+    commitState.clearResponses();
 
     Event event =
-        new Event(EventType.COMMIT_COMPLETE, new CommitCompletePayload(currentCommitId, vtts));
+        new Event(
+            EventType.COMMIT_COMPLETE,
+            new CommitCompletePayload(commitState.getCurrentCommitId(), vtts));
     send(event);
 
     LOG.info(
         "Commit {} complete, commited to {} table(s), vtts {}",
-        currentCommitId,
+        commitState.getCurrentCommitId(),
         commitMap.size(),
         vtts);
   }
@@ -231,28 +175,6 @@ public class Coordinator extends Channel {
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
-  }
-
-  @VisibleForTesting
-  static Long getVtts(boolean partialCommit, List<CommitReadyPayload> buffer) {
-    boolean validVtts =
-        !partialCommit
-            && buffer.stream()
-                .flatMap(event -> event.getAssignments().stream())
-                .allMatch(offset -> offset.getTimestamp() != null);
-
-    Long result;
-    if (validVtts) {
-      result =
-          buffer.stream()
-              .flatMap(event -> event.getAssignments().stream())
-              .mapToLong(TopicPartitionOffset::getTimestamp)
-              .min()
-              .getAsLong();
-    } else {
-      result = null;
-    }
-    return result;
   }
 
   private void commitToTable(
@@ -297,7 +219,7 @@ public class Coordinator extends Channel {
       if (deleteFiles.isEmpty()) {
         AppendFiles appendOp = table.newAppend();
         appendOp.set(snapshotOffsetsProp, offsetsJson);
-        appendOp.set(COMMIT_ID_SNAPSHOT_PROP, currentCommitId.toString());
+        appendOp.set(COMMIT_ID_SNAPSHOT_PROP, commitState.getCurrentCommitId().toString());
         if (vtts != null) {
           appendOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts));
         }
@@ -306,7 +228,7 @@ public class Coordinator extends Channel {
       } else {
         RowDelta deltaOp = table.newRowDelta();
         deltaOp.set(snapshotOffsetsProp, offsetsJson);
-        deltaOp.set(COMMIT_ID_SNAPSHOT_PROP, currentCommitId.toString());
+        deltaOp.set(COMMIT_ID_SNAPSHOT_PROP, commitState.getCurrentCommitId().toString());
         if (vtts != null) {
           deltaOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts));
         }
@@ -320,7 +242,7 @@ public class Coordinator extends Channel {
           new Event(
               EventType.COMMIT_TABLE,
               new CommitTablePayload(
-                  currentCommitId,
+                  commitState.getCurrentCommitId(),
                   TableName.of(tableIdentifier),
                   table.currentSnapshot().snapshotId(),
                   vtts));
@@ -330,7 +252,7 @@ public class Coordinator extends Channel {
           "Commit complete to table {}, snapshot {}, commit ID {}, vtts {}",
           tableIdentifier,
           snapshotId,
-          currentCommitId,
+          commitState.getCurrentCommitId(),
           vtts);
     }
   }
