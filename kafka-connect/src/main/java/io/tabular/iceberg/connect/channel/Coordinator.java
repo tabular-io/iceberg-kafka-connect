@@ -77,11 +77,11 @@ public class Coordinator extends Channel {
     this.totalPartitionCount = getTotalPartitionCount();
     this.snapshotOffsetsProp = CONTROL_OFFSETS_SNAPSHOT_PREFIX + config.getControlTopic();
     this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.getCommitThreads());
-    this.commitState = new CommitState();
+    this.commitState = new CommitState(config);
   }
 
   public void process() {
-    if (commitState.isCommitIntervalReached(config.getCommitIntervalMs())) {
+    if (commitState.isCommitIntervalReached()) {
       // send out begin commit
       commitState.startNewCommit();
       Event event =
@@ -92,7 +92,7 @@ public class Coordinator extends Channel {
 
     consumeAvailable(POLL_DURATION);
 
-    if (commitState.isCommitTimedOut(config.getCommitTimeoutMs())) {
+    if (commitState.isCommitTimedOut()) {
       commit(true);
     }
   }

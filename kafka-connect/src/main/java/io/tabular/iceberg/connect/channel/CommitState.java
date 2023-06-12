@@ -20,6 +20,7 @@ package io.tabular.iceberg.connect.channel;
 
 import static java.util.stream.Collectors.groupingBy;
 
+import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.events.TopicPartitionOffset;
@@ -38,6 +39,11 @@ public class CommitState {
   private final List<CommitReadyPayload> readyBuffer = new LinkedList<>();
   private long startTime;
   private UUID currentCommitId;
+  private final IcebergSinkConfig config;
+
+  public CommitState(IcebergSinkConfig config) {
+    this.config = config;
+  }
 
   public void addResponse(Envelope envelope) {
     commitBuffer.add(envelope);
@@ -62,13 +68,14 @@ public class CommitState {
     return currentCommitId != null;
   }
 
-  public boolean isCommitIntervalReached(long commitIntervalMs) {
+  public boolean isCommitIntervalReached() {
     if (startTime == 0) {
       startTime = System.currentTimeMillis();
     }
 
     // send out begin commit
-    return (!isCommitInProgress() && System.currentTimeMillis() - startTime >= commitIntervalMs);
+    return (!isCommitInProgress()
+        && System.currentTimeMillis() - startTime >= config.getCommitIntervalMs());
   }
 
   public void startNewCommit() {
@@ -85,12 +92,12 @@ public class CommitState {
     commitBuffer.clear();
   }
 
-  public boolean isCommitTimedOut(long commitTimeoutMs) {
+  public boolean isCommitTimedOut() {
     if (!isCommitInProgress()) {
       return false;
     }
 
-    if (System.currentTimeMillis() - startTime > commitTimeoutMs) {
+    if (System.currentTimeMillis() - startTime > config.getCommitTimeoutMs()) {
       LOG.info("Commit timeout reached");
       return true;
     }

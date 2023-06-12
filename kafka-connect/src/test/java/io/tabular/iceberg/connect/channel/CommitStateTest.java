@@ -25,11 +25,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.events.Event;
 import io.tabular.iceberg.connect.events.Payload;
 import io.tabular.iceberg.connect.events.TopicPartitionOffset;
-import java.util.List;
 import java.util.UUID;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.junit.jupiter.api.Test;
@@ -39,7 +39,7 @@ public class CommitStateTest {
   public void testIsCommitReady() {
     TopicPartitionOffset tp = mock(TopicPartitionOffset.class);
 
-    CommitState commitState = new CommitState();
+    CommitState commitState = new CommitState(mock(IcebergSinkConfig.class));
     commitState.startNewCommit();
 
     CommitReadyPayload payload1 = mock(CommitReadyPayload.class);
@@ -76,9 +76,7 @@ public class CommitStateTest {
     when(tp3.getTimestamp()).thenReturn(1L);
     when(payload2.getAssignments()).thenReturn(ImmutableList.of(tp3));
 
-    List<CommitReadyPayload> buffer = ImmutableList.of(payload1, payload2);
-
-    CommitState commitState = new CommitState();
+    CommitState commitState = new CommitState(mock(IcebergSinkConfig.class));
     commitState.startNewCommit();
 
     commitState.addReady(wrapInEnvelope(payload1));
@@ -95,7 +93,6 @@ public class CommitStateTest {
 
     commitState.addReady(wrapInEnvelope(payload3));
 
-    buffer = ImmutableList.of(payload1, payload2, payload3);
     assertNull(commitState.getVtts(false));
     assertNull(commitState.getVtts(true));
   }
