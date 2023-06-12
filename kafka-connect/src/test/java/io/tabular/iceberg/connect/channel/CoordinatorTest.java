@@ -22,12 +22,9 @@ import static io.tabular.iceberg.connect.events.EventTestUtil.createDataFile;
 import static io.tabular.iceberg.connect.events.EventTestUtil.createDeleteFile;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -138,58 +135,6 @@ public class CoordinatorTest extends ChannelTestBase {
         (CommitCompletePayload) commitComplete.getPayload();
     assertEquals(commitId, commitCompletePayload.getCommitId());
     assertEquals(ts, commitCompletePayload.getVtts());
-  }
-
-  @Test
-  public void testIsCommitReady() {
-    UUID commitId = UUID.randomUUID();
-    TopicPartitionOffset tp = mock(TopicPartitionOffset.class);
-
-    CommitReadyPayload payload1 = mock(CommitReadyPayload.class);
-    when(payload1.getCommitId()).thenReturn(commitId);
-    when(payload1.getAssignments()).thenReturn(ImmutableList.of(tp, tp));
-
-    CommitReadyPayload payload2 = mock(CommitReadyPayload.class);
-    when(payload2.getCommitId()).thenReturn(commitId);
-    when(payload2.getAssignments()).thenReturn(ImmutableList.of(tp));
-
-    CommitReadyPayload payload3 = mock(CommitReadyPayload.class);
-    when(payload3.getCommitId()).thenReturn(UUID.randomUUID());
-    when(payload3.getAssignments()).thenReturn(ImmutableList.of(tp));
-
-    List<CommitReadyPayload> buffer = ImmutableList.of(payload1, payload2, payload3);
-
-    assertTrue(Coordinator.isCommitReady(commitId, 3, buffer));
-    assertFalse(Coordinator.isCommitReady(commitId, 4, buffer));
-  }
-
-  @Test
-  public void testGetVtts() {
-    CommitReadyPayload payload1 = mock(CommitReadyPayload.class);
-    TopicPartitionOffset tp1 = mock(TopicPartitionOffset.class);
-    when(tp1.getTimestamp()).thenReturn(3L);
-    TopicPartitionOffset tp2 = mock(TopicPartitionOffset.class);
-    when(tp2.getTimestamp()).thenReturn(2L);
-    when(payload1.getAssignments()).thenReturn(ImmutableList.of(tp1, tp2));
-
-    CommitReadyPayload payload2 = mock(CommitReadyPayload.class);
-    TopicPartitionOffset tp3 = mock(TopicPartitionOffset.class);
-    when(tp3.getTimestamp()).thenReturn(1L);
-    when(payload2.getAssignments()).thenReturn(ImmutableList.of(tp3));
-
-    List<CommitReadyPayload> buffer = ImmutableList.of(payload1, payload2);
-    assertEquals(1L, Coordinator.getVtts(false, buffer));
-    assertNull(Coordinator.getVtts(true, buffer));
-
-    // null timestamp for one, so should not set a vtts
-    CommitReadyPayload payload3 = mock(CommitReadyPayload.class);
-    TopicPartitionOffset tp4 = mock(TopicPartitionOffset.class);
-    when(tp4.getTimestamp()).thenReturn(null);
-    when(payload3.getAssignments()).thenReturn(ImmutableList.of(tp4));
-
-    buffer = ImmutableList.of(payload1, payload2, payload3);
-    assertNull(Coordinator.getVtts(false, buffer));
-    assertNull(Coordinator.getVtts(true, buffer));
   }
 
   private UUID coordinatorTest(List<DataFile> dataFiles, List<DeleteFile> deleteFiles, long ts) {
