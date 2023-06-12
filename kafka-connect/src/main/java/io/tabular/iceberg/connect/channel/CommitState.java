@@ -73,7 +73,6 @@ public class CommitState {
       startTime = System.currentTimeMillis();
     }
 
-    // send out begin commit
     return (!isCommitInProgress()
         && System.currentTimeMillis() - startTime >= config.getCommitIntervalMs());
   }
