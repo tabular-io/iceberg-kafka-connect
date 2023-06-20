@@ -100,7 +100,7 @@ This example config connects to a Iceberg REST catalog.
     "iceberg.tables": "default.events",
     "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
     "iceberg.catalog.uri": "https://localhost",
-    "iceberg.catalog.credential": "<token>",
+    "iceberg.catalog.credential": "<credential>",
     "iceberg.catalog.warehouse": "<warehouse name>"
     }
 }
@@ -142,7 +142,7 @@ PARTITIONED BY (hours(ts));
     "iceberg.table.default.events_create.routeRegex": "create",
     "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
     "iceberg.catalog.uri": "https://localhost",
-    "iceberg.catalog.credential": "<token>",
+    "iceberg.catalog.credential": "<credential>",
     "iceberg.catalog.warehouse": "<warehouse name>"
     }
 }
@@ -168,7 +168,7 @@ See above for creating two tables.
     "iceberg.tables.routeField": "db_table",
     "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
     "iceberg.catalog.uri": "https://localhost",
-    "iceberg.catalog.credential": "<token>",
+    "iceberg.catalog.credential": "<credential>",
     "iceberg.catalog.warehouse": "<warehouse name>"
     }
 }
@@ -195,7 +195,7 @@ See above for creating the table
     "iceberg.tables.cdcField": "_cdc_op",
     "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
     "iceberg.catalog.uri": "https://localhost",
-    "iceberg.catalog.credential": "<token>",
+    "iceberg.catalog.credential": "<credential>",
     "iceberg.catalog.warehouse": "<warehouse name>"
     }
 }
