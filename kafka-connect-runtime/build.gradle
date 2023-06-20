@@ -42,6 +42,9 @@ processResources {
 distributions {
   main {
     contents {
+      from(processResources.destinationDir) {
+        include "manifest.json"
+      }
       into("lib/") {
         from configurations.runtimeClasspath
       }
@@ -49,8 +52,8 @@ distributions {
         from "$rootDir/LICENSE"
         from "$rootDir/README.md"
       }
-      from(processResources.destinationDir) {
-        include "manifest.json"
+      into("assets/") {
+        from "$rootDir/logos"
       }
     }
   }

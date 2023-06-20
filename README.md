@@ -18,6 +18,39 @@ zip archive yourself by running:
 ```
 The zip archive will be found under `./kafka-connect-runtime/build/distributions`.
 
+# Configuration
+
+| Property                                 | Description                                                                                                   |
+|------------------------------------------|---------------------------------------------------------------------------------------------------------------|
+| iceberg.tables                           | Comma-separated list of destination tables                                                                    |
+| iceberg.tables.routeField                | For multi-table fan-out, the name of the field used to route records to tables                                |
+| iceberg.tables.\<table name\>.routeRegex | The regex used to match a record's `routeField` to a table                                                    |
+| iceberg.tables.dynamic.enabled           | Set to `true` to route to a table specified in `routeField` instead of using `routeRegex`, default is `false` |
+| iceberg.tables.cdcField                  | Name of the field containing the CDC operation, `I`, `U`, or `D`, default is none                             |
+| iceberg.tables.upsertModeEnabled         | Set to `true` to enable upsert mode, default is `false`                                                       |
+| iceberg.control.topic                    | Name of the control topic, default is `control-<connector name>`                                            |
+| iceberg.control.group.id                 | Name of the consumer group to store offsets, default is `cg-control-<connector name>`                       |
+| iceberg.control.commitIntervalMs         | Commit interval in msec, default is 300,000 (5 min)                                                           |
+| iceberg.control.commitTimeoutMs          | Commit timeout interval in msec, default is 30,000 (30 sec)                                                   |
+| iceberg.control.commitThreads            | Number of threads to use for commits, default is (cores * 2)                                                  |
+| iceberg.catalog.*                        | Properties passed through to Iceberg catalog initialization                                                   |
+| iceberg.kafka.*                          | Properties passed through to control topic Kafka client initialization                                        |
+
+If `iceberg.tables.dynamic.enabled` is `false` (the default) then you must specify `iceberg.tables`. If
+`iceberg.tables.dynamic.enabled` is `true` then you must specify `iceberg.tables.routeField` which will
+contain the name of the table. Enabling `iceberg.tables.upsertModeEnabled` will cause all appends to be
+preceded by an equality delete. Both CDC and upsert mode require an Iceberg V2 table with identity fields
+defined.
+
+By default the connector will attempt to use Kafka client config from the worker properties for connecting to
+the control topic. If that config cannot be read for some reason, Kafka client settings
+can be set explicitly using `iceberg.kafka.*` properties.
+
+The `iceberg.catalog.*` properties are required for connecting to the Iceberg catalog. The core catalog
+types are included in the default distribution, such as REST, Hadoop, Glue, DynamoDB, Nessie,
+JDBC, and Hive. JDBC drivers and the Hive metastore client are not included in the default
+distribution, so you will need to include those if needed.
+
 # Examples
 
 ## Initial setup
@@ -56,7 +89,8 @@ PARTITIONED BY (hours(ts))
 ```
 
 ### Connector config
-```
+This example config connects to a Iceberg REST catalog.
+```json
 {
 "name": "events-sink",
 "config": {
@@ -65,7 +99,9 @@ PARTITIONED BY (hours(ts))
     "topics": "events",
     "iceberg.tables": "default.events",
     "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
-    "iceberg.catalog.uri": ...
+    "iceberg.catalog.uri": "https://localhost",
+    "iceberg.catalog.credential": "<token>",
+    "iceberg.catalog.warehouse": "<warehouse name>"
     }
 }
 ```
@@ -93,7 +129,7 @@ PARTITIONED BY (hours(ts));
 ```
 
 ### Connector config
-```
+```json
 {
 "name": "events-sink",
 "config": {
@@ -105,7 +141,9 @@ PARTITIONED BY (hours(ts));
     "iceberg.table.default.events_list.routeRegex": "list",
     "iceberg.table.default.events_create.routeRegex": "create",
     "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
-    "iceberg.catalog.uri": ...
+    "iceberg.catalog.uri": "https://localhost",
+    "iceberg.catalog.credential": "<token>",
+    "iceberg.catalog.warehouse": "<warehouse name>"
     }
 }
 ```
@@ -119,7 +157,7 @@ field is set to `default.events_list`, then the record is written to the `defaul
 See above for creating two tables.
 
 ### Connector config
-```
+```json
 {
 "name": "events-sink",
 "config": {
@@ -129,7 +167,9 @@ See above for creating two tables.
     "iceberg.tables.dynamic.enabled": "true",
     "iceberg.tables.routeField": "db_table",
     "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
-    "iceberg.catalog.uri": ...
+    "iceberg.catalog.uri": "https://localhost",
+    "iceberg.catalog.credential": "<token>",
+    "iceberg.catalog.warehouse": "<warehouse name>"
     }
 }
 ```
@@ -144,7 +184,7 @@ and have an identity field (or fields) defined. This can be combined with multi-
 See above for creating the table
 
 ### Connector config
-```
+```json
 {
 "name": "events-sink",
 "config": {
@@ -154,7 +194,9 @@ See above for creating the table
     "iceberg.tables": "default.events",
     "iceberg.tables.cdcField": "_cdc_op",
     "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
-    "iceberg.catalog.uri": ...
+    "iceberg.catalog.uri": "https://localhost",
+    "iceberg.catalog.credential": "<token>",
+    "iceberg.catalog.warehouse": "<warehouse name>"
     }
 }
 ```
