@@ -47,7 +47,7 @@ the control topic. If that config cannot be read for some reason, Kafka client s
 can be set explicitly using `iceberg.kafka.*` properties.
 
 The `iceberg.catalog.*` properties are required for connecting to the Iceberg catalog. The core catalog
-types are included in the default distribution, such as REST, Hadoop, Glue, DynamoDB, Nessie,
+types are included in the default distribution, including REST, Glue, DynamoDB, Hadoop, Nessie,
 JDBC, and Hive. JDBC drivers and the Hive metastore client are not included in the default
 distribution, so you will need to include those if needed.
 

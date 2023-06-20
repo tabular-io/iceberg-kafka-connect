@@ -3,7 +3,7 @@
   "name": "iceberg-kafka-connect",
   "logo": "assets/iceberg.png",
   "version": "__VERSION__",
-  "description": "A sink connector for writing data to Iceberg tables",
+  "description": "A sink connector for writing data from Kafka into Iceberg tables",
 
   "component_types": [
     "sink"
@@ -41,7 +41,7 @@
   "support": {
     "provider_name": "Tabular Technologies, Inc.",
     "logo": "assets/tabular.png",
-    "summary": "Support for this connector is provided by the open source community. You can open an issue in GitHub or post a question in the Iceberg Slack workspace in the kafka-connect channel.",
+    "summary": "Support for this connector is provided by the Iceberg open source community. You can open an issue in the connector GitHub repo or post a question in the Iceberg Slack workspace in the kafka-connect channel.",
     "url": "https://github.com/tabular-io/iceberg-kafka-connect/issues"
   }
 }
