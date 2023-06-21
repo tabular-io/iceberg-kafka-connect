@@ -1,5 +1,5 @@
 {
-  "title": "Iceberg Sink Connector",
+  "title": "Apache Iceberg Sink Connector",
   "name": "iceberg-kafka-connect",
   "logo": "assets/iceberg.png",
   "version": "__VERSION__",
