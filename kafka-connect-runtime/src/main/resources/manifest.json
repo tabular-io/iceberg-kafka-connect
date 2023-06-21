@@ -3,7 +3,7 @@
   "name": "iceberg-kafka-connect",
   "logo": "assets/iceberg.png",
   "version": "__VERSION__",
-  "description": "A sink connector for writing data from Kafka into Iceberg tables",
+  "description": "The Apache Iceberg Sink Connector for Kafka Connect is a sink connector for writing data from Kafka into Iceberg tables.",
 
   "component_types": [
     "sink"
