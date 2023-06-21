@@ -1,5 +1,5 @@
-# Iceberg Sink Connector
-The Iceberg Sink Connector for Kafka Connect is a sink connector for writing data from Kafka into Iceberg tables.
+# Apache Iceberg Sink Connector
+The Apache Iceberg Sink Connector for Kafka Connect is a sink connector for writing data from Kafka into Iceberg tables.
 
 # Features
 * Commit coordination for centralized Iceberg commits
@@ -10,7 +10,7 @@ The Iceberg Sink Connector for Kafka Connect is a sink connector for writing dat
 * Field name mapping via Iceberg’s column mapping functionality
 
 # Installation
-The Iceberg Sink Connector is under active development, with early access builds available under
+The Apache Iceberg Sink Connector is under active development, with early access builds available under
 [Releases](https://github.com/tabular-io/iceberg-kafka-connect/releases). You can build the connector
 zip archive yourself by running:
 ```bash
