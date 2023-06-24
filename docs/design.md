@@ -21,9 +21,7 @@ Finally, we want to correlate the Kafka consumer offsets with Iceberg commits, w
 * Message conversion using the Iceberg schema as the source of truth
 * Field name mapping via Iceberg’s column mapping functionality
 
-
-
-Iceberg KC.png
+![Iceberg%20KC](https://github.com/tabular-io/iceberg-kafka-connect/assets/5475421/edb8e698-0878-445f-8e41-140ba05c237e)
 
 ## Commit Coordinator
 
