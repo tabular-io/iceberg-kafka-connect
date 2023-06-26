@@ -149,6 +149,7 @@ If the table is rolled back to an older snapshot, then that also rolls back to o
 * Pluggable commit coordinator
   * Allow a backend to handle instead of requiring a control topic
 * Distribute commits across workers
+* Schema evolution, automatic table creation
 
 ## Alternatives Considered
 
