@@ -88,7 +88,6 @@ public class Event implements Element {
             .name("groupId")
             .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
             .type()
-            .nullable() // for backwards compatibility
             .stringType()
             .noDefault()
             .endRecord();

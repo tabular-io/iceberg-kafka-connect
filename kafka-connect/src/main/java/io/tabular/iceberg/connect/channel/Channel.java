@@ -124,7 +124,7 @@ public abstract class Channel {
 
             Event event = Event.decode(record.value());
 
-            if (event.getGroupId() == null || event.getGroupId().equals(groupId)) {
+            if (event.getGroupId().equals(groupId)) {
               LOG.debug("Received event of type: {}", event.getType().name());
               if (receive(new Envelope(event, record.partition(), record.offset()))) {
                 LOG.info("Handled event of type: {}", event.getType().name());
