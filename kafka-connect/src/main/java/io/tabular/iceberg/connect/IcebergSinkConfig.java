@@ -75,7 +75,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String NAME_PROP = "name";
   private static final String BOOTSTRAP_SERVERS_PROP = "bootstrap.servers";
 
-  private static final String DEFAULT_CONTROL_TOPIC_PREFIX = "control-";
+  private static final String DEFAULT_CONTROL_TOPIC = "control-iceberg";
   public static final String DEFAULT_CONTROL_GROUP_PREFIX = "cg-control-";
 
   public static ConfigDef CONFIG_DEF = newConfigDef();
@@ -127,7 +127,11 @@ public class IcebergSinkConfig extends AbstractConfig {
         "Set to true to treat all appends as upserts, false otherwise");
     configDef.define(CATALOG_IMPL_PROP, Type.STRING, Importance.HIGH, "Iceberg catalog class name");
     configDef.define(
-        CONTROL_TOPIC_PROP, Type.STRING, null, Importance.MEDIUM, "Name of the control topic");
+        CONTROL_TOPIC_PROP,
+        Type.STRING,
+        DEFAULT_CONTROL_TOPIC,
+        Importance.MEDIUM,
+        "Name of the control topic");
     configDef.define(
         CONTROL_GROUP_ID_PROP,
         Type.STRING,
@@ -252,13 +256,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   }
 
   public String getControlTopic() {
-    String result = getString(CONTROL_TOPIC_PROP);
-    if (result != null) {
-      return result;
-    }
-    String connectorName = getConnectorName();
-    Preconditions.checkNotNull(connectorName);
-    return DEFAULT_CONTROL_TOPIC_PREFIX + connectorName;
+    return getString(CONTROL_TOPIC_PROP);
   }
 
   public String getControlGroupId() {

@@ -95,7 +95,11 @@ public class WorkerTest extends ChannelTestBase {
     worker.save(ImmutableList.of(rec));
 
     UUID commitId = UUID.randomUUID();
-    Event commitRequest = new Event(EventType.COMMIT_REQUEST, new CommitRequestPayload(commitId));
+    Event commitRequest =
+        new Event(
+            config.getConnectorName(),
+            EventType.COMMIT_REQUEST,
+            new CommitRequestPayload(commitId));
     byte[] bytes = Event.encode(commitRequest);
     consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, 1, "key", bytes));
 

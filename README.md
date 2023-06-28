@@ -28,8 +28,8 @@ The zip archive will be found under `./kafka-connect-runtime/build/distributions
 | iceberg.tables.dynamic.enabled           | Set to `true` to route to a table specified in `routeField` instead of using `routeRegex`, default is `false` |
 | iceberg.tables.cdcField                  | Name of the field containing the CDC operation, `I`, `U`, or `D`, default is none                             |
 | iceberg.tables.upsertModeEnabled         | Set to `true` to enable upsert mode, default is `false`                                                       |
-| iceberg.control.topic                    | Name of the control topic, default is `control-<connector name>`                                            |
-| iceberg.control.group.id                 | Name of the consumer group to store offsets, default is `cg-control-<connector name>`                       |
+| iceberg.control.topic                    | Name of the control topic, default is `control-iceberg`                                                       |
+| iceberg.control.group.id                 | Name of the consumer group to store offsets, default is `cg-control-<connector name>`                         |
 | iceberg.control.commitIntervalMs         | Commit interval in msec, default is 300,000 (5 min)                                                           |
 | iceberg.control.commitTimeoutMs          | Commit timeout interval in msec, default is 30,000 (30 sec)                                                   |
 | iceberg.control.commitThreads            | Number of threads to use for commits, default is (cores * 2)                                                  |
@@ -59,13 +59,13 @@ distribution, so you will need to include those if needed.
 This assumes the source topic already exists and is named `events`.
 
 ### Control topic
-If your Kafka cluster has `auto.create.topics.enable` set to `true` (the default), then the control topic will be automatically created. If not, then you will need to create the topic first. The default topic name is `control-<connector name>`:
+If your Kafka cluster has `auto.create.topics.enable` set to `true` (the default), then the control topic will be automatically created. If not, then you will need to create the topic first. The default topic name is `control-iceberg`:
 ```bash
 bin/kafka-topics  \
   --command-config command-config.props \
   --bootstrap-server ${CONNECT_BOOTSTRAP_SERVERS} \
   --create \
-  --topic control-events-sink \
+  --topic control-iceberg \
   --partitions 1
 ```
 *NOTE: Clusters running on Confluent Cloud have `auto.create.topics.enable` set to `false` by default.*
