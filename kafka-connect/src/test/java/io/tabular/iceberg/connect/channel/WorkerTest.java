@@ -97,7 +97,7 @@ public class WorkerTest extends ChannelTestBase {
     UUID commitId = UUID.randomUUID();
     Event commitRequest =
         new Event(
-            config.getConnectorName(),
+            config.getControlGroupId(),
             EventType.COMMIT_REQUEST,
             new CommitRequestPayload(commitId));
     byte[] bytes = Event.encode(commitRequest);

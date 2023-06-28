@@ -76,7 +76,7 @@ public class IntegrationTestBase {
             new Condition<String>() {
               @Override
               public boolean matches(String str) {
-                return str.startsWith("kafka.connect.control.offsets.");
+                return str.startsWith("kafka.connect.offsets.");
               }
             });
     assertThat(props).containsKey("kafka.connect.commitId");

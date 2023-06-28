@@ -18,6 +18,7 @@
  */
 package io.tabular.iceberg.connect.channel;
 
+import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -56,7 +57,7 @@ public class Coordinator extends Channel {
 
   private static final Logger LOG = LoggerFactory.getLogger(Coordinator.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private static final String CONTROL_OFFSETS_SNAPSHOT_PREFIX = "kafka.connect.control.offsets.";
+  private static final String OFFSETS_SNAPSHOT_PROP_FMT = "kafka.connect.offsets.%s.%s";
   private static final String COMMIT_ID_SNAPSHOT_PROP = "kafka.connect.commitId";
   private static final String VTTS_SNAPSHOT_PROP = "kafka.connect.vtts";
   private static final Duration POLL_DURATION = Duration.ofMillis(1000);
@@ -75,7 +76,8 @@ public class Coordinator extends Channel {
     this.catalog = catalog;
     this.config = config;
     this.totalPartitionCount = getTotalPartitionCount();
-    this.snapshotOffsetsProp = CONTROL_OFFSETS_SNAPSHOT_PREFIX + config.getControlTopic();
+    this.snapshotOffsetsProp =
+        format(OFFSETS_SNAPSHOT_PROP_FMT, config.getControlTopic(), config.getControlGroupId());
     this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.getCommitThreads());
     this.commitState = new CommitState(config);
   }
@@ -86,7 +88,7 @@ public class Coordinator extends Channel {
       commitState.startNewCommit();
       Event event =
           new Event(
-              config.getConnectorName(),
+              config.getControlGroupId(),
               EventType.COMMIT_REQUEST,
               new CommitRequestPayload(commitState.getCurrentCommitId()));
       send(event);
@@ -160,7 +162,7 @@ public class Coordinator extends Channel {
 
     Event event =
         new Event(
-            config.getConnectorName(),
+            config.getControlGroupId(),
             EventType.COMMIT_COMPLETE,
             new CommitCompletePayload(commitState.getCurrentCommitId(), vtts));
     send(event);
@@ -243,7 +245,7 @@ public class Coordinator extends Channel {
       Long snapshotId = table.currentSnapshot().snapshotId();
       Event event =
           new Event(
-              config.getConnectorName(),
+              config.getControlGroupId(),
               EventType.COMMIT_TABLE,
               new CommitTablePayload(
                   commitState.getCurrentCommitId(),
@@ -264,12 +266,10 @@ public class Coordinator extends Channel {
   private Map<Integer, Long> getLastCommittedOffsetsForTable(Table table) {
     // TODO: support branches
 
-    String offsetsProp = CONTROL_OFFSETS_SNAPSHOT_PREFIX + config.getControlTopic();
     Snapshot snapshot = table.currentSnapshot();
-
     while (snapshot != null) {
       Map<String, String> summary = snapshot.summary();
-      String value = summary.get(offsetsProp);
+      String value = summary.get(snapshotOffsetsProp);
       if (value != null) {
         TypeReference<Map<Integer, Long>> typeRef = new TypeReference<Map<Integer, Long>>() {};
         try {

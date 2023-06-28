@@ -32,7 +32,7 @@ public class Event implements Element {
   private UUID id;
   private EventType type;
   private Long timestamp;
-  private String connector;
+  private String groupId;
   private Payload payload;
   private Schema avroSchema;
 
@@ -56,11 +56,11 @@ public class Event implements Element {
     this.avroSchema = avroSchema;
   }
 
-  public Event(String connector, EventType type, Payload payload) {
+  public Event(String groupId, EventType type, Payload payload) {
     this.id = UUID.randomUUID();
     this.type = type;
     this.timestamp = System.currentTimeMillis();
-    this.connector = connector;
+    this.groupId = groupId;
     this.payload = payload;
 
     this.avroSchema =
@@ -85,10 +85,9 @@ public class Event implements Element {
             .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
             .type(payload.getSchema())
             .noDefault()
-            .name("connector")
+            .name("groupId")
             .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
             .type()
-            .nullable() // for backwards compatibility
             .stringType()
             .noDefault()
             .endRecord();
@@ -110,8 +109,8 @@ public class Event implements Element {
     return payload;
   }
 
-  public String getConnector() {
-    return connector;
+  public String getGroupId() {
+    return groupId;
   }
 
   @Override
@@ -135,7 +134,7 @@ public class Event implements Element {
         this.payload = (Payload) v;
         return;
       case 4:
-        this.connector = v == null ? null : v.toString();
+        this.groupId = v == null ? null : v.toString();
         return;
       default:
         // ignore the object, it must be from a newer version of the format
@@ -154,7 +153,7 @@ public class Event implements Element {
       case 3:
         return payload;
       case 4:
-        return connector;
+        return groupId;
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
     }
