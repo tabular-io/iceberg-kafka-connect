@@ -47,7 +47,7 @@ public abstract class Channel {
 
   private final String controlTopic;
   private final String controlGroupId;
-  private final String connector;
+  private final String groupId;
   private final Producer<String, byte[]> producer;
   private final Consumer<String, byte[]> consumer;
   private final Admin admin;
@@ -61,7 +61,7 @@ public abstract class Channel {
       KafkaClientFactory clientFactory) {
     this.controlTopic = config.getControlTopic();
     this.controlGroupId = config.getControlGroupId();
-    this.connector = config.getConnectorName();
+    this.groupId = config.getControlGroupId();
 
     String transactionalId = name + config.getTransactionalSuffix();
     this.producer = clientFactory.createProducer(transactionalId);
@@ -124,7 +124,7 @@ public abstract class Channel {
 
             Event event = Event.decode(record.value());
 
-            if (event.getConnector() == null || event.getConnector().equals(connector)) {
+            if (event.getGroupId() == null || event.getGroupId().equals(groupId)) {
               LOG.debug("Received event of type: {}", event.getType().name());
               if (receive(new Envelope(event, record.partition(), record.offset()))) {
                 LOG.info("Handled event of type: {}", event.getType().name());

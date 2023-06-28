@@ -64,7 +64,7 @@ public class CoordinatorTest extends ChannelTestBase {
 
     ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
     verify(appendOp, times(3)).set(captor.capture(), notNull());
-    assertThat(captor.getAllValues().get(0)).startsWith("kafka.connect.control.offsets.");
+    assertThat(captor.getAllValues().get(0)).startsWith("kafka.connect.offsets.");
     assertEquals("kafka.connect.commitId", captor.getAllValues().get(1));
     assertEquals("kafka.connect.vtts", captor.getAllValues().get(2));
 
@@ -90,7 +90,7 @@ public class CoordinatorTest extends ChannelTestBase {
 
     ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
     verify(deltaOp, times(3)).set(captor.capture(), notNull());
-    assertThat(captor.getAllValues().get(0)).startsWith("kafka.connect.control.offsets.");
+    assertThat(captor.getAllValues().get(0)).startsWith("kafka.connect.offsets.");
     assertEquals("kafka.connect.commitId", captor.getAllValues().get(1));
     assertEquals("kafka.connect.vtts", captor.getAllValues().get(2));
   }
@@ -162,7 +162,7 @@ public class CoordinatorTest extends ChannelTestBase {
 
     Event commitResponse =
         new Event(
-            config.getConnectorName(),
+            config.getControlGroupId(),
             EventType.COMMIT_RESPONSE,
             new CommitResponsePayload(
                 StructType.of(),
@@ -175,7 +175,7 @@ public class CoordinatorTest extends ChannelTestBase {
 
     Event commitReady =
         new Event(
-            config.getConnectorName(),
+            config.getControlGroupId(),
             EventType.COMMIT_READY,
             new CommitReadyPayload(
                 commitId, ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))));

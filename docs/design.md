@@ -81,7 +81,7 @@ When a task starts up, the consumer offsets are initialized to those in the sink
 
 #### Control topic
 
-On coordinator startup, the control topic offsets are restored from the consumer group. Any data files events added after the offsets are processed during startup. If the consumer group had not yet been initialized, then the coordinator’s consumer starts reading from the latest. 
+On coordinator startup, the control topic offsets are restored from the consumer group. Any data files events added after the offsets are processed during startup. If the consumer group had not yet been initialized, then the coordinator’s consumer starts reading from the latest.
 
 The control topic offsets are also stored in the Iceberg snapshot as a summary property. Before committing to a table, this property is read from the table. Only data files events with offsets after this value are committed to the table.
 
@@ -110,7 +110,7 @@ The connector has exactly-once semantics. Workers ensure this by sending the dat
 
 If a task encounters a very heavy GC cycle during a transaction that causes a pause longer than the consumer session timeout (45 seconds by default), a partition might be assigned to a different task even though the “zombie” is still alive (but in a degraded state).
 
-In this circumstance, the new worker starts reading from the current committed offsets. When the zombie starts processing again, it complete the commit. This could lead to duplicates in this extreme case. Zombie fencing will be targeted for a future release. 
+In this circumstance, the new worker starts reading from the current committed offsets. When the zombie starts processing again, it complete the commit. This could lead to duplicates in this extreme case. Zombie fencing will be targeted for a future release.
 
 ## Error Handling
 
