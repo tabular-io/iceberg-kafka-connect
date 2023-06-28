@@ -20,6 +20,7 @@ Iceberg writes the Avro schema with the manifest files, so the data files events
   * ID
   * Timestamp
   * Type
+  * Connector
   * Payload (one of)
     * Commit request payload
       * Commit ID

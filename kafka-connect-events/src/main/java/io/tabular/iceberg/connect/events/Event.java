@@ -32,6 +32,7 @@ public class Event implements Element {
   private UUID id;
   private EventType type;
   private Long timestamp;
+  private String connector;
   private Payload payload;
   private Schema avroSchema;
 
@@ -55,10 +56,11 @@ public class Event implements Element {
     this.avroSchema = avroSchema;
   }
 
-  public Event(EventType type, Payload payload) {
+  public Event(String connector, EventType type, Payload payload) {
     this.id = UUID.randomUUID();
     this.type = type;
     this.timestamp = System.currentTimeMillis();
+    this.connector = connector;
     this.payload = payload;
 
     this.avroSchema =
@@ -83,6 +85,12 @@ public class Event implements Element {
             .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
             .type(payload.getSchema())
             .noDefault()
+            .name("connector")
+            .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+            .type()
+            .nullable() // for backwards compatibility
+            .stringType()
+            .noDefault()
             .endRecord();
   }
 
@@ -100,6 +108,10 @@ public class Event implements Element {
 
   public Payload getPayload() {
     return payload;
+  }
+
+  public String getConnector() {
+    return connector;
   }
 
   @Override
@@ -122,6 +134,9 @@ public class Event implements Element {
       case 3:
         this.payload = (Payload) v;
         return;
+      case 4:
+        this.connector = v == null ? null : v.toString();
+        return;
       default:
         // ignore the object, it must be from a newer version of the format
     }
@@ -138,6 +153,8 @@ public class Event implements Element {
         return timestamp;
       case 3:
         return payload;
+      case 4:
+        return connector;
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
     }

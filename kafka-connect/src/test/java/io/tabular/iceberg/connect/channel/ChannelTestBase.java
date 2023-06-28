@@ -79,6 +79,7 @@ public class ChannelTestBase {
     when(config.getControlTopic()).thenReturn(CTL_TOPIC_NAME);
     when(config.getControlGroupId()).thenReturn("group");
     when(config.getCommitThreads()).thenReturn(1);
+    when(config.getConnectorName()).thenReturn("connector");
 
     TopicPartitionInfo partitionInfo = mock(TopicPartitionInfo.class);
     when(partitionInfo.partition()).thenReturn(0);

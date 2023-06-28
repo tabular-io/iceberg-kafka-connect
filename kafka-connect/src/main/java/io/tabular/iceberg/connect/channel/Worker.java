@@ -148,6 +148,7 @@ public class Worker extends Channel {
             .map(
                 writeResult ->
                     new Event(
+                        config.getConnectorName(),
                         EventType.COMMIT_RESPONSE,
                         new CommitResponsePayload(
                             writeResult.getPartitionStruct(),
@@ -158,7 +159,10 @@ public class Worker extends Channel {
             .collect(toList());
 
     Event readyEvent =
-        new Event(EventType.COMMIT_READY, new CommitReadyPayload(commitId, assignments));
+        new Event(
+            config.getConnectorName(),
+            EventType.COMMIT_READY,
+            new CommitReadyPayload(commitId, assignments));
     events.add(readyEvent);
 
     send(events, offsets);

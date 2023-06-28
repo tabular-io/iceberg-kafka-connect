@@ -162,6 +162,7 @@ public class CoordinatorTest extends ChannelTestBase {
 
     Event commitResponse =
         new Event(
+            config.getConnectorName(),
             EventType.COMMIT_RESPONSE,
             new CommitResponsePayload(
                 StructType.of(),
@@ -174,6 +175,7 @@ public class CoordinatorTest extends ChannelTestBase {
 
     Event commitReady =
         new Event(
+            config.getConnectorName(),
             EventType.COMMIT_READY,
             new CommitReadyPayload(
                 commitId, ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))));

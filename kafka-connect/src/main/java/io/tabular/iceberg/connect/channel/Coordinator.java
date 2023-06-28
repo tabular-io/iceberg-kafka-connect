@@ -86,7 +86,9 @@ public class Coordinator extends Channel {
       commitState.startNewCommit();
       Event event =
           new Event(
-              EventType.COMMIT_REQUEST, new CommitRequestPayload(commitState.getCurrentCommitId()));
+              config.getConnectorName(),
+              EventType.COMMIT_REQUEST,
+              new CommitRequestPayload(commitState.getCurrentCommitId()));
       send(event);
     }
 
@@ -158,6 +160,7 @@ public class Coordinator extends Channel {
 
     Event event =
         new Event(
+            config.getConnectorName(),
             EventType.COMMIT_COMPLETE,
             new CommitCompletePayload(commitState.getCurrentCommitId(), vtts));
     send(event);
@@ -240,6 +243,7 @@ public class Coordinator extends Channel {
       Long snapshotId = table.currentSnapshot().snapshotId();
       Event event =
           new Event(
+              config.getConnectorName(),
               EventType.COMMIT_TABLE,
               new CommitTablePayload(
                   commitState.getCurrentCommitId(),
