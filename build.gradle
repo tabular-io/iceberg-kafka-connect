@@ -33,8 +33,8 @@ subprojects {
           "Implementation-Version": project.version,
           "Implementation-Vendor": "Tabular Technologies, Inc.",
           "Build-Timestamp": java.time.Instant.now().toString(),
-          "Build-JDK": "${System.properties['java.version']} (${System.properties['java.vendor']} ${System.properties['java.vm.version']})",
-          "Build-OS": "${System.properties['os.name']} ${System.properties['os.arch']} ${System.properties['os.version']}",
+          "Build-JDK": "${System.properties["java.version"]} (${System.properties["java.vendor"]} ${System.properties["java.vm.version"]})",
+          "Build-OS": "${System.properties["os.name"]} ${System.properties["os.arch"]} ${System.properties["os.version"]}",
       )
     }
   }

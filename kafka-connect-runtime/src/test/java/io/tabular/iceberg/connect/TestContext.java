@@ -42,6 +42,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.Network;
+import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.wait.strategy.HttpWaitStrategy;
 import org.testcontainers.lifecycle.Startables;
 import org.testcontainers.utility.DockerImageName;
@@ -59,7 +60,7 @@ public class TestContext {
   private final KafkaContainer kafka;
   private final KafkaConnectContainer kafkaConnect;
   private final GenericContainer hiveCatalog;
-  private final GenericContainer postgres;
+  private final PostgreSQLContainer postgres;
   private final GenericContainer minio;
 
   private static final String LOCAL_INSTALL_DIR = "build/install";
@@ -72,10 +73,10 @@ public class TestContext {
   private static final String POSTGRES_IMAGE = "postgres:14-alpine";
 
   private TestContext() {
-    network = Network.newNetwork();
+    network = Network.builder().createNetworkCmdModifier(cmd -> cmd.withName("iceberg")).build();
 
     minio =
-        new GenericContainer(DockerImageName.parse(MINIO_IMAGE))
+        new GenericContainer<>(DockerImageName.parse(MINIO_IMAGE))
             .withNetwork(network)
             .withNetworkAliases("minio")
             .withExposedPorts(9000)
@@ -88,23 +89,20 @@ public class TestContext {
     }
 
     postgres =
-        new GenericContainer(DockerImageName.parse(POSTGRES_IMAGE))
+        new PostgreSQLContainer<>(DockerImageName.parse(POSTGRES_IMAGE))
             .withNetwork(network)
-            .withNetworkAliases("postgres")
-            .withEnv("POSTGRES_DB", "metastore")
-            .withEnv("POSTGRES_USER", "sa")
-            .withEnv("POSTGRES_PASSWORD", "sa");
+            .withNetworkAliases("postgres");
 
     hiveCatalog =
-        new GenericContainer(DockerImageName.parse(HIVE_CATALOG_IMAGE))
+        new GenericContainer<>(DockerImageName.parse(HIVE_CATALOG_IMAGE))
             .withNetwork(network)
             .withNetworkAliases("hive")
             .dependsOn(minio, postgres)
             .withExposedPorts(9083)
             .withEnv("DATABASE_HOST", "postgres")
-            .withEnv("DATABASE_DB", "metastore")
-            .withEnv("DATABASE_USER", "sa")
-            .withEnv("DATABASE_PASSWORD", "sa")
+            .withEnv("DATABASE_DB", postgres.getDatabaseName())
+            .withEnv("DATABASE_USER", postgres.getUsername())
+            .withEnv("DATABASE_PASSWORD", postgres.getPassword())
             .withEnv("S3_BUCKET", BUCKET)
             .withEnv("S3_PREFIX", WAREHOUSE_PREFIX)
             .withEnv("S3_ENDPOINT_URL", "http://minio:9000")
