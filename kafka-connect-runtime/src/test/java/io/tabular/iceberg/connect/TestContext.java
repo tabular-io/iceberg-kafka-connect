@@ -71,7 +71,7 @@ public class TestContext {
     network = Network.newNetwork();
 
     minio =
-        new GenericContainer(DockerImageName.parse(MINIO_IMAGE))
+        new GenericContainer<>(DockerImageName.parse(MINIO_IMAGE))
             .withNetwork(network)
             .withNetworkAliases("minio")
             .withExposedPorts(9000)
@@ -79,7 +79,7 @@ public class TestContext {
             .waitingFor(new HttpWaitStrategy().forPort(9000).forPath("/minio/health/ready"));
 
     restCatalog =
-        new GenericContainer(DockerImageName.parse(REST_CATALOG_IMAGE))
+        new GenericContainer<>(DockerImageName.parse(REST_CATALOG_IMAGE))
             .withNetwork(network)
             .withNetworkAliases("iceberg")
             .dependsOn(minio)

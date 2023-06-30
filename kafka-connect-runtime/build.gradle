@@ -37,7 +37,7 @@ dependencies {
 
 processResources {
   filter {
-    it.replace('__VERSION__', project.version)
+    it.replace("__VERSION__", project.version)
   }
 }
 
