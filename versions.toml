@@ -4,6 +4,7 @@ avro-ver = "1.11.1"
 awaitility-ver = "4.2.0"
 aws-ver = "2.20.18"
 hadoop-ver = "3.3.5"
+hive-ver = "2.3.9"
 http-client-ver = "5.2.1"
 iceberg-ver = "1.3.0"
 jackson-ver = "2.14.2"
@@ -20,7 +21,10 @@ aws-glue = { module = "software.amazon.awssdk:glue", version.ref = "aws-ver" }
 aws-kms = { module = "software.amazon.awssdk:kms", version.ref = "aws-ver" }
 aws-s3 = { module = "software.amazon.awssdk:s3", version.ref = "aws-ver" }
 aws-sts = { module = "software.amazon.awssdk:sts", version.ref = "aws-ver" }
+hadoop-client = { module = "org.apache.hadoop:hadoop-client", version.ref = "hadoop-ver" }
 hadoop-common = { module = "org.apache.hadoop:hadoop-common", version.ref = "hadoop-ver" }
+hive-exec = { module = "org.apache.hive:hive-exec", version.ref = "hive-ver" }
+hive-metastore = { module = "org.apache.hive:hive-metastore", version.ref = "hive-ver" }
 iceberg-api = { module = "org.apache.iceberg:iceberg-api", version.ref = "iceberg-ver" }
 iceberg-aws = { module = "org.apache.iceberg:iceberg-aws", version.ref = "iceberg-ver" }
 iceberg-common = { module = "org.apache.iceberg:iceberg-common", version.ref = "iceberg-ver" }

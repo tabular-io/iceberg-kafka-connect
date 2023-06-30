@@ -18,9 +18,13 @@
  */
 package io.tabular.iceberg.connect;
 
+import static java.lang.String.format;
+
 public interface TestConstants {
 
   String BUCKET = "bucket";
+  String WAREHOUSE_PREFIX = "warehouse";
+  String WAREHOUSE_LOCATION = format("s3a://%s/%s", BUCKET, WAREHOUSE_PREFIX);
   String AWS_ACCESS_KEY = "minioadmin";
   String AWS_SECRET_KEY = "minioadmin";
   String AWS_REGION = "us-east-1";

@@ -20,15 +20,14 @@ package io.tabular.iceberg.connect;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.hive.HiveCatalog;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
-import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -44,7 +43,7 @@ public class IntegrationTestBase {
   protected final AtomicInteger cnt = new AtomicInteger(0);
 
   protected S3Client s3;
-  protected RESTCatalog catalog;
+  protected HiveCatalog catalog;
   protected Admin admin;
 
   private KafkaProducer<String, String> producer;
@@ -59,11 +58,6 @@ public class IntegrationTestBase {
 
   @AfterEach
   public void baseTeardown() {
-    try {
-      catalog.close();
-    } catch (IOException e) {
-      // NO-OP
-    }
     producer.close();
     admin.close();
     s3.close();

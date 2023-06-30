@@ -21,6 +21,7 @@ package io.tabular.iceberg.connect;
 import static io.tabular.iceberg.connect.TestConstants.AWS_ACCESS_KEY;
 import static io.tabular.iceberg.connect.TestConstants.AWS_REGION;
 import static io.tabular.iceberg.connect.TestConstants.AWS_SECRET_KEY;
+import static io.tabular.iceberg.connect.TestConstants.WAREHOUSE_LOCATION;
 import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -34,11 +35,12 @@ import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.aws.AwsClientProperties;
+import org.apache.iceberg.aws.s3.S3FileIO;
 import org.apache.iceberg.aws.s3.S3FileIOProperties;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.hive.HiveCatalog;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
-import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.iceberg.types.Types;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
@@ -50,7 +52,7 @@ public class IntegrationMultiTableTest extends IntegrationTestBase {
   private static final String CONNECTOR_NAME = "test_connector-" + UUID.randomUUID();
   private static final String TEST_TOPIC = "test-topic-" + UUID.randomUUID();
   private static final int TEST_TOPIC_PARTITIONS = 2;
-  private static final String TEST_DB = "default";
+  private static final String TEST_DB = "test";
   private static final String TEST_TABLE1 = "foobar1";
   private static final String TEST_TABLE2 = "foobar2";
   private static final TableIdentifier TABLE_IDENTIFIER1 = TableIdentifier.of(TEST_DB, TEST_TABLE1);
@@ -103,8 +105,10 @@ public class IntegrationMultiTableTest extends IntegrationTestBase {
             .config(format("iceberg.table.%s.%s.routeRegex", TEST_DB, TEST_TABLE2), "type2")
             .config("iceberg.control.commitIntervalMs", 1000)
             .config("iceberg.control.commitTimeoutMs", Integer.MAX_VALUE)
-            .config("iceberg.catalog", RESTCatalog.class.getName())
-            .config("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
+            .config("iceberg.catalog", HiveCatalog.class.getName())
+            .config("iceberg.catalog." + CatalogProperties.URI, "thrift://hive:9083")
+            .config("iceberg.catalog." + CatalogProperties.WAREHOUSE_LOCATION, WAREHOUSE_LOCATION)
+            .config("iceberg.catalog." + CatalogProperties.FILE_IO_IMPL, S3FileIO.class.getName())
             .config("iceberg.catalog." + S3FileIOProperties.ENDPOINT, "http://minio:9000")
             .config("iceberg.catalog." + S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
             .config("iceberg.catalog." + S3FileIOProperties.SECRET_ACCESS_KEY, AWS_SECRET_KEY)

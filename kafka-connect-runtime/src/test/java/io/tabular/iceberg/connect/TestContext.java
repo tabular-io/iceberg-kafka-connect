@@ -22,6 +22,8 @@ import static io.tabular.iceberg.connect.TestConstants.AWS_ACCESS_KEY;
 import static io.tabular.iceberg.connect.TestConstants.AWS_REGION;
 import static io.tabular.iceberg.connect.TestConstants.AWS_SECRET_KEY;
 import static io.tabular.iceberg.connect.TestConstants.BUCKET;
+import static io.tabular.iceberg.connect.TestConstants.WAREHOUSE_LOCATION;
+import static io.tabular.iceberg.connect.TestConstants.WAREHOUSE_PREFIX;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -30,8 +32,8 @@ import java.util.stream.Stream;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.aws.s3.S3FileIO;
 import org.apache.iceberg.aws.s3.S3FileIOProperties;
+import org.apache.iceberg.hive.HiveCatalog;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -56,7 +58,8 @@ public class TestContext {
   private final Network network;
   private final KafkaContainer kafka;
   private final KafkaConnectContainer kafkaConnect;
-  private final GenericContainer restCatalog;
+  private final GenericContainer hiveCatalog;
+  private final GenericContainer postgres;
   private final GenericContainer minio;
 
   private static final String LOCAL_INSTALL_DIR = "build/install";
@@ -65,7 +68,8 @@ public class TestContext {
   private static final String MINIO_IMAGE = "minio/minio";
   private static final String KAFKA_IMAGE = "confluentinc/cp-kafka:7.4.0";
   private static final String CONNECT_IMAGE = "confluentinc/cp-kafka-connect:7.4.0";
-  private static final String REST_CATALOG_IMAGE = "tabulario/iceberg-rest:0.5.0";
+  private static final String HIVE_CATALOG_IMAGE = "tabulario/hive-metastore";
+  private static final String POSTGRES_IMAGE = "postgres:14-alpine";
 
   private TestContext() {
     network = Network.newNetwork();
@@ -77,19 +81,35 @@ public class TestContext {
             .withExposedPorts(9000)
             .withCommand("server /data")
             .waitingFor(new HttpWaitStrategy().forPort(9000).forPath("/minio/health/ready"));
+    minio.start();
 
-    restCatalog =
-        new GenericContainer(DockerImageName.parse(REST_CATALOG_IMAGE))
+    try (S3Client s3 = initLocalS3Client()) {
+      s3.createBucket(req -> req.bucket(BUCKET));
+    }
+
+    postgres =
+        new GenericContainer(DockerImageName.parse(POSTGRES_IMAGE))
             .withNetwork(network)
-            .withNetworkAliases("iceberg")
-            .dependsOn(minio)
-            .withExposedPorts(8181)
-            .withEnv("CATALOG_WAREHOUSE", "s3://" + BUCKET + "/warehouse")
-            .withEnv("CATALOG_IO__IMPL", S3FileIO.class.getName())
-            .withEnv("CATALOG_S3_ENDPOINT", "http://minio:9000")
-            .withEnv("CATALOG_S3_ACCESS__KEY__ID", AWS_ACCESS_KEY)
-            .withEnv("CATALOG_S3_SECRET__ACCESS__KEY", AWS_SECRET_KEY)
-            .withEnv("CATALOG_S3_PATH__STYLE__ACCESS", "true")
+            .withNetworkAliases("postgres")
+            .withEnv("POSTGRES_DB", "metastore")
+            .withEnv("POSTGRES_USER", "sa")
+            .withEnv("POSTGRES_PASSWORD", "sa");
+
+    hiveCatalog =
+        new GenericContainer(DockerImageName.parse(HIVE_CATALOG_IMAGE))
+            .withNetwork(network)
+            .withNetworkAliases("hive")
+            .dependsOn(minio, postgres)
+            .withExposedPorts(9083)
+            .withEnv("DATABASE_HOST", "postgres")
+            .withEnv("DATABASE_DB", "metastore")
+            .withEnv("DATABASE_USER", "sa")
+            .withEnv("DATABASE_PASSWORD", "sa")
+            .withEnv("S3_BUCKET", BUCKET)
+            .withEnv("S3_PREFIX", WAREHOUSE_PREFIX)
+            .withEnv("S3_ENDPOINT_URL", "http://minio:9000")
+            .withEnv("AWS_ACCESS_KEY", AWS_ACCESS_KEY)
+            .withEnv("AWS_SECRET_ACCESS_KEY", AWS_SECRET_KEY)
             .withEnv("AWS_REGION", AWS_REGION);
 
     kafka = new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE)).withNetwork(network);
@@ -97,17 +117,13 @@ public class TestContext {
     kafkaConnect =
         new KafkaConnectContainer(DockerImageName.parse(CONNECT_IMAGE))
             .withNetwork(network)
-            .dependsOn(restCatalog, kafka)
+            .dependsOn(hiveCatalog, kafka)
             .withFileSystemBind(LOCAL_INSTALL_DIR, KC_PLUGIN_DIR)
             .withEnv("CONNECT_PLUGIN_PATH", KC_PLUGIN_DIR)
             .withEnv("CONNECT_BOOTSTRAP_SERVERS", kafka.getNetworkAliases().get(0) + ":9092")
             .withEnv("CONNECT_OFFSET_FLUSH_INTERVAL_MS", "500");
 
-    Startables.deepStart(Stream.of(minio, restCatalog, kafka, kafkaConnect)).join();
-
-    try (S3Client s3 = initLocalS3Client()) {
-      s3.createBucket(req -> req.bucket(BUCKET));
-    }
+    Startables.deepStart(Stream.of(postgres, hiveCatalog, kafka, kafkaConnect)).join();
 
     Runtime.getRuntime().addShutdownHook(new Thread(this::shutdown));
   }
@@ -115,7 +131,8 @@ public class TestContext {
   private void shutdown() {
     kafkaConnect.close();
     kafka.close();
-    restCatalog.close();
+    hiveCatalog.close();
+    postgres.close();
     minio.close();
     network.close();
   }
@@ -125,7 +142,7 @@ public class TestContext {
   }
 
   private int getLocalCatalogPort() {
-    return restCatalog.getMappedPort(8181);
+    return hiveCatalog.getMappedPort(9083);
   }
 
   private String getLocalBootstrapServers() {
@@ -156,13 +173,14 @@ public class TestContext {
     }
   }
 
-  public RESTCatalog initLocalCatalog() {
-    String localCatalogUri = "http://localhost:" + getLocalCatalogPort();
-    RESTCatalog result = new RESTCatalog();
+  public HiveCatalog initLocalCatalog() {
+    String localCatalogUri = "thrift://localhost:" + getLocalCatalogPort();
+    HiveCatalog result = new HiveCatalog();
     result.initialize(
         "local",
         ImmutableMap.<String, String>builder()
             .put(CatalogProperties.URI, localCatalogUri)
+            .put(CatalogProperties.WAREHOUSE_LOCATION, WAREHOUSE_LOCATION)
             .put(CatalogProperties.FILE_IO_IMPL, S3FileIO.class.getName())
             .put(S3FileIOProperties.ENDPOINT, "http://localhost:" + getLocalMinioPort())
             .put(S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
