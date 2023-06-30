@@ -50,7 +50,7 @@ public class IntegrationMultiTableTest extends IntegrationTestBase {
   private static final String CONNECTOR_NAME = "test_connector-" + UUID.randomUUID();
   private static final String TEST_TOPIC = "test-topic-" + UUID.randomUUID();
   private static final int TEST_TOPIC_PARTITIONS = 2;
-  private static final String TEST_DB = "default";
+  private static final String TEST_DB = "test";
   private static final String TEST_TABLE1 = "foobar1";
   private static final String TEST_TABLE2 = "foobar2";
   private static final TableIdentifier TABLE_IDENTIFIER1 = TableIdentifier.of(TEST_DB, TEST_TABLE1);
