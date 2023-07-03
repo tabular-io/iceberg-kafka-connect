@@ -168,7 +168,7 @@ public class Coordinator extends Channel {
     send(event);
 
     LOG.info(
-        "Commit {} complete, commited to {} table(s), vtts {}",
+        "Commit {} complete, committed to {} table(s), vtts {}",
         commitState.getCurrentCommitId(),
         commitMap.size(),
         vtts);
@@ -192,13 +192,13 @@ public class Coordinator extends Channel {
       return;
     }
 
-    Map<Integer, Long> commitedOffsets = getLastCommittedOffsetsForTable(table);
+    Map<Integer, Long> committedOffsets = getLastCommittedOffsetsForTable(table);
 
     List<CommitResponsePayload> payloads =
         envelopeList.stream()
             .filter(
                 envelope -> {
-                  Long minOffset = commitedOffsets.get(envelope.getPartition());
+                  Long minOffset = committedOffsets.get(envelope.getPartition());
                   return minOffset == null || envelope.getOffset() >= minOffset;
                 })
             .map(envelope -> (CommitResponsePayload) envelope.getEvent().getPayload())
