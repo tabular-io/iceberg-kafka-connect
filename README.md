@@ -66,8 +66,8 @@ otherwise you will need to include that yourself.
 ```
 
 ### Hive example
-NOTE: Use the distribution that includes the HMS client (or include the HMS client yourself). Using `S3FileIO` is recommended
-(the default is `HadoopFileIO` with `HiveCatalog`).
+NOTE: Use the distribution that includes the HMS client (or include the HMS client yourself). Use `S3FileIO` when
+using S3 for storage (the default is `HadoopFileIO` with `HiveCatalog`).
 ```
 "iceberg.catalog":"org.apache.iceberg.hive.HiveCatalog",
 "iceberg.catalog.uri":"thrift://hive:9083",
