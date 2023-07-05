@@ -2,11 +2,16 @@ plugins {
   id "distribution"
 }
 
-configurations.all {
-  resolutionStrategy.force "net.minidev:json-smart:2.4.11"
-  resolutionStrategy.force "com.nimbusds:nimbus-jose-jwt:9.31"
-  resolutionStrategy.force "org.codehaus.jettison:jettison:1.5.4"
-  resolutionStrategy.force "org.xerial.snappy:snappy-java:1.1.10.1"
+configurations {
+  hive {
+    extendsFrom runtimeClasspath
+  }
+  all {
+    resolutionStrategy.force "net.minidev:json-smart:2.4.11"
+    resolutionStrategy.force "com.nimbusds:nimbus-jose-jwt:9.31"
+    resolutionStrategy.force "org.codehaus.jettison:jettison:1.5.4"
+    resolutionStrategy.force "org.xerial.snappy:snappy-java:1.1.10.1"
+  }
 }
 
 dependencies {
@@ -17,6 +22,37 @@ dependencies {
     exclude group: "log4j"
     exclude group: "org.slf4j"
     exclude group: "ch.qos.reload4j"
+  }
+
+  hive(libs.hive.common) {
+    exclude group: "org.apache.avro", module: "avro"
+    exclude group: "org.slf4j", module: "slf4j-log4j12"
+    exclude group: "org.pentaho" // missing dependency
+    exclude group: "org.apache.hive", module: "hive-llap-tez"
+    exclude group: "org.apache.logging.log4j"
+    exclude group: "com.google.protobuf", module: "protobuf-java"
+    exclude group: "org.apache.calcite"
+    exclude group: "org.apache.calcite.avatica"
+    exclude group: "com.google.code.findbugs", module: "jsr305"
+  }
+  hive(libs.hive.metastore) {
+    exclude group: "org.apache.avro", module: "avro"
+    exclude group: "org.slf4j", module: "slf4j-log4j12"
+    exclude group: "org.pentaho" // missing dependency
+    exclude group: "org.apache.hbase"
+    exclude group: "org.apache.logging.log4j"
+    exclude group: "co.cask.tephra"
+    exclude group: "com.google.code.findbugs", module: "jsr305"
+    exclude group: "org.eclipse.jetty.aggregate", module: "jetty-all"
+    exclude group: "org.eclipse.jetty.orbit", module: "javax.servlet"
+    exclude group: "org.apache.parquet", module: "parquet-hadoop-bundle"
+    exclude group: "com.tdunning", module: "json"
+    exclude group: "javax.transaction", module: "transaction-api"
+    exclude group: "com.zaxxer", module: "HikariCP"
+  }
+  hive(libs.hadoop.client) {
+    exclude group: "org.apache.avro", module: "avro"
+    exclude group: "org.slf4j", module: "slf4j-log4j12"
   }
 
   testImplementation libs.bundles.iceberg
@@ -59,23 +95,45 @@ distributions {
       }
     }
   }
+  hive {
+    contents {
+      from(processResources.destinationDir) {
+        include "manifest.json"
+      }
+      into("lib/") {
+        from configurations.hive
+      }
+      into("doc/") {
+        from "$rootDir/LICENSE"
+        from "$rootDir/README.md"
+      }
+      into("assets/") {
+        from "$rootDir/logos"
+      }
+    }
+  }
 }
 
 publishing {
   publications {
     mavenJava(MavenPublication) {
       artifact distZip
+      artifact hiveDistZip
     }
   }
 }
 
-tasks.distTar.enabled = false
 tasks.jar.enabled = false
 
-installDist.dependsOn processResources
+tasks.distTar.enabled = false
 distZip.dependsOn processResources
+installDist.dependsOn processResources
+
+tasks.hiveDistTar.enabled = false
+hiveDistZip.dependsOn processResources
+installHiveDist.dependsOn processResources
 
 // build the install before test so it can be installed into kafka connect
 test.dependsOn installDist
 
-assemble.dependsOn distZip
+assemble.dependsOn distZip, hiveDistZip
