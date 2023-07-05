@@ -116,8 +116,10 @@ distributions {
 
 publishing {
   publications {
-    mavenJava(MavenPublication) {
+    main(MavenPublication) {
       artifact distZip
+    }
+    hive(MavenPublication) {
       artifact hiveDistZip
     }
   }
