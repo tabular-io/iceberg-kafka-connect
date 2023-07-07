@@ -2,11 +2,16 @@ plugins {
   id "distribution"
 }
 
-configurations.all {
-  resolutionStrategy.force "net.minidev:json-smart:2.4.11"
-  resolutionStrategy.force "com.nimbusds:nimbus-jose-jwt:9.31"
-  resolutionStrategy.force "org.codehaus.jettison:jettison:1.5.4"
-  resolutionStrategy.force "org.xerial.snappy:snappy-java:1.1.10.1"
+configurations {
+  hive {
+    extendsFrom runtimeClasspath
+  }
+  all {
+    resolutionStrategy.force "net.minidev:json-smart:2.4.11"
+    resolutionStrategy.force "com.nimbusds:nimbus-jose-jwt:9.31"
+    resolutionStrategy.force "org.codehaus.jettison:jettison:1.5.4"
+    resolutionStrategy.force "org.xerial.snappy:snappy-java:1.1.10.1"
+  }
 }
 
 dependencies {
@@ -86,23 +91,47 @@ distributions {
       }
     }
   }
-}
-
-publishing {
-  publications {
-    mavenJava(MavenPublication) {
-      artifact distZip
+  hive {
+    contents {
+      from(processResources.destinationDir) {
+        include "manifest.json"
+      }
+      into("lib/") {
+        from configurations.hive
+      }
+      into("doc/") {
+        from "$rootDir/LICENSE"
+        from "$rootDir/README.md"
+      }
+      into("assets/") {
+        from "$rootDir/logos"
+      }
     }
   }
 }
 
-tasks.distTar.enabled = false
+publishing {
+  publications {
+    main(MavenPublication) {
+      artifact distZip
+    }
+    hive(MavenPublication) {
+      artifact hiveDistZip
+    }
+  }
+}
+
 tasks.jar.enabled = false
 
-installDist.dependsOn processResources
+tasks.distTar.enabled = false
 distZip.dependsOn processResources
+installDist.dependsOn processResources
+
+tasks.hiveDistTar.enabled = false
+hiveDistZip.dependsOn processResources
+installHiveDist.dependsOn processResources
 
 // build the install before test so it can be installed into kafka connect
 test.dependsOn installDist
 
-assemble.dependsOn distZip
+assemble.dependsOn distZip, hiveDistZip

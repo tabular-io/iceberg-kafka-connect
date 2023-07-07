@@ -42,14 +42,47 @@ contain the name of the table. Enabling `iceberg.tables.upsertModeEnabled` will 
 preceded by an equality delete. Both CDC and upsert mode require an Iceberg V2 table with identity fields
 defined.
 
+## Kafka configuration
+
 By default the connector will attempt to use Kafka client config from the worker properties for connecting to
 the control topic. If that config cannot be read for some reason, Kafka client settings
 can be set explicitly using `iceberg.kafka.*` properties.
 
+## Catalog configuration
+
 The `iceberg.catalog.*` properties are required for connecting to the Iceberg catalog. The core catalog
 types are included in the default distribution, including REST, Glue, DynamoDB, Hadoop, Nessie,
-JDBC, and Hive. JDBC drivers and the Hive metastore client are not included in the default
-distribution, so you will need to include those if needed.
+JDBC, and Hive. JDBC drivers are not included in the default distribution, so you will need to include
+those if needed. When using a Hive catalog, you can use the distribution that includes the Hive metastore client,
+otherwise you will need to include that yourself.
+
+
+### REST example
+```
+"iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
+"iceberg.catalog.uri": "https://catalog-service",
+"iceberg.catalog.credential": "<credential>",
+"iceberg.catalog.warehouse": "<warehouse>",
+```
+
+### Hive example
+NOTE: Use the distribution that includes the HMS client (or include the HMS client yourself). Use `S3FileIO` when
+using S3 for storage (the default is `HadoopFileIO` with `HiveCatalog`).
+```
+"iceberg.catalog":"org.apache.iceberg.hive.HiveCatalog",
+"iceberg.catalog.uri":"thrift://hive:9083",
+"iceberg.catalog.io-impl":"org.apache.iceberg.aws.s3.S3FileIO",
+"iceberg.catalog.warehouse":"s3a://bucket/warehouse",
+"iceberg.catalog.client.region":"us-east-1",
+"iceberg.catalog.s3.access-key-id":"<AWS access>",
+"iceberg.catalog.s3.secret-access-key":"<AWS secret>",
+```
+
+### Notes
+Depending on your setup, you may need to also set `iceberg.catalog.s3.endpoint`, `iceberg.catalog.s3.staging-dir`,
+or `iceberg.catalog.s3.path-style-access`. See the [Iceberg docs](https://iceberg.apache.org/docs/latest/) for
+full details on configuring catalogs.
+
 
 # Examples
 
