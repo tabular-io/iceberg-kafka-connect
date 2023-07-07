@@ -23,7 +23,6 @@ aws-s3 = { module = "software.amazon.awssdk:s3", version.ref = "aws-ver" }
 aws-sts = { module = "software.amazon.awssdk:sts", version.ref = "aws-ver" }
 hadoop-client = { module = "org.apache.hadoop:hadoop-client", version.ref = "hadoop-ver" }
 hadoop-common = { module = "org.apache.hadoop:hadoop-common", version.ref = "hadoop-ver" }
-hive-common = { module = "org.apache.hive:hive-common", version.ref = "hive-ver" }
 hive-metastore = { module = "org.apache.hive:hive-metastore", version.ref = "hive-ver" }
 iceberg-api = { module = "org.apache.iceberg:iceberg-api", version.ref = "iceberg-ver" }
 iceberg-aws = { module = "org.apache.iceberg:iceberg-aws", version.ref = "iceberg-ver" }
