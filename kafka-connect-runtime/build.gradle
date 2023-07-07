@@ -42,6 +42,8 @@ dependencies {
     exclude group: "org.apache.hadoop", module: "hadoop-yarn-server-applicationhistoryservice"
     exclude group: "org.apache.hadoop", module: "hadoop-yarn-server-resourcemanager"
     exclude group: "org.apache.hadoop", module: "hadoop-yarn-server-web-proxy"
+    exclude group: "org.apache.hive", module: "hive-service-rpc"
+    exclude group: "com.github.joshelser", module: "dropwizard-metrics-hadoop-metrics2-reporter"
   }
   hive(libs.hadoop.client) {
     exclude group: "org.apache.avro", module: "avro"
