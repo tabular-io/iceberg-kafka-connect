@@ -24,7 +24,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.util.Map;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.jupiter.api.Test;
 
@@ -47,7 +46,7 @@ public class IcebergSinkConfigTest {
     Map<String, String> props =
         ImmutableMap.of(
             "topics", "source-topic",
-            "iceberg.catalog", RESTCatalog.class.getName(),
+            "iceberg.catalog.type", "rest",
             "iceberg.tables", "db.landing",
             "iceberg.tables.dynamic.enabled", "true");
     assertThatExceptionOfType(ConfigException.class).isThrownBy(() -> new IcebergSinkConfig(props));
@@ -57,7 +56,7 @@ public class IcebergSinkConfigTest {
   public void testGetDefault() {
     Map<String, String> props =
         ImmutableMap.of(
-            "iceberg.catalog", RESTCatalog.class.getName(),
+            "iceberg.catalog.type", "rest",
             "topics", "source-topic",
             "iceberg.tables", "db.landing");
     IcebergSinkConfig config = new IcebergSinkConfig(props);

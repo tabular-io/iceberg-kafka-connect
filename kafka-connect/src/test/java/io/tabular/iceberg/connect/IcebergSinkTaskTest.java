@@ -35,7 +35,7 @@ public class IcebergSinkTaskTest {
     task.start(
         ImmutableMap.of(
             "topics", "topic1, topic2",
-            "iceberg.catalog", "catalog",
+            "iceberg.catalog.type", "rest",
             "iceberg.tables", "table"));
 
     List<TopicPartition> assignments =

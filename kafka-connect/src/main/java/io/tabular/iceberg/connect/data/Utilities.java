@@ -48,8 +48,8 @@ public class Utilities {
   private static final Logger LOG = LoggerFactory.getLogger(Utilities.class.getName());
 
   public static Catalog loadCatalog(IcebergSinkConfig config) {
-    return CatalogUtil.loadCatalog(
-        config.getCatalogImpl(), "iceberg", config.getCatalogProps(), getHadoopConfig());
+    return CatalogUtil.buildIcebergCatalog(
+        config.getCatalogName(), config.getCatalogProps(), getHadoopConfig());
   }
 
   private static Object getHadoopConfig() {

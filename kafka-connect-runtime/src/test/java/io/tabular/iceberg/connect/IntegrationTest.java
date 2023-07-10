@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.apache.iceberg.CatalogProperties;
+import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
@@ -39,7 +40,6 @@ import org.apache.iceberg.aws.s3.S3FileIOProperties;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
-import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.iceberg.types.Types;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
@@ -96,7 +96,9 @@ public class IntegrationTest extends IntegrationTestBase {
             .config("iceberg.tables", format("%s.%s", TEST_DB, TEST_TABLE))
             .config("iceberg.control.commitIntervalMs", 1000)
             .config("iceberg.control.commitTimeoutMs", Integer.MAX_VALUE)
-            .config("iceberg.catalog", RESTCatalog.class.getName())
+            .config(
+                "iceberg.catalog." + CatalogUtil.ICEBERG_CATALOG_TYPE,
+                CatalogUtil.ICEBERG_CATALOG_TYPE_REST)
             .config("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
             .config("iceberg.catalog." + S3FileIOProperties.ENDPOINT, "http://minio:9000")
             .config("iceberg.catalog." + S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
