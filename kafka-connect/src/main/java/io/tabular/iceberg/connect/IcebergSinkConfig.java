@@ -58,7 +58,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String KAFKA_PROP_PREFIX = "iceberg.kafka.";
   private static final String TABLE_PROP_PREFIX = "iceberg.table.";
 
-  private static final String CATALOG_IMPL_PROP = "iceberg.catalog";
+  private static final String CATALOG_NAME_PROP = "iceberg.catalog";
   private static final String TABLES_PROP = "iceberg.tables";
   private static final String TABLES_DYNAMIC_PROP = "iceberg.tables.dynamic.enabled";
   private static final String TABLES_ROUTE_FIELD_PROP = "iceberg.tables.routeField";
@@ -75,6 +75,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String NAME_PROP = "name";
   private static final String BOOTSTRAP_SERVERS_PROP = "bootstrap.servers";
 
+  private static final String DEFAULT_CATALOG_NAME = "iceberg";
   private static final String DEFAULT_CONTROL_TOPIC = "control-iceberg";
   public static final String DEFAULT_CONTROL_GROUP_PREFIX = "cg-control-";
 
@@ -125,7 +126,12 @@ public class IcebergSinkConfig extends AbstractConfig {
         false,
         Importance.MEDIUM,
         "Set to true to treat all appends as upserts, false otherwise");
-    configDef.define(CATALOG_IMPL_PROP, Type.STRING, Importance.HIGH, "Iceberg catalog class name");
+    configDef.define(
+        CATALOG_NAME_PROP,
+        Type.STRING,
+        DEFAULT_CATALOG_NAME,
+        Importance.MEDIUM,
+        "Iceberg catalog name");
     configDef.define(
         CONTROL_TOPIC_PROP,
         Type.STRING,
@@ -186,6 +192,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   }
 
   private void validate() {
+    checkState(!getCatalogProps().isEmpty(), "Must specify Iceberg catalog properties");
     if (getTables() != null) {
       checkState(!getDynamicTablesEnabled(), "Cannot specify both static and dynamic table names");
     } else if (getDynamicTablesEnabled()) {
@@ -223,8 +230,8 @@ public class IcebergSinkConfig extends AbstractConfig {
     return kafkaProps;
   }
 
-  public String getCatalogImpl() {
-    return getString(CATALOG_IMPL_PROP);
+  public String getCatalogName() {
+    return getString(CATALOG_NAME_PROP);
   }
 
   public List<String> getTables() {

@@ -33,6 +33,7 @@ The zip archive will be found under `./kafka-connect-runtime/build/distributions
 | iceberg.control.commitIntervalMs         | Commit interval in msec, default is 300,000 (5 min)                                                           |
 | iceberg.control.commitTimeoutMs          | Commit timeout interval in msec, default is 30,000 (30 sec)                                                   |
 | iceberg.control.commitThreads            | Number of threads to use for commits, default is (cores * 2)                                                  |
+| iceberg.catalog                          | Name of the catalog, default is `iceberg`                                                                     |
 | iceberg.catalog.*                        | Properties passed through to Iceberg catalog initialization                                                   |
 | iceberg.kafka.*                          | Properties passed through to control topic Kafka client initialization                                        |
 
@@ -59,7 +60,7 @@ otherwise you will need to include that yourself.
 
 ### REST example
 ```
-"iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
+"iceberg.catalog.type": "rest",
 "iceberg.catalog.uri": "https://catalog-service",
 "iceberg.catalog.credential": "<credential>",
 "iceberg.catalog.warehouse": "<warehouse>",
@@ -69,7 +70,7 @@ otherwise you will need to include that yourself.
 NOTE: Use the distribution that includes the HMS client (or include the HMS client yourself). Use `S3FileIO` when
 using S3 for storage (the default is `HadoopFileIO` with `HiveCatalog`).
 ```
-"iceberg.catalog":"org.apache.iceberg.hive.HiveCatalog",
+"iceberg.catalog.tyoe":"hive",
 "iceberg.catalog.uri":"thrift://hive:9083",
 "iceberg.catalog.io-impl":"org.apache.iceberg.aws.s3.S3FileIO",
 "iceberg.catalog.warehouse":"s3a://bucket/warehouse",
@@ -131,7 +132,7 @@ This example config connects to a Iceberg REST catalog.
     "tasks.max": "2",
     "topics": "events",
     "iceberg.tables": "default.events",
-    "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
+    "iceberg.catalog.type": "rest",
     "iceberg.catalog.uri": "https://localhost",
     "iceberg.catalog.credential": "<credential>",
     "iceberg.catalog.warehouse": "<warehouse name>"
@@ -173,7 +174,7 @@ PARTITIONED BY (hours(ts));
     "iceberg.tables.routeField": "type",
     "iceberg.table.default.events_list.routeRegex": "list",
     "iceberg.table.default.events_create.routeRegex": "create",
-    "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
+    "iceberg.catalog.type": "rest",
     "iceberg.catalog.uri": "https://localhost",
     "iceberg.catalog.credential": "<credential>",
     "iceberg.catalog.warehouse": "<warehouse name>"
@@ -199,7 +200,7 @@ See above for creating two tables.
     "topics": "events",
     "iceberg.tables.dynamic.enabled": "true",
     "iceberg.tables.routeField": "db_table",
-    "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
+    "iceberg.catalog.type": "rest",
     "iceberg.catalog.uri": "https://localhost",
     "iceberg.catalog.credential": "<credential>",
     "iceberg.catalog.warehouse": "<warehouse name>"
@@ -226,7 +227,7 @@ See above for creating the table
     "topics": "events",
     "iceberg.tables": "default.events",
     "iceberg.tables.cdcField": "_cdc_op",
-    "iceberg.catalog": "org.apache.iceberg.rest.RESTCatalog",
+    "iceberg.catalog.type": "rest",
     "iceberg.catalog.uri": "https://localhost",
     "iceberg.catalog.credential": "<credential>",
     "iceberg.catalog.warehouse": "<warehouse name>"
