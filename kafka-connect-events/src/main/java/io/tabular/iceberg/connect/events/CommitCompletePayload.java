@@ -30,6 +30,22 @@ public class CommitCompletePayload implements Payload {
   private Long vtts;
   private Schema avroSchema;
 
+  private static final Schema AVRO_SCHEMA =
+      SchemaBuilder.builder()
+          .record(CommitCompletePayload.class.getName())
+          .fields()
+          .name("commitId")
+          .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+          .type(UUID_SCHEMA)
+          .noDefault()
+          .name("vtts")
+          .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+          .type()
+          .nullable()
+          .longType()
+          .noDefault()
+          .endRecord();
+
   public CommitCompletePayload(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }
@@ -37,22 +53,7 @@ public class CommitCompletePayload implements Payload {
   public CommitCompletePayload(UUID commitId, Long vtts) {
     this.commitId = commitId;
     this.vtts = vtts;
-
-    this.avroSchema =
-        SchemaBuilder.builder()
-            .record(getClass().getName())
-            .fields()
-            .name("commitId")
-            .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
-            .type(UUID_SCHEMA)
-            .noDefault()
-            .name("vtts")
-            .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
-            .type()
-            .nullable()
-            .longType()
-            .noDefault()
-            .endRecord();
+    this.avroSchema = AVRO_SCHEMA;
   }
 
   public UUID getCommitId() {

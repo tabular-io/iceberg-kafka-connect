@@ -31,6 +31,23 @@ public class CommitReadyPayload implements Payload {
   private List<TopicPartitionOffset> assignments;
   private Schema avroSchema;
 
+  private static final Schema AVRO_SCHEMA =
+      SchemaBuilder.builder()
+          .record(CommitReadyPayload.class.getName())
+          .fields()
+          .name("commitId")
+          .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+          .type(UUID_SCHEMA)
+          .noDefault()
+          .name("assignments")
+          .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+          .type()
+          .nullable()
+          .array()
+          .items(TopicPartitionOffset.AVRO_SCHEMA)
+          .noDefault()
+          .endRecord();
+
   public CommitReadyPayload(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }
@@ -38,23 +55,7 @@ public class CommitReadyPayload implements Payload {
   public CommitReadyPayload(UUID commitId, List<TopicPartitionOffset> assignments) {
     this.commitId = commitId;
     this.assignments = assignments;
-
-    this.avroSchema =
-        SchemaBuilder.builder()
-            .record(getClass().getName())
-            .fields()
-            .name("commitId")
-            .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
-            .type(UUID_SCHEMA)
-            .noDefault()
-            .name("assignments")
-            .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
-            .type()
-            .nullable()
-            .array()
-            .items(TopicPartitionOffset.AVRO_SCHEMA)
-            .noDefault()
-            .endRecord();
+    this.avroSchema = AVRO_SCHEMA;
   }
 
   public UUID getCommitId() {

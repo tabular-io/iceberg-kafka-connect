@@ -32,6 +32,32 @@ public class CommitTablePayload implements Payload {
   private Long vtts;
   private Schema avroSchema;
 
+  private static final Schema AVRO_SCHEMA =
+      SchemaBuilder.builder()
+          .record(CommitTablePayload.class.getName())
+          .fields()
+          .name("commitId")
+          .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+          .type(UUID_SCHEMA)
+          .noDefault()
+          .name("tableName")
+          .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+          .type(TableName.AVRO_SCHEMA)
+          .noDefault()
+          .name("snapshotId")
+          .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+          .type()
+          .nullable()
+          .longType()
+          .noDefault()
+          .name("vtts")
+          .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
+          .type()
+          .nullable()
+          .longType()
+          .noDefault()
+          .endRecord();
+
   public CommitTablePayload(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }
@@ -41,32 +67,7 @@ public class CommitTablePayload implements Payload {
     this.tableName = tableName;
     this.snapshotId = snapshotId;
     this.vtts = vtts;
-
-    this.avroSchema =
-        SchemaBuilder.builder()
-            .record(getClass().getName())
-            .fields()
-            .name("commitId")
-            .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
-            .type(UUID_SCHEMA)
-            .noDefault()
-            .name("tableName")
-            .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
-            .type(TableName.AVRO_SCHEMA)
-            .noDefault()
-            .name("snapshotId")
-            .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
-            .type()
-            .nullable()
-            .longType()
-            .noDefault()
-            .name("vtts")
-            .prop(FIELD_ID_PROP, DUMMY_FIELD_ID)
-            .type()
-            .nullable()
-            .longType()
-            .noDefault()
-            .endRecord();
+    this.avroSchema = AVRO_SCHEMA;
   }
 
   public UUID getCommitId() {
