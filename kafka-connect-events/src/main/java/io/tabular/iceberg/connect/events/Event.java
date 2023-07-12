@@ -22,10 +22,14 @@ import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.Map;
 import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
+import org.apache.avro.io.ResolvingDecoder;
 import org.apache.iceberg.avro.AvroEncoderUtil;
+import org.apache.iceberg.common.DynFields;
+import org.apache.iceberg.data.avro.DecoderResolver;
 
 public class Event implements Element {
 
@@ -35,6 +39,9 @@ public class Event implements Element {
   private String groupId;
   private Payload payload;
   private Schema avroSchema;
+
+  private static final ThreadLocal<Map<Schema, Map<Schema, ResolvingDecoder>>> DECODER_CACHES =
+      getDecoderCaches();
 
   public static byte[] encode(Event event) {
     try {
@@ -46,7 +53,10 @@ public class Event implements Element {
 
   public static Event decode(byte[] bytes) {
     try {
-      return AvroEncoderUtil.decode(bytes);
+      Event event = AvroEncoderUtil.decode(bytes);
+      // workaround for memory leak, until this is addressed upstream
+      DECODER_CACHES.get().clear();
+      return event;
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
@@ -157,5 +167,11 @@ public class Event implements Element {
       default:
         throw new UnsupportedOperationException("Unknown field ordinal: " + i);
     }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static ThreadLocal<Map<Schema, Map<Schema, ResolvingDecoder>>> getDecoderCaches() {
+    return (ThreadLocal<Map<Schema, Map<Schema, ResolvingDecoder>>>)
+        DynFields.builder().hiddenImpl(DecoderResolver.class, "DECODER_CACHES").buildStatic().get();
   }
 }
