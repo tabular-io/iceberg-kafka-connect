@@ -26,7 +26,6 @@ import java.util.Map;
 import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
-import org.apache.avro.io.ResolvingDecoder;
 import org.apache.iceberg.avro.AvroEncoderUtil;
 import org.apache.iceberg.common.DynFields;
 import org.apache.iceberg.data.avro.DecoderResolver;
@@ -40,8 +39,7 @@ public class Event implements Element {
   private Payload payload;
   private Schema avroSchema;
 
-  private static final ThreadLocal<Map<Schema, Map<Schema, ResolvingDecoder>>> DECODER_CACHES =
-      getDecoderCaches();
+  private static final ThreadLocal<Map<?, ?>> DECODER_CACHES = getDecoderCaches();
 
   public static byte[] encode(Event event) {
     try {
@@ -170,8 +168,8 @@ public class Event implements Element {
   }
 
   @SuppressWarnings("unchecked")
-  private static ThreadLocal<Map<Schema, Map<Schema, ResolvingDecoder>>> getDecoderCaches() {
-    return (ThreadLocal<Map<Schema, Map<Schema, ResolvingDecoder>>>)
+  private static ThreadLocal<Map<?, ?>> getDecoderCaches() {
+    return (ThreadLocal<Map<?, ?>>)
         DynFields.builder().hiddenImpl(DecoderResolver.class, "DECODER_CACHES").buildStatic().get();
   }
 }
