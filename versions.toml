@@ -20,6 +20,7 @@ aws-dynamodb = { module = "software.amazon.awssdk:dynamodb", version.ref = "aws-
 aws-glue = { module = "software.amazon.awssdk:glue", version.ref = "aws-ver" }
 aws-kms = { module = "software.amazon.awssdk:kms", version.ref = "aws-ver" }
 aws-s3 = { module = "software.amazon.awssdk:s3", version.ref = "aws-ver" }
+aws-sso = { module = "software.amazon.awssdk:sso", version.ref = "aws-ver" }
 aws-sts = { module = "software.amazon.awssdk:sts", version.ref = "aws-ver" }
 hadoop-client = { module = "org.apache.hadoop:hadoop-client", version.ref = "hadoop-ver" }
 hadoop-common = { module = "org.apache.hadoop:hadoop-common", version.ref = "hadoop-ver" }
@@ -53,7 +54,7 @@ testcontainers-kafka = { module = "org.testcontainers:kafka", version.ref = "tes
 
 
 [bundles]
-aws = ["aws-dynamodb", "aws-glue", "aws-kms", "aws-s3", "aws-sts"]
+aws = ["aws-dynamodb", "aws-glue", "aws-kms", "aws-s3", "aws-sso", "aws-sts"]
 iceberg = ["iceberg-api", "iceberg-common", "iceberg-core", "iceberg-data", "iceberg-guava", "iceberg-orc", "iceberg-parquet"]
 iceberg-ext = ["iceberg-aws", "iceberg-hive-metastore", "iceberg-nessie"]
 jackson = ["jackson-core", "jackson-databind"]
