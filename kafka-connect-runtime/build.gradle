@@ -24,6 +24,7 @@ dependencies {
     exclude group: "ch.qos.reload4j"
   }
 
+  hive libs.iceberg.hive.metastore
   hive(libs.hive.metastore) {
     exclude group: "org.apache.avro", module: "avro"
     exclude group: "org.slf4j", module: "slf4j-log4j12"

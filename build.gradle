@@ -17,6 +17,10 @@ subprojects {
 
   repositories {
     mavenCentral()
+
+    maven {
+      url = "https://tabular-repository-public.s3.amazonaws.com/releases"
+    }
   }
 
   sourceCompatibility = "1.8"
