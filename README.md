@@ -49,6 +49,19 @@ By default the connector will attempt to use Kafka client config from the worker
 the control topic. If that config cannot be read for some reason, Kafka client settings
 can be set explicitly using `iceberg.kafka.*` properties.
 
+### Source topic offsets
+
+Source topic offsets are stored in two different consumer groups. The first is the sink-managed consumer
+group defined by the `iceberg.control.group.id` property. The second is the Kafka Connect managed
+consumer group which is named `connect-<connector name>` by default. The sink-managed consumer
+group is used by the sink to achieve exactly-once processing. The Kafka Connect consumer group is
+only used as a fallback if the sink-managed consumer group is missing. To reset the offsets,
+both consumer groups need to be reset.
+
+### Message format
+
+Messages should be converted to a struct or map using the appropriate Kafka Connect converter.
+
 ## Catalog configuration
 
 The `iceberg.catalog.*` properties are required for connecting to the Iceberg catalog. The core catalog
@@ -56,6 +69,9 @@ types are included in the default distribution, including REST, Glue, DynamoDB, 
 JDBC, and Hive. JDBC drivers are not included in the default distribution, so you will need to include
 those if needed. When using a Hive catalog, you can use the distribution that includes the Hive metastore client,
 otherwise you will need to include that yourself.
+
+To set the catalog type, you can set `iceberg.catalog.type` to `rest`, `hive`, or `hadoop`. For other
+catalog types, you need to instead set `iceberg.catalog.catalog-impl` to the name of the catalog class.
 
 
 ### REST example
@@ -70,13 +86,20 @@ otherwise you will need to include that yourself.
 NOTE: Use the distribution that includes the HMS client (or include the HMS client yourself). Use `S3FileIO` when
 using S3 for storage (the default is `HadoopFileIO` with `HiveCatalog`).
 ```
-"iceberg.catalog.tyoe":"hive",
+"iceberg.catalog.type":"hive",
 "iceberg.catalog.uri":"thrift://hive:9083",
 "iceberg.catalog.io-impl":"org.apache.iceberg.aws.s3.S3FileIO",
 "iceberg.catalog.warehouse":"s3a://bucket/warehouse",
 "iceberg.catalog.client.region":"us-east-1",
 "iceberg.catalog.s3.access-key-id":"<AWS access>",
 "iceberg.catalog.s3.secret-access-key":"<AWS secret>",
+```
+
+### Glue example
+```
+"iceberg.catalog.catalog-impl": "org.apache.iceberg.aws.glue.GlueCatalog",
+"iceberg.catalog.warehouse": "s3a://bucket/warehouse",
+"iceberg.catalog.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
 ```
 
 ### Notes
