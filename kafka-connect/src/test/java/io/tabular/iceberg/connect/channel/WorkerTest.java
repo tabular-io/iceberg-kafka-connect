@@ -26,7 +26,6 @@ import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.data.IcebergWriter;
 import io.tabular.iceberg.connect.data.IcebergWriterFactory;
-import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.data.WriterResult;
 import io.tabular.iceberg.connect.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.events.CommitRequestPayload;
@@ -76,8 +75,7 @@ public class WorkerTest extends ChannelTestBase {
             TableIdentifier.parse(TABLE_NAME),
             ImmutableList.of(createDataFile()),
             ImmutableList.of(),
-            StructType.of(),
-            ImmutableMap.of(new TopicPartition(SRC_TOPIC_NAME, 0), new Offset(0L, 0L)));
+            StructType.of());
     IcebergWriter writer = mock(IcebergWriter.class);
     when(writer.complete()).thenReturn(writeResult);
 
