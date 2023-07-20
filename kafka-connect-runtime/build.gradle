@@ -16,6 +16,7 @@ configurations {
 
 dependencies {
   implementation project(":iceberg-kafka-connect")
+  implementation project(":iceberg-kafka-connect-transforms")
   implementation libs.bundles.iceberg.ext
   implementation libs.bundles.aws
   implementation(libs.hadoop.common) {
