@@ -23,15 +23,12 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.WriteResult;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 public class IcebergWriter implements Closeable {
@@ -40,7 +37,6 @@ public class IcebergWriter implements Closeable {
   private final IcebergSinkConfig config;
   private final RecordConverter recordConverter;
   private final TaskWriter<Record> writer;
-  private final Map<TopicPartition, Offset> offsets;
 
   public IcebergWriter(Catalog catalog, String tableName, IcebergSinkConfig config) {
     this.tableIdentifier = TableIdentifier.parse(tableName);
@@ -48,15 +44,9 @@ public class IcebergWriter implements Closeable {
     this.config = config;
     this.recordConverter = new RecordConverter(table, config.getJsonConverter());
     this.writer = Utilities.createTableWriter(table, config);
-    this.offsets = new HashMap<>();
   }
 
   public void write(SinkRecord record) {
-    // the consumer stores the offsets that corresponds to the next record to consume,
-    // so increment the record offset by one
-    offsets.put(
-        new TopicPartition(record.topic(), record.kafkaPartition()),
-        new Offset(record.kafkaOffset() + 1, record.timestamp()));
     try {
       // TODO: config to handle tombstones instead of always ignoring?
       if (record.value() != null) {
@@ -110,8 +100,7 @@ public class IcebergWriter implements Closeable {
         tableIdentifier,
         Arrays.asList(writeResult.dataFiles()),
         Arrays.asList(writeResult.deleteFiles()),
-        table.spec().partitionType(),
-        offsets);
+        table.spec().partitionType());
   }
 
   @Override

@@ -63,6 +63,7 @@ public class Worker extends Channel {
   private final String controlGroupId;
   private final Map<String, IcebergWriter> writers;
   private final Map<String, Boolean> tableExistsMap;
+  private final Map<TopicPartition, Offset> sourceOffsets;
 
   public Worker(
       Catalog catalog,
@@ -80,6 +81,7 @@ public class Worker extends Channel {
     this.controlGroupId = config.getControlGroupId();
     this.writers = new HashMap<>();
     this.tableExistsMap = new HashMap<>();
+    this.sourceOffsets = new HashMap<>();
   }
 
   public void syncCommitOffsets() {
@@ -113,17 +115,11 @@ public class Worker extends Channel {
 
     List<WriterResult> writeResults =
         writers.values().stream().map(IcebergWriter::complete).collect(toList());
+    Map<TopicPartition, Offset> offsets = new HashMap<>(sourceOffsets);
 
     tableExistsMap.clear();
     writers.clear();
-
-    Map<TopicPartition, Offset> offsets = new HashMap<>();
-    writeResults.stream()
-        .flatMap(writerResult -> writerResult.getOffsets().entrySet().stream())
-        .forEach(
-            entry ->
-                offsets.merge(
-                    entry.getKey(), entry.getValue(), (o1, o2) -> o1.compareTo(o2) >= 0 ? o1 : o2));
+    sourceOffsets.clear();
 
     // include all assigned topic partitions even if no messages were read
     // from a partition, as the coordinator will use that to determine
@@ -182,6 +178,12 @@ public class Worker extends Channel {
   }
 
   private void save(SinkRecord record) {
+    // the consumer stores the offsets that corresponds to the next record to consume,
+    // so increment the record offset by one
+    sourceOffsets.put(
+        new TopicPartition(record.topic(), record.kafkaPartition()),
+        new Offset(record.kafkaOffset() + 1, record.timestamp()));
+
     if (config.getDynamicTablesEnabled()) {
       routeRecordDynamically(record);
     } else {
