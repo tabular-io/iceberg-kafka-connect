@@ -114,5 +114,8 @@ public class WorkerTest extends ChannelTestBase {
     assertEquals(EventType.COMMIT_READY, event.getType());
     CommitReadyPayload readyPayload = (CommitReadyPayload) event.getPayload();
     assertEquals(commitId, readyPayload.getCommitId());
+    assertEquals(1, readyPayload.getAssignments().size());
+    // offset should be one more than the record offset
+    assertEquals(1L, readyPayload.getAssignments().get(0).getOffset());
   }
 }
