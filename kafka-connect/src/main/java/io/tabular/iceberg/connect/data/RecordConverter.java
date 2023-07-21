@@ -59,6 +59,7 @@ import org.apache.iceberg.types.Types.NestedField;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.types.Types.TimestampType;
 import org.apache.iceberg.util.DateTimeUtil;
+import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.json.JsonConverter;
 
@@ -164,7 +165,12 @@ public class RecordConverter {
     if (value instanceof Map) {
       return ((Map<?, ?>) value).get(fieldName);
     } else if (value instanceof Struct) {
-      return ((Struct) value).get(fieldName);
+      Struct struct = (Struct) value;
+      Field field = struct.schema().field(fieldName);
+      if (field == null) {
+        return null;
+      }
+      return struct.get(field);
     }
     throw new IllegalArgumentException("Cannot convert to struct: " + value.getClass().getName());
   }
