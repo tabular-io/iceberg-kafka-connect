@@ -18,6 +18,8 @@
  */
 package io.tabular.iceberg.connect.data;
 
+import static java.lang.String.format;
+
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import java.io.Closeable;
 import java.io.IOException;
@@ -29,6 +31,7 @@ import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.WriteResult;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 public class IcebergWriter implements Closeable {
@@ -59,8 +62,12 @@ public class IcebergWriter implements Closeable {
           writer.write(new RecordWrapper(row, op));
         }
       }
-    } catch (IOException e) {
-      throw new UncheckedIOException(e);
+    } catch (Exception e) {
+      throw new DataException(
+          format(
+              "An error occurred converting record, topic: %s, partition, %d, offset: %d",
+              record.topic(), record.kafkaPartition(), record.kafkaOffset()),
+          e);
     }
   }
 

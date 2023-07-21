@@ -80,7 +80,11 @@ public class RecordConverterTest {
           Types.NestedField.required(
               36,
               "ma",
-              Types.MapType.ofRequired(37, 38, Types.StringType.get(), Types.StringType.get())));
+              Types.MapType.ofRequired(37, 38, Types.StringType.get(), Types.StringType.get())),
+          Types.NestedField.optional(39, "extra", Types.StringType.get()));
+
+  // we have 1 unmapped column so exclude that from the count
+  private static final int MAPPED_CNT = SCHEMA.columns().size() - 1;
 
   private static final org.apache.iceberg.Schema NESTED_SCHEMA =
       new org.apache.iceberg.Schema(
@@ -169,7 +173,7 @@ public class RecordConverterTest {
 
     String str = (String) record.getField("st");
     Map<String, Object> map = (Map<String, Object>) MAPPER.readValue(str, Map.class);
-    assertEquals(SCHEMA.columns().size(), map.size());
+    assertEquals(MAPPED_CNT, map.size());
   }
 
   @Test
@@ -206,7 +210,7 @@ public class RecordConverterTest {
 
     String str = (String) record.getField("st");
     Map<String, Object> map = (Map<String, Object>) MAPPER.readValue(str, Map.class);
-    assertEquals(SCHEMA.columns().size(), map.size());
+    assertEquals(MAPPED_CNT, map.size());
   }
 
   @Test
