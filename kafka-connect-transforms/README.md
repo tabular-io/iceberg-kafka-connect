@@ -28,7 +28,7 @@ The `CopyValue` SMT copies a value from one field to a new field.
 _(Experimental)_
 
 The `DmsTransform` SMT transforms an AWS DMS formatted message for use by the sink's CDC feature.
-It will promote the `data` element field to top level and add the following metadata fields:
+It will promote the `data` element fields to top level and add the following metadata fields:
 `_cdc_op`, `_cdc_ts`, and `_cdc_table`.
 
 ## Configuration
