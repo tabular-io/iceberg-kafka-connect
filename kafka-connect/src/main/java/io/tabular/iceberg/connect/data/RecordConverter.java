@@ -19,7 +19,6 @@
 package io.tabular.iceberg.connect.data;
 
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME;
-import static java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,6 +33,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.Temporal;
 import java.util.Base64;
@@ -66,6 +67,12 @@ import org.apache.kafka.connect.json.JsonConverter;
 public class RecordConverter {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
+
+  private static final DateTimeFormatter OFFSET_TS_FMT =
+      new DateTimeFormatterBuilder()
+          .append(ISO_LOCAL_DATE_TIME)
+          .appendOffset("+HHmm", "Z")
+          .toFormatter();
 
   private final StructType tableSchema;
   private final NameMapping nameMapping;
@@ -346,11 +353,11 @@ public class RecordConverter {
   }
 
   private OffsetDateTime parseOffsetDateTime(String str) {
-    String dateStr = ensureIsoLiteral(str);
+    String tsStr = ensureTimestampFormat(str);
     try {
-      return OffsetDateTime.parse(dateStr, ISO_OFFSET_DATE_TIME);
+      return OFFSET_TS_FMT.parse(tsStr, OffsetDateTime::from);
     } catch (DateTimeParseException e) {
-      return LocalDateTime.parse(dateStr, ISO_LOCAL_DATE_TIME).atOffset(ZoneOffset.UTC);
+      return LocalDateTime.parse(tsStr, ISO_LOCAL_DATE_TIME).atOffset(ZoneOffset.UTC);
     }
   }
 
@@ -372,18 +379,22 @@ public class RecordConverter {
   }
 
   private LocalDateTime parseLocalDateTime(String str) {
-    String dateStr = ensureIsoLiteral(str);
+    String tsStr = ensureTimestampFormat(str);
     try {
-      return LocalDateTime.parse(dateStr, ISO_LOCAL_DATE_TIME);
+      return LocalDateTime.parse(tsStr, ISO_LOCAL_DATE_TIME);
     } catch (DateTimeParseException e) {
-      return OffsetDateTime.parse(dateStr, ISO_OFFSET_DATE_TIME).toLocalDateTime();
+      return OFFSET_TS_FMT.parse(tsStr, OffsetDateTime::from).toLocalDateTime();
     }
   }
 
-  private String ensureIsoLiteral(String str) {
-    if (str.charAt(10) == ' ') {
-      return str.substring(0, 10) + 'T' + str.substring(11);
+  private String ensureTimestampFormat(String str) {
+    String result = str;
+    if (result.charAt(10) == ' ') {
+      result = result.substring(0, 10) + 'T' + result.substring(11);
     }
-    return str;
+    if (result.length() > 22 && result.charAt(19) == '+' && result.charAt(22) == ':') {
+      result = result.substring(0, 19) + result.substring(19).replace(":", "");
+    }
+    return result;
   }
 }

@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -233,59 +234,45 @@ public class RecordConverterTest {
 
   @Test
   public void testTimestampWithZoneConversion() {
-    Table table = mock(Table.class);
-    when(table.schema()).thenReturn(SIMPLE_SCHEMA);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
-
     OffsetDateTime expected = OffsetDateTime.parse("2023-05-18T11:22:33Z");
-
-    Temporal ts = converter.convertTimestampValue("2023-05-18T11:22:33Z", TimestampType.withZone());
-    assertEquals(expected, ts);
-
-    ts = converter.convertTimestampValue("2023-05-18 11:22:33Z", TimestampType.withZone());
-    assertEquals(expected, ts);
-
-    ts = converter.convertTimestampValue("2023-05-18T11:22:33", TimestampType.withZone());
-    assertEquals(expected, ts);
-
-    ts = converter.convertTimestampValue("2023-05-18 11:22:33", TimestampType.withZone());
-    assertEquals(expected, ts);
-
-    long epochMillis = expected.toInstant().toEpochMilli();
-    ts = converter.convertTimestampValue(epochMillis, TimestampType.withZone());
-    assertEquals(expected, ts);
-
-    ts = converter.convertTimestampValue(new Date(epochMillis), TimestampType.withZone());
-    assertEquals(expected, ts);
+    long expectedMillis = expected.toInstant().toEpochMilli();
+    convertToTimestamps(expected, expectedMillis, TimestampType.withZone());
   }
 
   @Test
   public void testTimestampWithoutZoneConversion() {
+    LocalDateTime expected = LocalDateTime.parse("2023-05-18T11:22:33");
+    long expectedMillis = expected.atZone(ZoneOffset.UTC).toInstant().toEpochMilli();
+    convertToTimestamps(expected, expectedMillis, TimestampType.withoutZone());
+  }
+
+  private void convertToTimestamps(Temporal expected, long expectedMillis, TimestampType type) {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SIMPLE_SCHEMA);
     RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
-    LocalDateTime expected = LocalDateTime.parse("2023-05-18T11:22:33");
+    List<Object> inputList =
+        ImmutableList.of(
+            "2023-05-18T11:22:33Z",
+            "2023-05-18 11:22:33Z",
+            "2023-05-18T11:22:33+00",
+            "2023-05-18 11:22:33+00",
+            "2023-05-18T11:22:33+00:00",
+            "2023-05-18 11:22:33+00:00",
+            "2023-05-18T11:22:33+0000",
+            "2023-05-18 11:22:33+0000",
+            "2023-05-18T11:22:33",
+            "2023-05-18 11:22:33",
+            expectedMillis,
+            new Date(expectedMillis),
+            OffsetDateTime.ofInstant(Instant.ofEpochMilli(expectedMillis), ZoneOffset.UTC),
+            LocalDateTime.ofInstant(Instant.ofEpochMilli(expectedMillis), ZoneOffset.UTC));
 
-    Temporal ts =
-        converter.convertTimestampValue("2023-05-18T11:22:33", TimestampType.withoutZone());
-    assertEquals(expected, ts);
-
-    ts = converter.convertTimestampValue("2023-05-18 11:22:33", TimestampType.withoutZone());
-    assertEquals(expected, ts);
-
-    ts = converter.convertTimestampValue("2023-05-18T11:22:33Z", TimestampType.withoutZone());
-    assertEquals(expected, ts);
-
-    ts = converter.convertTimestampValue("2023-05-18 11:22:33Z", TimestampType.withoutZone());
-    assertEquals(expected, ts);
-
-    long epochMillis = expected.atZone(ZoneOffset.UTC).toInstant().toEpochMilli();
-    ts = converter.convertTimestampValue(epochMillis, TimestampType.withoutZone());
-    assertEquals(expected, ts);
-
-    ts = converter.convertTimestampValue(new Date(epochMillis), TimestampType.withoutZone());
-    assertEquals(expected, ts);
+    inputList.forEach(
+        input -> {
+          Temporal ts = converter.convertTimestampValue(input, type);
+          assertEquals(expected, ts);
+        });
   }
 
   private Map<String, Object> createMapData() {
