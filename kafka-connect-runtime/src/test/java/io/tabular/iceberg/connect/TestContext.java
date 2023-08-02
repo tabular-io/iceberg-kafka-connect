@@ -63,9 +63,9 @@ public class TestContext {
   private static final String KC_PLUGIN_DIR = "/test/kafka-connect";
 
   private static final String MINIO_IMAGE = "minio/minio";
-  private static final String KAFKA_IMAGE = "confluentinc/cp-kafka:7.4.0";
-  private static final String CONNECT_IMAGE = "confluentinc/cp-kafka-connect:7.4.0";
-  private static final String REST_CATALOG_IMAGE = "tabulario/iceberg-rest:0.5.0";
+  private static final String KAFKA_IMAGE = "confluentinc/cp-kafka:7.4.1";
+  private static final String CONNECT_IMAGE = "confluentinc/cp-kafka-connect:7.4.1";
+  private static final String REST_CATALOG_IMAGE = "tabulario/iceberg-rest:0.6.0";
 
   private TestContext() {
     network = Network.newNetwork();

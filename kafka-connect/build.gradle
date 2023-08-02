@@ -7,6 +7,7 @@ dependencies {
   compileOnly libs.bundles.kafka.connect
 
   testImplementation(testFixtures(project(":iceberg-kafka-connect-events")))
+  testImplementation libs.hadoop.common
 
   testImplementation libs.junit.api
   testRuntimeOnly libs.junit.engine

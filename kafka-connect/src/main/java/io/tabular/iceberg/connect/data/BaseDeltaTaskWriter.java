@@ -39,6 +39,7 @@ abstract class BaseDeltaTaskWriter extends BaseTaskWriter<Record> {
   private final Schema deleteSchema;
   private final InternalRecordWrapper wrapper;
   private final InternalRecordWrapper keyWrapper;
+  private final RecordProjection keyProjection;
   private final boolean upsertMode;
 
   BaseDeltaTaskWriter(
@@ -55,6 +56,7 @@ abstract class BaseDeltaTaskWriter extends BaseTaskWriter<Record> {
     this.deleteSchema = TypeUtil.select(schema, Sets.newHashSet(schema.identifierFieldIds()));
     this.wrapper = new InternalRecordWrapper(schema.asStruct());
     this.keyWrapper = new InternalRecordWrapper(deleteSchema.asStruct());
+    this.keyProjection = RecordProjection.create(schema, deleteSchema);
     this.upsertMode = upsertMode;
   }
 
@@ -72,8 +74,7 @@ abstract class BaseDeltaTaskWriter extends BaseTaskWriter<Record> {
             : upsertMode ? Operation.UPDATE : Operation.INSERT;
     RowDataDeltaWriter writer = route(row);
     if (op == Operation.UPDATE || op == Operation.DELETE) {
-      // TODO: use deleteKey()
-      writer.delete(row);
+      writer.deleteKey(keyProjection.wrap(row));
     }
     if (op == Operation.UPDATE || op == Operation.INSERT) {
       writer.write(row);
