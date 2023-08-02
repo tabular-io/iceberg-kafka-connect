@@ -29,6 +29,9 @@ import org.apache.iceberg.types.Types.MapType;
 import org.apache.iceberg.types.Types.NestedField;
 import org.apache.iceberg.types.Types.StructType;
 
+/**
+ * This is modified from {@link org.apache.iceberg.util.StructProjection} to support record types.
+ */
 public class RecordProjection implements Record {
 
   /**
