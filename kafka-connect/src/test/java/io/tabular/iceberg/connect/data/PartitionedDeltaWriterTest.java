@@ -51,6 +51,8 @@ public class PartitionedDeltaWriterTest extends BaseWriterTest {
     WriteResult result =
         writeTest(ImmutableList.of(row1, row2), config, PartitionedDeltaWriter.class);
 
+    // in upsert mode, each write is a delete + append, so we'll have 1 data file
+    // and 1 delete file for each partition (2 total)
     assertEquals(2, result.dataFiles().length);
     assertEquals(2, result.deleteFiles().length);
   }

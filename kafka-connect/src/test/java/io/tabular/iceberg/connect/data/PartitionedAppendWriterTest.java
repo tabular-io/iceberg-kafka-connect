@@ -50,6 +50,7 @@ public class PartitionedAppendWriterTest extends BaseWriterTest {
     WriteResult result =
         writeTest(ImmutableList.of(row1, row2), config, PartitionedAppendWriter.class);
 
+    // 1 data file for each partition (2 total)
     assertEquals(2, result.dataFiles().length);
     assertEquals(0, result.deleteFiles().length);
   }

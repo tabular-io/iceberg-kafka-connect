@@ -43,6 +43,8 @@ public class UnpartitionedDeltaWriterTest extends BaseWriterTest {
 
     WriteResult result = writeTest(ImmutableList.of(row), config, UnpartitionedDeltaWriter.class);
 
+    // in upsert mode, each write is a delete + append, so we'll have 1 data file
+    // and 1 delete file
     assertEquals(1, result.dataFiles().length);
     assertEquals(1, result.deleteFiles().length);
   }
