@@ -72,8 +72,7 @@ abstract class BaseDeltaTaskWriter extends BaseTaskWriter<Record> {
             : upsertMode ? Operation.UPDATE : Operation.INSERT;
     RowDataDeltaWriter writer = route(row);
     if (op == Operation.UPDATE || op == Operation.DELETE) {
-      // TODO: use deleteKey()
-      writer.delete(row);
+      writer.deleteKey(row);
     }
     if (op == Operation.UPDATE || op == Operation.INSERT) {
       writer.write(row);
