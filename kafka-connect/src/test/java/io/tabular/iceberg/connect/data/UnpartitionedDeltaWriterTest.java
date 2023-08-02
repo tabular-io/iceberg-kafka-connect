@@ -39,6 +39,7 @@ public class UnpartitionedDeltaWriterTest extends BaseWriterTest {
     Record row = GenericRecord.create(SCHEMA);
     row.setField("id", 123L);
     row.setField("data", "hello world!");
+    row.setField("id2", 123L);
 
     WriteResult result = writeTest(ImmutableList.of(row), config, UnpartitionedDeltaWriter.class);
 

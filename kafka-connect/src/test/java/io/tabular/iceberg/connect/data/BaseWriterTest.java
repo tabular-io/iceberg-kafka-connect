@@ -50,8 +50,9 @@ public class BaseWriterTest {
       new Schema(
           ImmutableList.of(
               Types.NestedField.required(1, "id", Types.LongType.get()),
-              Types.NestedField.required(2, "data", Types.StringType.get())),
-          ImmutableSet.of(1));
+              Types.NestedField.required(2, "data", Types.StringType.get()),
+              Types.NestedField.required(3, "id2", Types.LongType.get())),
+          ImmutableSet.of(1, 3));
 
   protected static final PartitionSpec SPEC =
       PartitionSpec.builderFor(SCHEMA).identity("data").build();

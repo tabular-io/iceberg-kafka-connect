@@ -38,10 +38,12 @@ public class UnpartitionedWriterTest extends BaseWriterTest {
     Record row1 = GenericRecord.create(SCHEMA);
     row1.setField("id", 123L);
     row1.setField("data", "hello world!");
+    row1.setField("id2", 123L);
 
     Record row2 = GenericRecord.create(SCHEMA);
-    row2.setField("id", 2345L);
+    row2.setField("id", 234L);
     row2.setField("data", "foobar");
+    row2.setField("id2", 234L);
 
     WriteResult result = writeTest(ImmutableList.of(row1, row2), config, UnpartitionedWriter.class);
 
