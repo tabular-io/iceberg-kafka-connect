@@ -265,7 +265,9 @@ message for use by the sink. This transform will promote the data fields to top 
 three metadata fields. These fields are `_cdc_op` for operation type (I, U, D), `_cdc_table` for
 the source table name, and `_cdc_ts` for the operation timestamp.
 
-Here is an example config that uses this transform to apply updates to an Iceberg table.
+Here is an example config that uses this transform to apply updates to an Iceberg table. The
+`routeRegex` is defined to ensure the correct message is routed to the table.
+
 ```json
 {
 "name": "dms-cdc-sink",
@@ -280,6 +282,8 @@ Here is an example config that uses this transform to apply updates to an Iceber
     "transforms.dms.type": "io.tabular.iceberg.connect.transforms.DmsTransform",
     "iceberg.tables": "default.dms_test",
     "iceberg.tables.cdcField": "_cdc_op",
+    "iceberg.tables.routeField": "_cdc_table",
+    "iceberg.table.default.dms_test.routeRegex": "src_db.src_table",
     "iceberg.catalog.type": "rest",
     "iceberg.catalog.uri": "https://localhost",
     "iceberg.catalog.credential": "<credential>",
