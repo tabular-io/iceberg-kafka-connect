@@ -12,6 +12,11 @@ configurations {
     resolutionStrategy.force "org.codehaus.jettison:jettison:1.5.4"
     resolutionStrategy.force "org.xerial.snappy:snappy-java:1.1.10.1"
     resolutionStrategy.force "org.apache.hadoop.thirdparty:hadoop-shaded-guava:1.1.1-tabular"
+    resolutionStrategy.eachDependency { details ->
+      if (details.requested.group == "io.netty") {
+        details.useVersion "4.1.86.Final"
+      }
+    }
   }
 }
 
@@ -19,11 +24,14 @@ dependencies {
   implementation project(":iceberg-kafka-connect")
   implementation project(":iceberg-kafka-connect-transforms")
   implementation libs.bundles.iceberg.ext
-  implementation libs.bundles.aws
   implementation(libs.hadoop.common) {
     exclude group: "log4j"
     exclude group: "org.slf4j"
     exclude group: "ch.qos.reload4j"
+    // exclude dependencies that have vulnerabilities and shouldn't be needed...
+    exclude group: "com.google.guava"
+    exclude group: "com.google.protobuf"
+    exclude group: "org.apache.hadoop.thirdparty", module: "hadoop-shaded-protobuf_3_7"
   }
 
   hive libs.iceberg.hive.metastore
@@ -54,7 +62,7 @@ dependencies {
   }
 
   testImplementation libs.bundles.iceberg
-  testImplementation libs.bundles.aws
+  testImplementation libs.iceberg.aws.bundle
   testImplementation libs.bundles.jackson
   testImplementation libs.bundles.kafka.connect
 
