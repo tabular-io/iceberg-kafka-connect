@@ -55,6 +55,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String ROUTE_REGEX = "routeRegex";
 
   private static final String CATALOG_PROP_PREFIX = "iceberg.catalog.";
+  private static final String HADOOP_PROP_PREFIX = "iceberg.hadoop.";
   private static final String KAFKA_PROP_PREFIX = "iceberg.kafka.";
   private static final String TABLE_PROP_PREFIX = "iceberg.table.";
 
@@ -167,6 +168,7 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   private final Map<String, String> originalProps;
   private final Map<String, String> catalogProps;
+  private final Map<String, String> hadoopProps;
   private final Map<String, String> kafkaProps;
   private final Map<String, Pattern> tableRouteRegexMap = new HashMap<>();
   private final JsonConverter jsonConverter;
@@ -176,6 +178,7 @@ public class IcebergSinkConfig extends AbstractConfig {
     this.originalProps = originalProps;
 
     this.catalogProps = PropertyUtil.propertiesWithPrefix(originalProps, CATALOG_PROP_PREFIX);
+    this.hadoopProps = PropertyUtil.propertiesWithPrefix(originalProps, HADOOP_PROP_PREFIX);
 
     this.kafkaProps = new HashMap<>(loadWorkerProps());
     kafkaProps.putAll(PropertyUtil.propertiesWithPrefix(originalProps, KAFKA_PROP_PREFIX));
@@ -224,6 +227,10 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public Map<String, String> getCatalogProps() {
     return catalogProps;
+  }
+
+  public Map<String, String> getHadoopProps() {
+    return hadoopProps;
   }
 
   public Map<String, String> getKafkaProps() {
