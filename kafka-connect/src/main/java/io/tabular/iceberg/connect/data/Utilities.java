@@ -32,6 +32,9 @@ import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
+import org.apache.iceberg.common.DynClasses;
+import org.apache.iceberg.common.DynMethods;
+import org.apache.iceberg.common.DynMethods.BoundMethod;
 import org.apache.iceberg.data.GenericAppenderFactory;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.io.FileAppenderFactory;
@@ -52,15 +55,31 @@ public class Utilities {
 
   public static Catalog loadCatalog(IcebergSinkConfig config) {
     return CatalogUtil.buildIcebergCatalog(
-        config.getCatalogName(), config.getCatalogProps(), getHadoopConfig());
+        config.getCatalogName(),
+        config.getCatalogProps(),
+        getHadoopConfig(config.getHadoopProps()));
   }
 
-  private static Object getHadoopConfig() {
-    try {
-      Class<?> clazz = Class.forName("org.apache.hadoop.conf.Configuration");
-      return clazz.getDeclaredConstructor().newInstance();
-    } catch (ClassNotFoundException e) {
+  private static Object getHadoopConfig(Map<String, String> hadoopProps) {
+    Class<?> configClass =
+        DynClasses.builder().impl("org.apache.hadoop.hdfs.HdfsConfiguration").orNull().build();
+    if (configClass == null) {
+      configClass =
+          DynClasses.builder().impl("org.apache.hadoop.conf.Configuration").orNull().build();
+    }
+
+    if (configClass == null) {
       LOG.info("Hadoop not found on classpath, not creating Hadoop config");
+      return null;
+    }
+
+    try {
+      Object result = configClass.getDeclaredConstructor().newInstance();
+      BoundMethod setMethod =
+          DynMethods.builder("set").impl(configClass, String.class, String.class).build(result);
+      hadoopProps.forEach(setMethod::invoke);
+      LOG.info("Hadoop config initialized: {}", configClass.getName());
+      return result;
     } catch (InstantiationException
         | IllegalAccessException
         | NoSuchMethodException

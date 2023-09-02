@@ -35,6 +35,7 @@ The zip archive will be found under `./kafka-connect-runtime/build/distributions
 | iceberg.control.commitThreads            | Number of threads to use for commits, default is (cores * 2)                                                  |
 | iceberg.catalog                          | Name of the catalog, default is `iceberg`                                                                     |
 | iceberg.catalog.*                        | Properties passed through to Iceberg catalog initialization                                                   |
+| iceberg.hadoop.*                         | Properties passed through to Hadoop configuration                                                             |
 | iceberg.kafka.*                          | Properties passed through to control topic Kafka client initialization                                        |
 
 If `iceberg.tables.dynamic.enabled` is `false` (the default) then you must specify `iceberg.tables`. If
