@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<configuration>
+  <property>
+    <name>foo</name>
+    <value>bar</value>
+  </property>
+</configuration>
