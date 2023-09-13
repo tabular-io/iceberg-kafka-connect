@@ -24,7 +24,13 @@ import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES;
 import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -41,6 +47,7 @@ import org.apache.iceberg.io.FileAppenderFactory;
 import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.UnpartitionedWriter;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.relocated.com.google.common.primitives.Ints;
 import org.apache.iceberg.types.TypeUtil;
@@ -52,15 +59,16 @@ import org.slf4j.LoggerFactory;
 public class Utilities {
 
   private static final Logger LOG = LoggerFactory.getLogger(Utilities.class.getName());
+  private static final List<String> HADOOP_CONF_FILES =
+      ImmutableList.of("core-site.xml", "hdfs-site.xml", "hive-site.xml");
 
   public static Catalog loadCatalog(IcebergSinkConfig config) {
     return CatalogUtil.buildIcebergCatalog(
-        config.getCatalogName(),
-        config.getCatalogProps(),
-        getHadoopConfig(config.getHadoopProps()));
+        config.getCatalogName(), config.getCatalogProps(), getHadoopConfig(config));
   }
 
-  private static Object getHadoopConfig(Map<String, String> hadoopProps) {
+  // use reflection here to avoid requiring Hadoop as a dependency
+  private static Object getHadoopConfig(IcebergSinkConfig config) {
     Class<?> configClass =
         DynClasses.builder().impl("org.apache.hadoop.hdfs.HdfsConfiguration").orNull().build();
     if (configClass == null) {
@@ -75,9 +83,30 @@ public class Utilities {
 
     try {
       Object result = configClass.getDeclaredConstructor().newInstance();
+      BoundMethod addResourceMethod =
+          DynMethods.builder("addResource").impl(configClass, URL.class).build(result);
       BoundMethod setMethod =
           DynMethods.builder("set").impl(configClass, String.class, String.class).build(result);
-      hadoopProps.forEach(setMethod::invoke);
+
+      //  load any config files in the specified config directory
+      String hadoopConfDir = config.getHadoopConfDir();
+      if (hadoopConfDir != null) {
+        HADOOP_CONF_FILES.forEach(
+            confFile -> {
+              Path path = Paths.get(hadoopConfDir, confFile);
+              if (Files.exists(path)) {
+                try {
+                  addResourceMethod.invoke(path.toUri().toURL());
+                } catch (IOException e) {
+                  LOG.warn("Error adding Hadoop resource {}, resource was not added", path, e);
+                }
+              }
+            });
+      }
+
+      // set any Hadoop properties specified in the sink config
+      config.getHadoopProps().forEach(setMethod::invoke);
+
       LOG.info("Hadoop config initialized: {}", configClass.getName());
       return result;
     } catch (InstantiationException

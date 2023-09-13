@@ -72,6 +72,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.control.commitTimeoutMs";
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
   private static final String COMMIT_THREADS_PROP = "iceberg.control.commitThreads";
+  private static final String HADDOP_CONF_DIR_PROP = "iceberg.hadoop-conf-dir";
 
   private static final String NAME_PROP = "name";
   private static final String BOOTSTRAP_SERVERS_PROP = "bootstrap.servers";
@@ -161,6 +162,12 @@ public class IcebergSinkConfig extends AbstractConfig {
         COMMIT_THREADS_PROP,
         Type.INT,
         Runtime.getRuntime().availableProcessors() * 2,
+        Importance.MEDIUM,
+        "Coordinator threads to use for table commits, default is (cores * 2)");
+    configDef.define(
+        HADDOP_CONF_DIR_PROP,
+        Type.STRING,
+        null,
         Importance.MEDIUM,
         "Coordinator threads to use for table commits, default is (cores * 2)");
     return configDef;
@@ -293,6 +300,10 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public int getCommitThreads() {
     return getInt(COMMIT_THREADS_PROP);
+  }
+
+  public String getHadoopConfDir() {
+    return getString(HADDOP_CONF_DIR_PROP);
   }
 
   public boolean isUpsertMode() {
