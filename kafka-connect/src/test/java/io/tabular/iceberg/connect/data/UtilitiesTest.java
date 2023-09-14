@@ -21,6 +21,10 @@ package io.tabular.iceberg.connect.data;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.catalog.Catalog;
@@ -28,8 +32,16 @@ import org.apache.iceberg.hadoop.Configurable;
 import org.apache.iceberg.inmemory.InMemoryCatalog;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class UtilitiesTest {
+
+  private static final String HADOOP_CONF_TEMPLATE =
+      "<configuration><property><name>%s</name><value>%s</value></property></configuration>";
+
+  @TempDir private Path tempDir;
 
   public static class TestCatalog extends InMemoryCatalog implements Configurable<Configuration> {
     private Configuration conf;
@@ -41,15 +53,15 @@ public class UtilitiesTest {
   }
 
   @Test
-  public void testLoadCatalog() {
+  public void testLoadCatalogNoHadoopDir() {
     Map<String, String> props =
         ImmutableMap.of(
             "topics",
             "mytopic",
             "iceberg.tables",
             "mytable",
-            "iceberg.hadoop.prop",
-            "value",
+            "iceberg.hadoop.conf-prop",
+            "conf-value",
             "iceberg.catalog.catalog-impl",
             TestCatalog.class.getName());
     IcebergSinkConfig config = new IcebergSinkConfig(props);
@@ -59,7 +71,46 @@ public class UtilitiesTest {
 
     Configuration conf = ((TestCatalog) result).conf;
     assertThat(conf).isNotNull();
-    assertThat(conf.get("prop")).isEqualTo("value");
+
+    // check that the sink config property was added
+    assertThat(conf.get("conf-prop")).isEqualTo("conf-value");
+
+    // check that core-site.xml was loaded
+    assertThat(conf.get("foo")).isEqualTo("bar");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"core-site.xml", "hdfs-site.xml", "hive-site.xml"})
+  public void testLoadCatalogWithHadoopDir(String confFile) throws IOException {
+    Path path = tempDir.resolve(confFile);
+    String xml = String.format(HADOOP_CONF_TEMPLATE, "file-prop", "file-value");
+    Files.write(path, xml.getBytes(StandardCharsets.UTF_8));
+
+    Map<String, String> props =
+        ImmutableMap.of(
+            "topics",
+            "mytopic",
+            "iceberg.tables",
+            "mytable",
+            "iceberg.hadoop-conf-dir",
+            tempDir.toString(),
+            "iceberg.hadoop.conf-prop",
+            "conf-value",
+            "iceberg.catalog.catalog-impl",
+            TestCatalog.class.getName());
+    IcebergSinkConfig config = new IcebergSinkConfig(props);
+    Catalog result = Utilities.loadCatalog(config);
+
+    assertThat(result).isInstanceOf(TestCatalog.class);
+
+    Configuration conf = ((TestCatalog) result).conf;
+    assertThat(conf).isNotNull();
+
+    // check that the sink config property was added
+    assertThat(conf.get("conf-prop")).isEqualTo("conf-value");
+
+    // check that the config file was loaded
+    assertThat(conf.get("file-prop")).isEqualTo("file-value");
 
     // check that core-site.xml was loaded
     assertThat(conf.get("foo")).isEqualTo("bar");

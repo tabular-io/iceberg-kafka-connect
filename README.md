@@ -35,7 +35,8 @@ The zip archive will be found under `./kafka-connect-runtime/build/distributions
 | iceberg.control.commitThreads            | Number of threads to use for commits, default is (cores * 2)                                                  |
 | iceberg.catalog                          | Name of the catalog, default is `iceberg`                                                                     |
 | iceberg.catalog.*                        | Properties passed through to Iceberg catalog initialization                                                   |
-| iceberg.hadoop.*                         | Properties passed through to Hadoop configuration                                                             |
+| iceberg.hadoop-conf-dir                  | If specified, Hadoop config files in this directory will be loaded                                            |
+| iceberg.hadoop.*                         | Properties passed through to the Hadoop configuration                                                         |
 | iceberg.kafka.*                          | Properties passed through to control topic Kafka client initialization                                        |
 
 If `iceberg.tables.dynamic.enabled` is `false` (the default) then you must specify `iceberg.tables`. If
@@ -74,6 +75,12 @@ otherwise you will need to include that yourself.
 To set the catalog type, you can set `iceberg.catalog.type` to `rest`, `hive`, or `hadoop`. For other
 catalog types, you need to instead set `iceberg.catalog.catalog-impl` to the name of the catalog class.
 
+## Hadoop configuration
+
+When using HDFS or Hive, the sink will initialize the Hadoop configuration. First, config files
+from the classpath are loaded. Next, if `iceberg.hadoop-conf-dir` is specified, config files
+are loaded from that location. Finally, any `iceberg.hadoop.*` properties from the sink config are
+applied. When merging these, the order of precedence is sink config > config dir > classpath.
 
 ### REST example
 ```
