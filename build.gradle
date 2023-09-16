@@ -13,7 +13,7 @@ subprojects {
   apply plugin: "maven-publish"
 
   group "io.tabular.connect"
-  version "0.4.13"
+  version "0.4.14-SNAPSHOT"
 
   repositories {
     mavenCentral()
