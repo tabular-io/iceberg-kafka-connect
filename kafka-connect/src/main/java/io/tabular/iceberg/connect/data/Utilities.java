@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.Table;
@@ -130,7 +131,8 @@ public class Utilities {
     }
   }
 
-  public static TaskWriter<Record> createTableWriter(Table table, IcebergSinkConfig config) {
+  public static TaskWriter<Record> createTableWriter(
+      Table table, String tableName, IcebergSinkConfig config) {
     String formatStr =
         table.properties().getOrDefault(DEFAULT_FILE_FORMAT, DEFAULT_FILE_FORMAT_DEFAULT);
     FileFormat format = FileFormat.valueOf(formatStr.toUpperCase());
@@ -140,6 +142,15 @@ public class Utilities {
             table.properties(), WRITE_TARGET_FILE_SIZE_BYTES, WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT);
 
     Set<Integer> equalityFieldIds = table.schema().identifierFieldIds();
+
+    // override the identifier fields if the config is set
+    List<String> idCols = config.getTableIdColumns(tableName);
+    if (!idCols.isEmpty()) {
+      equalityFieldIds =
+          idCols.stream()
+              .map(colName -> table.schema().findField(colName).fieldId())
+              .collect(Collectors.toSet());
+    }
 
     FileAppenderFactory<Record> appenderFactory;
     if (equalityFieldIds == null || equalityFieldIds.isEmpty()) {

@@ -21,6 +21,7 @@ package io.tabular.iceberg.connect;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,8 +29,10 @@ import java.util.Properties;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.apache.iceberg.IcebergBuild;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.util.PropertyUtil;
@@ -53,6 +56,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   public static final String INTERNAL_TRANSACTIONAL_SUFFIX_PROP =
       "iceberg.coordinator.transactional.suffix";
   private static final String ROUTE_REGEX = "routeRegex";
+  private static final String ID_COLUMNS = "idColumns";
 
   private static final String CATALOG_PROP_PREFIX = "iceberg.catalog.";
   private static final String HADOOP_PROP_PREFIX = "iceberg.hadoop.";
@@ -178,6 +182,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private final Map<String, String> hadoopProps;
   private final Map<String, String> kafkaProps;
   private final Map<String, Pattern> tableRouteRegexMap = new HashMap<>();
+  private final Map<String, List<String>> tableIdColumnsMap = new HashMap<>();
   private final JsonConverter jsonConverter;
 
   public IcebergSinkConfig(Map<String, String> originalProps) {
@@ -269,6 +274,18 @@ public class IcebergSinkConfig extends AbstractConfig {
             return null;
           }
           return Pattern.compile(value);
+        });
+  }
+
+  public List<String> getTableIdColumns(String tableName) {
+    return tableIdColumnsMap.computeIfAbsent(
+        tableName,
+        notUsed -> {
+          String value = originalProps.get(TABLE_PROP_PREFIX + tableName + "." + ID_COLUMNS);
+          if (value == null || value.isEmpty()) {
+            return ImmutableList.of();
+          }
+          return Arrays.stream(value.split(",")).map(String::trim).collect(Collectors.toList());
         });
   }
 

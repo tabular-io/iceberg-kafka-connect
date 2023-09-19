@@ -20,24 +20,25 @@ The zip archive will be found under `./kafka-connect-runtime/build/distributions
 
 # Configuration
 
-| Property                                 | Description                                                                                                   |
-|------------------------------------------|---------------------------------------------------------------------------------------------------------------|
-| iceberg.tables                           | Comma-separated list of destination tables                                                                    |
-| iceberg.tables.routeField                | For multi-table fan-out, the name of the field used to route records to tables                                |
-| iceberg.tables.\<table name\>.routeRegex | The regex used to match a record's `routeField` to a table                                                    |
-| iceberg.tables.dynamic.enabled           | Set to `true` to route to a table specified in `routeField` instead of using `routeRegex`, default is `false` |
-| iceberg.tables.cdcField                  | Name of the field containing the CDC operation, `I`, `U`, or `D`, default is none                             |
-| iceberg.tables.upsertModeEnabled         | Set to `true` to enable upsert mode, default is `false`                                                       |
-| iceberg.control.topic                    | Name of the control topic, default is `control-iceberg`                                                       |
-| iceberg.control.group.id                 | Name of the consumer group to store offsets, default is `cg-control-<connector name>`                         |
-| iceberg.control.commitIntervalMs         | Commit interval in msec, default is 300,000 (5 min)                                                           |
-| iceberg.control.commitTimeoutMs          | Commit timeout interval in msec, default is 30,000 (30 sec)                                                   |
-| iceberg.control.commitThreads            | Number of threads to use for commits, default is (cores * 2)                                                  |
-| iceberg.catalog                          | Name of the catalog, default is `iceberg`                                                                     |
-| iceberg.catalog.*                        | Properties passed through to Iceberg catalog initialization                                                   |
-| iceberg.hadoop-conf-dir                  | If specified, Hadoop config files in this directory will be loaded                                            |
-| iceberg.hadoop.*                         | Properties passed through to the Hadoop configuration                                                         |
-| iceberg.kafka.*                          | Properties passed through to control topic Kafka client initialization                                        |
+| Property                                | Description                                                                                                   |
+|-----------------------------------------|---------------------------------------------------------------------------------------------------------------|
+| iceberg.tables                          | Comma-separated list of destination tables                                                                    |
+| iceberg.tables.routeField               | For multi-table fan-out, the name of the field used to route records to tables                                |
+| iceberg.table.\<table name\>.routeRegex | The regex used to match a record's `routeField` to a table                                                    |
+| iceberg.tables.dynamic.enabled          | Set to `true` to route to a table specified in `routeField` instead of using `routeRegex`, default is `false` |
+| iceberg.tables.cdcField                 | Name of the field containing the CDC operation, `I`, `U`, or `D`, default is none                             |
+| iceberg.table.\<table name\>.idColumns  | Comma-separated list of columns that identify a row in the table (primary key)                                |
+| iceberg.tables.upsertModeEnabled        | Set to `true` to enable upsert mode, default is `false`                                                       |
+| iceberg.control.topic                   | Name of the control topic, default is `control-iceberg`                                                       |
+| iceberg.control.group.id                | Name of the consumer group to store offsets, default is `cg-control-<connector name>`                         |
+| iceberg.control.commitIntervalMs        | Commit interval in msec, default is 300,000 (5 min)                                                           |
+| iceberg.control.commitTimeoutMs         | Commit timeout interval in msec, default is 30,000 (30 sec)                                                   |
+| iceberg.control.commitThreads           | Number of threads to use for commits, default is (cores * 2)                                                  |
+| iceberg.catalog                         | Name of the catalog, default is `iceberg`                                                                     |
+| iceberg.catalog.*                       | Properties passed through to Iceberg catalog initialization                                                   |
+| iceberg.hadoop-conf-dir                 | If specified, Hadoop config files in this directory will be loaded                                            |
+| iceberg.hadoop.*                        | Properties passed through to the Hadoop configuration                                                         |
+| iceberg.kafka.*                         | Properties passed through to control topic Kafka client initialization                                        |
 
 If `iceberg.tables.dynamic.enabled` is `false` (the default) then you must specify `iceberg.tables`. If
 `iceberg.tables.dynamic.enabled` is `true` then you must specify `iceberg.tables.routeField` which will
@@ -242,8 +243,10 @@ See above for creating two tables.
 ## Change data capture
 This example applies inserts, updates, and deletes based on the value of a field in the record.
 For example, if the `_cdc_op` field is set to `I` then the record is inserted, if `U` then it is
-upserted, and if `D` then it is deleted. This requires that the table be in Iceberg v2 format
-and have an identity field (or fields) defined. This can be combined with multi-table fan-out.
+upserted, and if `D` then it is deleted. This requires that the table be in Iceberg v2 format.
+The Iceberg identifier field(s) are used to identify a row, if that is not set for the table,
+then the `iceberg.tables.idColumns`configuration can be set instead. CDC can be combined with
+multi-table fan-out.
 
 ### Create the destination table
 See above for creating the table
