@@ -46,7 +46,7 @@ public class IcebergWriter implements Closeable {
     this.table = catalog.loadTable(tableIdentifier);
     this.config = config;
     this.recordConverter = new RecordConverter(table, config.getJsonConverter());
-    this.writer = Utilities.createTableWriter(table, config);
+    this.writer = Utilities.createTableWriter(table, tableName, config);
   }
 
   public void write(SinkRecord record) {
