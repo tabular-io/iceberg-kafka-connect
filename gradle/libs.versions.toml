@@ -52,9 +52,15 @@ mockito = "org.mockito:mockito-core:4.8.1"
 testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers-ver" }
 testcontainers-kafka = { module = "org.testcontainers:kafka", version.ref = "testcontainers-ver" }
 
+spotless-gradle = "com.diffplug.spotless:spotless-plugin-gradle:6.13.0"
+
 
 [bundles]
 iceberg = ["iceberg-api", "iceberg-common", "iceberg-core", "iceberg-data", "iceberg-guava", "iceberg-orc", "iceberg-parquet"]
 iceberg-ext = ["iceberg-aws", "iceberg-aws-bundle", "iceberg-azure", "iceberg-azure-bundle", "iceberg-gcp","iceberg-gcp-bundle", "iceberg-nessie"]
 jackson = ["jackson-core", "jackson-databind"]
 kafka-connect = ["kafka-clients", "kafka-connect-api", "kafka-connect-json", "kafka-connect-transforms"]
+
+
+[plugins]
+nebula-release = "nebula.release:17.2.2"
