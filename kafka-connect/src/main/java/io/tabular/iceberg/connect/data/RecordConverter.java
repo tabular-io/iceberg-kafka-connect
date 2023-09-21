@@ -312,6 +312,9 @@ public class RecordConverter {
       return LocalDate.parse((String) value);
     } else if (value instanceof LocalDate) {
       return (LocalDate) value;
+    } else if (value instanceof Date) {
+      int i = (int) (((Date) value).getTime() / 1000 / 60 / 60 / 24);
+      return DateTimeUtil.dateFromDays(i);
     }
     throw new RuntimeException("Cannot convert date: " + value);
   }
@@ -324,6 +327,9 @@ public class RecordConverter {
       return LocalTime.parse((String) value);
     } else if (value instanceof LocalTime) {
       return (LocalTime) value;
+    } else if (value instanceof Date) {
+      long l = ((Date) value).getTime();
+      return DateTimeUtil.timeFromMicros(l * 1000);
     }
     throw new RuntimeException("Cannot convert time: " + value);
   }
