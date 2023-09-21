@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -230,6 +231,50 @@ public class RecordConverterTest {
     Map<String, Object> data = ImmutableMap.of("renamed_ii", 123);
     Record record = converter.convert(data);
     assertEquals(123, record.getField("ii"));
+  }
+
+  @Test
+  public void testDateConversion() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(SIMPLE_SCHEMA);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+
+    LocalDate expected = LocalDate.of(2023, 11, 15);
+
+    List<Object> inputList =
+        ImmutableList.of(
+            "2023-11-15",
+            expected.toEpochDay(),
+            expected,
+            new Date(Duration.ofDays(expected.toEpochDay()).toMillis()));
+
+    inputList.forEach(
+        input -> {
+          Temporal ts = converter.convertDateValue(input);
+          assertEquals(expected, ts);
+        });
+  }
+
+  @Test
+  public void testTimeConversion() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(SIMPLE_SCHEMA);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+
+    LocalTime expected = LocalTime.of(7, 51, 30, 888_000_000);
+
+    List<Object> inputList =
+        ImmutableList.of(
+            "07:51:30.888",
+            expected.toNanoOfDay() / 1000 / 1000,
+            expected,
+            new Date(expected.toNanoOfDay() / 1000 / 1000));
+
+    inputList.forEach(
+        input -> {
+          Temporal ts = converter.convertTimeValue(input);
+          assertEquals(expected, ts);
+        });
   }
 
   @Test
