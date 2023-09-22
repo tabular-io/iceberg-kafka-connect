@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -127,7 +128,30 @@ public class KafkaConnectContainer extends GenericContainer<KafkaConnectContaine
                     }));
   }
 
+  public String connectorStatus(String name) {
+    HttpGet request =
+        new HttpGet(
+            String.format("http://localhost:%d/connectors/%s/status", getMappedPort(PORT), name));
+    try {
+      return HTTP.execute(
+          request,
+          response -> {
+            if (response.getCode() == HttpStatus.SC_OK) {
+              JsonNode root = MAPPER.readTree(response.getEntity().getContent());
+              return root.toPrettyString();
+            }
+            return "Error retrieving state for connector " + name;
+          });
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
   public void stopConnector(String name) {
+    // output final status to report any errors
+    System.out.println("Final connector status:");
+    System.out.println(connectorStatus(name));
+
     try {
       HttpDelete request =
           new HttpDelete(
