@@ -145,7 +145,7 @@ public class IntegrationTest extends IntegrationTestBase {
     send(TEST_TOPIC, TEST_TOPIC_PARTITIONS, event2);
     flush();
 
-    Awaitility.await().atMost(15, TimeUnit.SECONDS).untilAsserted(this::assertSnapshotAdded);
+    Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(this::assertSnapshotAdded);
   }
 
   private void assertSnapshotAdded() {

@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.classic.methods.HttpDelete;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
@@ -108,7 +109,7 @@ public class KafkaConnectContainer extends GenericContainer<KafkaConnectContaine
         new HttpGet(
             String.format("http://localhost:%d/connectors/%s/status", getMappedPort(PORT), name));
     Awaitility.await()
-        .atMost(Duration.ofSeconds(30))
+        .atMost(60, TimeUnit.SECONDS)
         .until(
             () ->
                 HTTP.execute(

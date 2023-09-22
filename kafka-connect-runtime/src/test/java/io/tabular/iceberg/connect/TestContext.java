@@ -28,6 +28,7 @@ import java.net.URISyntaxException;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.apache.iceberg.CatalogProperties;
+import org.apache.iceberg.aws.AwsClientProperties;
 import org.apache.iceberg.aws.s3.S3FileIO;
 import org.apache.iceberg.aws.s3.S3FileIOProperties;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
@@ -168,6 +169,7 @@ public class TestContext {
             .put(S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
             .put(S3FileIOProperties.SECRET_ACCESS_KEY, AWS_SECRET_KEY)
             .put(S3FileIOProperties.PATH_STYLE_ACCESS, "true")
+            .put(AwsClientProperties.CLIENT_REGION, AWS_REGION)
             .build());
     return result;
   }
