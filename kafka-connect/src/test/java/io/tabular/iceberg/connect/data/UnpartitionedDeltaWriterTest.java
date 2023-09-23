@@ -19,10 +19,12 @@
 package io.tabular.iceberg.connect.data;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import io.tabular.iceberg.connect.TableSinkConfig;
 import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.io.WriteResult;
@@ -35,6 +37,7 @@ public class UnpartitionedDeltaWriterTest extends BaseWriterTest {
   public void testUnpartitionedDeltaWriter() {
     IcebergSinkConfig config = mock(IcebergSinkConfig.class);
     when(config.isUpsertMode()).thenReturn(true);
+    when(config.getTableConfig(any())).thenReturn(mock(TableSinkConfig.class));
 
     Record row = GenericRecord.create(SCHEMA);
     row.setField("id", 123L);

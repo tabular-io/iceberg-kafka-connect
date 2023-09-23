@@ -36,6 +36,7 @@ import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import org.apache.iceberg.AppendFiles;
@@ -218,11 +219,14 @@ public class Coordinator extends Channel {
             .filter(deleteFile -> deleteFile.recordCount() > 0)
             .collect(toList());
 
+    Optional<String> branch = config.getTableConfig(tableIdentifier.toString()).commitBranch();
+
     if (dataFiles.isEmpty() && deleteFiles.isEmpty()) {
       LOG.info("Nothing to commit to table {}, skipping", tableIdentifier);
     } else {
       if (deleteFiles.isEmpty()) {
         AppendFiles appendOp = table.newAppend();
+        branch.ifPresent(appendOp::toBranch);
         appendOp.set(snapshotOffsetsProp, offsetsJson);
         appendOp.set(COMMIT_ID_SNAPSHOT_PROP, commitState.getCurrentCommitId().toString());
         if (vtts != null) {
@@ -232,6 +236,7 @@ public class Coordinator extends Channel {
         appendOp.commit();
       } else {
         RowDelta deltaOp = table.newRowDelta();
+        branch.ifPresent(deltaOp::toBranch);
         deltaOp.set(snapshotOffsetsProp, offsetsJson);
         deltaOp.set(COMMIT_ID_SNAPSHOT_PROP, commitState.getCurrentCommitId().toString());
         if (vtts != null) {

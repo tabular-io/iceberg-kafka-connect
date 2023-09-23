@@ -144,7 +144,7 @@ public class Utilities {
     Set<Integer> equalityFieldIds = table.schema().identifierFieldIds();
 
     // override the identifier fields if the config is set
-    List<String> idCols = config.getTableIdColumns(tableName);
+    List<String> idCols = config.getTableConfig(tableName).idColumns();
     if (!idCols.isEmpty()) {
       equalityFieldIds =
           idCols.stream()
