@@ -61,7 +61,6 @@ public class Coordinator extends Channel {
   private static final String OFFSETS_SNAPSHOT_PROP_FMT = "kafka.connect.offsets.%s.%s";
   private static final String COMMIT_ID_SNAPSHOT_PROP = "kafka.connect.commitId";
   private static final String VTTS_SNAPSHOT_PROP = "kafka.connect.vtts";
-  private static final String COMMIT_BRANCH = "kafka.connect.commitBranch";
   private static final Duration POLL_DURATION = Duration.ofMillis(1000);
 
   private final Catalog catalog;
@@ -194,7 +193,7 @@ public class Coordinator extends Channel {
       return;
     }
 
-    Optional<String> branch = getCommitBranch(table);
+    Optional<String> branch = config.getTableConfig(tableIdentifier.toString()).commitBranch();
 
     Map<Integer, Long> committedOffsets =
         getLastCommittedOffsetsForTable(table, branch.orElse(null));
@@ -268,14 +267,6 @@ public class Coordinator extends Channel {
           commitState.getCurrentCommitId(),
           vtts);
     }
-  }
-
-  public Optional<String> getCommitBranch(Table table) {
-    String branch = table.properties().get(COMMIT_BRANCH);
-    if (branch == null) {
-      branch = config.getTablesDefaultCommitBranch();
-    }
-    return Optional.ofNullable(branch);
   }
 
   private Snapshot latestSnapshot(Table table, String branch) {

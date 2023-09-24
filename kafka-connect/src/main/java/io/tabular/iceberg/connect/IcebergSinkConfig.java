@@ -21,16 +21,18 @@ package io.tabular.iceberg.connect;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.apache.iceberg.IcebergBuild;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.util.PropertyUtil;
@@ -54,6 +56,8 @@ public class IcebergSinkConfig extends AbstractConfig {
   public static final String INTERNAL_TRANSACTIONAL_SUFFIX_PROP =
       "iceberg.coordinator.transactional.suffix";
   private static final String ROUTE_REGEX = "routeRegex";
+  private static final String ID_COLUMNS = "idColumns";
+  private static final String COMMIT_BRANCH = "commitBranch";
 
   private static final String CATALOG_PROP_PREFIX = "iceberg.catalog.";
   private static final String HADOOP_PROP_PREFIX = "iceberg.hadoop.";
@@ -185,7 +189,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private final Map<String, String> catalogProps;
   private final Map<String, String> hadoopProps;
   private final Map<String, String> kafkaProps;
-  private final Map<String, Optional<Pattern>> tableRouteRegexMap = new HashMap<>();
+  private final Map<String, TableSinkConfig> tableConfigMap = new HashMap<>();
   private final JsonConverter jsonConverter;
 
   public IcebergSinkConfig(Map<String, String> originalProps) {
@@ -272,17 +276,29 @@ public class IcebergSinkConfig extends AbstractConfig {
     return getString(TABLES_DEFAULT_COMMIT_BRANCH);
   }
 
-  public Optional<Pattern> getTableRouteRegex(String tableName) {
-    return tableRouteRegexMap.computeIfAbsent(
+  public TableSinkConfig getTableConfig(String tableName) {
+    return tableConfigMap.computeIfAbsent(
         tableName,
         notUsed -> {
           Map<String, String> tableProps =
               PropertyUtil.propertiesWithPrefix(originalProps, TABLE_PROP_PREFIX + tableName + ".");
           String routeRegexStr = tableProps.get(ROUTE_REGEX);
-          if (routeRegexStr == null) {
-            return Optional.empty();
+          Pattern routeRegex = routeRegexStr == null ? null : Pattern.compile(routeRegexStr);
+
+          String idColumnsStr = tableProps.get(ID_COLUMNS);
+          List<String> idColumns =
+              idColumnsStr == null || idColumnsStr.isEmpty()
+                  ? ImmutableList.of()
+                  : Arrays.stream(idColumnsStr.split(","))
+                      .map(String::trim)
+                      .collect(Collectors.toList());
+
+          String commitBranch = tableProps.get(COMMIT_BRANCH);
+          if (commitBranch == null) {
+            commitBranch = getTablesDefaultCommitBranch();
           }
-          return Optional.of(Pattern.compile(routeRegexStr));
+
+          return new TableSinkConfig(routeRegex, idColumns, commitBranch);
         });
   }
 
