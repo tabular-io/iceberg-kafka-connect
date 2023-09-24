@@ -21,13 +21,20 @@ package io.tabular.iceberg.connect;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.iceberg.DataFile;
+import org.apache.iceberg.DeleteFile;
+import org.apache.iceberg.Snapshot;
+import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
+import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -49,12 +56,20 @@ public class IntegrationTestBase {
 
   private KafkaProducer<String, String> producer;
 
+  protected String connectorName;
+  protected String testTopic;
+
+  protected static final int TEST_TOPIC_PARTITIONS = 2;
+
   @BeforeEach
   public void baseSetup() {
     s3 = context.initLocalS3Client();
     catalog = context.initLocalCatalog();
     producer = context.initLocalProducer();
     admin = context.initLocalAdmin();
+
+    this.connectorName = "test_connector-" + UUID.randomUUID();
+    this.testTopic = "test-topic-" + UUID.randomUUID();
   }
 
   @AfterEach
@@ -69,8 +84,9 @@ public class IntegrationTestBase {
     s3.close();
   }
 
-  protected void assertSnapshotProps(TableIdentifier tableIdentifier) {
-    Map<String, String> props = catalog.loadTable(tableIdentifier).currentSnapshot().summary();
+  protected void assertSnapshotProps(TableIdentifier tableIdentifier, String branch) {
+    Table table = catalog.loadTable(tableIdentifier);
+    Map<String, String> props = latestSnapshot(table, branch).summary();
     assertThat(props)
         .hasKeySatisfying(
             new Condition<String>() {
@@ -81,6 +97,20 @@ public class IntegrationTestBase {
             });
     assertThat(props).containsKey("kafka.connect.commitId");
     assertThat(props).containsKey("kafka.connect.vtts");
+  }
+
+  protected List<DataFile> getDataFiles(TableIdentifier tableIdentifier, String branch) {
+    Table table = catalog.loadTable(tableIdentifier);
+    return Lists.newArrayList(latestSnapshot(table, branch).addedDataFiles(table.io()));
+  }
+
+  protected List<DeleteFile> getDeleteFiles(TableIdentifier tableIdentifier, String branch) {
+    Table table = catalog.loadTable(tableIdentifier);
+    return Lists.newArrayList(latestSnapshot(table, branch).addedDeleteFiles(table.io()));
+  }
+
+  private Snapshot latestSnapshot(Table table, String branch) {
+    return branch == null ? table.currentSnapshot() : table.snapshot(branch);
   }
 
   protected void createTopic(String topicName, int partitions) {

@@ -32,6 +32,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.iceberg.IcebergBuild;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.util.PropertyUtil;
@@ -287,7 +288,7 @@ public class IcebergSinkConfig extends AbstractConfig {
           String idColumnsStr = tableProps.get(ID_COLUMNS);
           List<String> idColumns =
               idColumnsStr == null || idColumnsStr.isEmpty()
-                  ? null
+                  ? ImmutableList.of()
                   : Arrays.stream(idColumnsStr.split(","))
                       .map(String::trim)
                       .collect(Collectors.toList());

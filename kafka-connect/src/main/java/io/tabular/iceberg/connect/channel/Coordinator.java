@@ -193,7 +193,10 @@ public class Coordinator extends Channel {
       return;
     }
 
-    Map<Integer, Long> committedOffsets = getLastCommittedOffsetsForTable(table);
+    Optional<String> branch = config.getTableConfig(tableIdentifier.toString()).commitBranch();
+
+    Map<Integer, Long> committedOffsets =
+        getLastCommittedOffsetsForTable(table, branch.orElse(null));
 
     List<CommitResponsePayload> payloads =
         envelopeList.stream()
@@ -218,8 +221,6 @@ public class Coordinator extends Channel {
             .flatMap(payload -> payload.getDeleteFiles().stream())
             .filter(deleteFile -> deleteFile.recordCount() > 0)
             .collect(toList());
-
-    Optional<String> branch = config.getTableConfig(tableIdentifier.toString()).commitBranch();
 
     if (dataFiles.isEmpty() && deleteFiles.isEmpty()) {
       LOG.info("Nothing to commit to table {}, skipping", tableIdentifier);
@@ -247,7 +248,7 @@ public class Coordinator extends Channel {
         deltaOp.commit();
       }
 
-      Long snapshotId = table.currentSnapshot().snapshotId();
+      Long snapshotId = latestSnapshot(table, branch.orElse(null)).snapshotId();
       Event event =
           new Event(
               config.getControlGroupId(),
@@ -255,7 +256,7 @@ public class Coordinator extends Channel {
               new CommitTablePayload(
                   commitState.getCurrentCommitId(),
                   TableName.of(tableIdentifier),
-                  table.currentSnapshot().snapshotId(),
+                  snapshotId,
                   vtts));
       send(event);
 
@@ -268,10 +269,15 @@ public class Coordinator extends Channel {
     }
   }
 
-  private Map<Integer, Long> getLastCommittedOffsetsForTable(Table table) {
-    // TODO: support branches
+  private Snapshot latestSnapshot(Table table, String branch) {
+    if (branch == null) {
+      return table.currentSnapshot();
+    }
+    return table.snapshot(branch);
+  }
 
-    Snapshot snapshot = table.currentSnapshot();
+  private Map<Integer, Long> getLastCommittedOffsetsForTable(Table table, String branch) {
+    Snapshot snapshot = latestSnapshot(table, branch);
     while (snapshot != null) {
       Map<String, String> summary = snapshot.summary();
       String value = summary.get(snapshotOffsetsProp);
