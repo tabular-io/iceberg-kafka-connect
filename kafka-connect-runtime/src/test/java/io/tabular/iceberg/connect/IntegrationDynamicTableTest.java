@@ -70,6 +70,25 @@ public class IntegrationDynamicTableTest extends IntegrationTestBase {
   @NullSource
   @ValueSource(strings = {"test_branch"})
   public void testIcebergSink(String branch) {
+    // partitioned table
+    catalog.createTable(TABLE_IDENTIFIER1, TEST_SCHEMA, TEST_SPEC);
+    // unpartitioned table
+    catalog.createTable(TABLE_IDENTIFIER2, TEST_SCHEMA);
+
+    runTest(branch);
+
+    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER1, branch);
+    assertThat(files).hasSize(1);
+    assertEquals(1, files.get(0).recordCount());
+    assertSnapshotProps(TABLE_IDENTIFIER1, branch);
+
+    files = getDataFiles(TABLE_IDENTIFIER2, branch);
+    assertThat(files).hasSize(1);
+    assertEquals(1, files.get(0).recordCount());
+    assertSnapshotProps(TABLE_IDENTIFIER2, branch);
+  }
+
+  private void runTest(String branch) {
     // set offset reset to earliest so we don't miss any test messages
     KafkaConnectContainer.Config connectorConfig =
         new KafkaConnectContainer.Config(connectorName)
@@ -99,27 +118,8 @@ public class IntegrationDynamicTableTest extends IntegrationTestBase {
       connectorConfig.config("iceberg.tables.defaultCommitBranch", branch);
     }
 
-    // partitioned table
-    catalog.createTable(TABLE_IDENTIFIER1, TEST_SCHEMA, TEST_SPEC);
-    // unpartitioned table
-    catalog.createTable(TABLE_IDENTIFIER2, TEST_SCHEMA);
-
     context.startConnector(connectorConfig);
 
-    runTest();
-
-    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER1, branch);
-    assertThat(files).hasSize(1);
-    assertEquals(1, files.get(0).recordCount());
-    assertSnapshotProps(TABLE_IDENTIFIER1, branch);
-
-    files = getDataFiles(TABLE_IDENTIFIER2, branch);
-    assertThat(files).hasSize(1);
-    assertEquals(1, files.get(0).recordCount());
-    assertSnapshotProps(TABLE_IDENTIFIER2, branch);
-  }
-
-  private void runTest() {
     TestEvent event1 =
         new TestEvent(1, "type1", System.currentTimeMillis(), TEST_DB + "." + TEST_TABLE1);
     TestEvent event2 =

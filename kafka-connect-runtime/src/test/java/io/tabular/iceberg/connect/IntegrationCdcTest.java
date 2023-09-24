@@ -71,7 +71,47 @@ public class IntegrationCdcTest extends IntegrationTestBase {
   @ParameterizedTest
   @NullSource
   @ValueSource(strings = {"test_branch"})
-  public void testIcebergSink(String branch) throws Exception {
+  public void testIcebergSinkPartitionedTable(String branch) {
+    catalog.createTable(
+        TABLE_IDENTIFIER, TEST_SCHEMA, TEST_SPEC, ImmutableMap.of(FORMAT_VERSION, "2"));
+
+    runTest(branch);
+
+    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
+    // partition may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(2, 3);
+    assertEquals(4, files.stream().mapToLong(DataFile::recordCount).sum());
+
+    List<DeleteFile> deleteFiles = getDeleteFiles(TABLE_IDENTIFIER, branch);
+    // partition may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(2, 3);
+    assertEquals(2, deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum());
+
+    assertSnapshotProps(TABLE_IDENTIFIER, branch);
+  }
+
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(strings = {"test_branch"})
+  public void testIcebergSinkUnpartitionedTable(String branch) {
+    catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA, null, ImmutableMap.of(FORMAT_VERSION, "2"));
+
+    runTest(branch);
+
+    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
+    // may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(1, 2);
+    assertEquals(4, files.stream().mapToLong(DataFile::recordCount).sum());
+
+    List<DeleteFile> deleteFiles = getDeleteFiles(TABLE_IDENTIFIER, branch);
+    // may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(1, 2);
+    assertEquals(2, deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum());
+
+    assertSnapshotProps(TABLE_IDENTIFIER, branch);
+  }
+
+  private void runTest(String branch) {
     // set offset reset to earliest so we don't miss any test messages
     KafkaConnectContainer.Config connectorConfig =
         new KafkaConnectContainer.Config(connectorName)
@@ -101,50 +141,8 @@ public class IntegrationCdcTest extends IntegrationTestBase {
       connectorConfig.config("iceberg.tables.defaultCommitBranch", branch);
     }
 
-    // partitioned table
-    catalog.createTable(
-        TABLE_IDENTIFIER, TEST_SCHEMA, TEST_SPEC, ImmutableMap.of(FORMAT_VERSION, "2"));
-
     context.startConnector(connectorConfig);
 
-    runTest();
-
-    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
-    // partition may involve 1 or 2 workers
-    assertThat(files).hasSizeBetween(2, 3);
-    assertEquals(4, files.stream().mapToLong(DataFile::recordCount).sum());
-
-    List<DeleteFile> deleteFiles = getDeleteFiles(TABLE_IDENTIFIER, branch);
-    // partition may involve 1 or 2 workers
-    assertThat(files).hasSizeBetween(2, 3);
-    assertEquals(2, deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum());
-
-    assertSnapshotProps(TABLE_IDENTIFIER, branch);
-
-    // unpartitioned table
-
-    catalog.dropTable(TABLE_IDENTIFIER);
-    catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA, null, ImmutableMap.of(FORMAT_VERSION, "2"));
-
-    // wait for the flush so the writer will refresh the table...
-    Thread.sleep(2000);
-
-    runTest();
-
-    files = getDataFiles(TABLE_IDENTIFIER, branch);
-    // may involve 1 or 2 workers
-    assertThat(files).hasSizeBetween(1, 2);
-    assertEquals(4, files.stream().mapToLong(DataFile::recordCount).sum());
-
-    deleteFiles = getDeleteFiles(TABLE_IDENTIFIER, branch);
-    // may involve 1 or 2 workers
-    assertThat(files).hasSizeBetween(1, 2);
-    assertEquals(2, deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum());
-
-    assertSnapshotProps(TABLE_IDENTIFIER, branch);
-  }
-
-  private void runTest() {
     // start with 3 records, update 1, delete 1. Should be a total of 4 adds and 2 deletes
     // (the update will be 1 add and 1 delete)
 

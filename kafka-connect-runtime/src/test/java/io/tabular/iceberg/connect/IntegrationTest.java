@@ -68,7 +68,35 @@ public class IntegrationTest extends IntegrationTestBase {
   @ParameterizedTest
   @NullSource
   @ValueSource(strings = {"test_branch"})
-  public void testIcebergSink(String branch) throws Exception {
+  public void testIcebergSinkPartitionedTable(String branch) {
+    catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA, TEST_SPEC);
+
+    runTest(branch);
+
+    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
+    // partition may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(1, 2);
+    assertEquals(1, files.get(0).recordCount());
+    assertEquals(1, files.get(1).recordCount());
+    assertSnapshotProps(TABLE_IDENTIFIER, branch);
+  }
+
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(strings = {"test_branch"})
+  public void testIcebergSinkUnpartitionedTable(String branch) {
+    catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA);
+
+    runTest(branch);
+
+    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
+    // may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(1, 2);
+    assertEquals(2, files.stream().mapToLong(DataFile::recordCount).sum());
+    assertSnapshotProps(TABLE_IDENTIFIER, branch);
+  }
+
+  private void runTest(String branch) {
     // set offset reset to earliest so we don't miss any test messages
     KafkaConnectContainer.Config connectorConfig =
         new KafkaConnectContainer.Config(connectorName)
@@ -96,39 +124,8 @@ public class IntegrationTest extends IntegrationTestBase {
     if (branch != null) {
       connectorConfig.config("iceberg.tables.defaultCommitBranch", branch);
     }
-
-    // partitioned table
-    catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA, TEST_SPEC);
-
     context.startConnector(connectorConfig);
 
-    runTest();
-
-    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
-    // partition may involve 1 or 2 workers
-    assertThat(files).hasSizeBetween(1, 2);
-    assertEquals(1, files.get(0).recordCount());
-    assertEquals(1, files.get(1).recordCount());
-    assertSnapshotProps(TABLE_IDENTIFIER, branch);
-
-    // unpartitioned table
-
-    catalog.dropTable(TABLE_IDENTIFIER);
-    catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA);
-
-    // wait for the flush so the writer will refresh the table...
-    Thread.sleep(2000);
-
-    runTest();
-
-    files = getDataFiles(TABLE_IDENTIFIER, branch);
-    // may involve 1 or 2 workers
-    assertThat(files).hasSizeBetween(1, 2);
-    assertEquals(2, files.stream().mapToLong(DataFile::recordCount).sum());
-    assertSnapshotProps(TABLE_IDENTIFIER, branch);
-  }
-
-  private void runTest() {
     TestEvent event1 = new TestEvent(1, "type1", System.currentTimeMillis(), "hello world!");
 
     long threeDaysAgo = System.currentTimeMillis() - Duration.ofDays(3).toMillis();
