@@ -19,12 +19,9 @@
 package io.tabular.iceberg.connect.data;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.TableSinkConfig;
 import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.io.UnpartitionedWriter;
@@ -37,7 +34,6 @@ public class UnpartitionedWriterTest extends BaseWriterTest {
   @Test
   public void testUnpartitionedWriter() {
     IcebergSinkConfig config = mock(IcebergSinkConfig.class);
-    when(config.getTableConfig(any())).thenReturn(mock(TableSinkConfig.class));
 
     Record row1 = GenericRecord.create(SCHEMA);
     row1.setField("id", 123L);

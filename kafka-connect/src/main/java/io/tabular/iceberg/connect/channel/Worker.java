@@ -210,8 +210,7 @@ public class Worker extends Channel {
             .forEach(
                 tableName ->
                     config
-                        .getTableConfig(tableName)
-                        .routeRegex()
+                        .getTableRouteRegex(tableName)
                         .ifPresent(
                             regex -> {
                               if (regex.matcher(routeValue).matches()) {

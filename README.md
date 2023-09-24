@@ -28,9 +28,7 @@ The zip archive will be found under `./kafka-connect-runtime/build/distributions
 | iceberg.tables.defaultCommitBranch        | Default branch for commits, main is used if not specified                                                     |
 | iceberg.tables.cdcField                   | Name of the field containing the CDC operation, `I`, `U`, or `D`, default is none                             |
 | iceberg.tables.upsertModeEnabled          | Set to `true` to enable upsert mode, default is `false`                                                       |
-| iceberg.table.\<table name\>.idColumns    | Comma-separated list of columns that identify a row in the table (primary key)                                |
 | iceberg.table.\<table name\>.routeRegex   | The regex used to match a record's `routeField` to a table                                                    |
-| iceberg.table.\<table name\>.commitBranch | Table-specific branch for commits, use `iceberg.tables.defaultCommitBranch` if not specified                  |
 | iceberg.control.topic                     | Name of the control topic, default is `control-iceberg`                                                       |
 | iceberg.control.group.id                  | Name of the consumer group to store offsets, default is `cg-control-<connector name>`                         |
 | iceberg.control.commitIntervalMs          | Commit interval in msec, default is 300,000 (5 min)                                                           |
@@ -47,6 +45,8 @@ If `iceberg.tables.dynamic.enabled` is `false` (the default) then you must speci
 contain the name of the table. Enabling `iceberg.tables.upsertModeEnabled` will cause all appends to be
 preceded by an equality delete. Both CDC and upsert mode require an Iceberg V2 table with identity fields
 defined.
+
+To set a table-specific commit branch, set the `kafka.connect.commitBranch` property on the table.
 
 ## Kafka configuration
 
@@ -245,10 +245,11 @@ See above for creating two tables.
 ## Change data capture
 This example applies inserts, updates, and deletes based on the value of a field in the record.
 For example, if the `_cdc_op` field is set to `I` then the record is inserted, if `U` then it is
-upserted, and if `D` then it is deleted. This requires that the table be in Iceberg v2 format.
-The Iceberg identifier field(s) are used to identify a row, if that is not set for the table,
-then the `iceberg.tables.idColumns`configuration can be set instead. CDC can be combined with
-multi-table fan-out.
+upserted, and if `D` then it is deleted. This requires that the table be in Iceberg v2 format. 
+
+The Iceberg identifier field(s) are used to identify a row. This can be set in Spark SQL with
+`ALTER TABLE ... SET IDENTIFIER FIELDS`. Alternatively, this can be set as the table property
+`identifier-fields` with a value in the form `[col1, col2]`.
 
 ### Create the destination table
 See above for creating the table
