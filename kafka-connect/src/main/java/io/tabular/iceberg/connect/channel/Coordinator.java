@@ -36,6 +36,7 @@ import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import org.apache.iceberg.AppendFiles;
@@ -192,7 +193,10 @@ public class Coordinator extends Channel {
       return;
     }
 
-    Map<Integer, Long> committedOffsets = getLastCommittedOffsetsForTable(table);
+    Optional<String> branch = config.getTableConfig(tableIdentifier.toString()).commitBranch();
+
+    Map<Integer, Long> committedOffsets =
+        getLastCommittedOffsetsForTable(table, branch.orElse(null));
 
     List<CommitResponsePayload> payloads =
         envelopeList.stream()
@@ -223,6 +227,7 @@ public class Coordinator extends Channel {
     } else {
       if (deleteFiles.isEmpty()) {
         AppendFiles appendOp = table.newAppend();
+        branch.ifPresent(appendOp::toBranch);
         appendOp.set(snapshotOffsetsProp, offsetsJson);
         appendOp.set(COMMIT_ID_SNAPSHOT_PROP, commitState.getCurrentCommitId().toString());
         if (vtts != null) {
@@ -232,6 +237,7 @@ public class Coordinator extends Channel {
         appendOp.commit();
       } else {
         RowDelta deltaOp = table.newRowDelta();
+        branch.ifPresent(deltaOp::toBranch);
         deltaOp.set(snapshotOffsetsProp, offsetsJson);
         deltaOp.set(COMMIT_ID_SNAPSHOT_PROP, commitState.getCurrentCommitId().toString());
         if (vtts != null) {
@@ -242,7 +248,7 @@ public class Coordinator extends Channel {
         deltaOp.commit();
       }
 
-      Long snapshotId = table.currentSnapshot().snapshotId();
+      Long snapshotId = latestSnapshot(table, branch.orElse(null)).snapshotId();
       Event event =
           new Event(
               config.getControlGroupId(),
@@ -250,7 +256,7 @@ public class Coordinator extends Channel {
               new CommitTablePayload(
                   commitState.getCurrentCommitId(),
                   TableName.of(tableIdentifier),
-                  table.currentSnapshot().snapshotId(),
+                  snapshotId,
                   vtts));
       send(event);
 
@@ -263,10 +269,15 @@ public class Coordinator extends Channel {
     }
   }
 
-  private Map<Integer, Long> getLastCommittedOffsetsForTable(Table table) {
-    // TODO: support branches
+  private Snapshot latestSnapshot(Table table, String branch) {
+    if (branch == null) {
+      return table.currentSnapshot();
+    }
+    return table.snapshot(branch);
+  }
 
-    Snapshot snapshot = table.currentSnapshot();
+  private Map<Integer, Long> getLastCommittedOffsetsForTable(Table table, String branch) {
+    Snapshot snapshot = latestSnapshot(table, branch);
     while (snapshot != null) {
       Map<String, String> summary = snapshot.summary();
       String value = summary.get(snapshotOffsetsProp);

@@ -18,14 +18,31 @@
  */
 package io.tabular.iceberg.connect;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
-public interface TestConstants {
+public class TableSinkConfig {
 
-  String BUCKET = "bucket";
-  String AWS_ACCESS_KEY = "minioadmin";
-  String AWS_SECRET_KEY = "minioadmin";
-  String AWS_REGION = "us-east-1";
+  private final Pattern routeRegex;
+  private final List<String> idColumns;
+  private final String commitBranch;
 
-  ObjectMapper MAPPER = new ObjectMapper();
+  public TableSinkConfig(Pattern routeRegex, List<String> idColumns, String commitBranch) {
+    this.routeRegex = routeRegex;
+    this.idColumns = idColumns;
+    this.commitBranch = commitBranch;
+  }
+
+  public Optional<Pattern> routeRegex() {
+    return Optional.ofNullable(routeRegex);
+  }
+
+  public List<String> idColumns() {
+    return idColumns;
+  }
+
+  public Optional<String> commitBranch() {
+    return Optional.ofNullable(commitBranch);
+  }
 }

@@ -24,6 +24,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import io.tabular.iceberg.connect.TableSinkConfig;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.RowDelta;
 import org.apache.iceberg.Snapshot;
@@ -80,6 +81,7 @@ public class ChannelTestBase {
     when(config.getControlGroupId()).thenReturn("group");
     when(config.getCommitThreads()).thenReturn(1);
     when(config.getControlGroupId()).thenReturn("cg-connector");
+    when(config.getTableConfig(any())).thenReturn(mock(TableSinkConfig.class));
 
     TopicPartitionInfo partitionInfo = mock(TopicPartitionInfo.class);
     when(partitionInfo.partition()).thenReturn(0);

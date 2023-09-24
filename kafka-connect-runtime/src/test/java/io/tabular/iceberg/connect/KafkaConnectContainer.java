@@ -18,8 +18,9 @@
  */
 package io.tabular.iceberg.connect;
 
+import static io.tabular.iceberg.connect.TestConstants.MAPPER;
+
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import java.io.IOException;
 import java.time.Duration;
@@ -43,7 +44,6 @@ import org.testcontainers.utility.DockerImageName;
 public class KafkaConnectContainer extends GenericContainer<KafkaConnectContainer> {
 
   private static final HttpClient HTTP = HttpClients.createDefault();
-  private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final int PORT = 8083;
 
   public static class Config {

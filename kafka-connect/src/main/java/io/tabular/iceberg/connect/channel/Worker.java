@@ -43,7 +43,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.regex.Pattern;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
@@ -209,12 +208,16 @@ public class Worker extends Channel {
         config
             .getTables()
             .forEach(
-                tableName -> {
-                  Pattern tableRouteRegex = config.getTableRouteRegex(tableName);
-                  if (tableRouteRegex != null && tableRouteRegex.matcher(routeValue).matches()) {
-                    getWriterForTable(tableName).write(record);
-                  }
-                });
+                tableName ->
+                    config
+                        .getTableConfig(tableName)
+                        .routeRegex()
+                        .ifPresent(
+                            regex -> {
+                              if (regex.matcher(routeValue).matches()) {
+                                getWriterForTable(tableName).write(record);
+                              }
+                            }));
       }
     }
   }
