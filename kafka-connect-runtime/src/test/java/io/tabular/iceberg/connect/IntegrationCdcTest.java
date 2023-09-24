@@ -21,6 +21,8 @@ package io.tabular.iceberg.connect;
 import static io.tabular.iceberg.connect.TestConstants.AWS_ACCESS_KEY;
 import static io.tabular.iceberg.connect.TestConstants.AWS_REGION;
 import static io.tabular.iceberg.connect.TestConstants.AWS_SECRET_KEY;
+import static io.tabular.iceberg.connect.TestEvent.TEST_SCHEMA;
+import static io.tabular.iceberg.connect.TestEvent.TEST_SPEC;
 import static java.lang.String.format;
 import static org.apache.iceberg.TableProperties.FORMAT_VERSION;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,17 +35,12 @@ import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
-import org.apache.iceberg.PartitionSpec;
-import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.aws.AwsClientProperties;
 import org.apache.iceberg.aws.s3.S3FileIOProperties;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
-import org.apache.iceberg.types.Types;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,20 +53,6 @@ public class IntegrationCdcTest extends IntegrationTestBase {
   private static final String TEST_DB = "test";
   private static final String TEST_TABLE = "foobar";
   private static final TableIdentifier TABLE_IDENTIFIER = TableIdentifier.of(TEST_DB, TEST_TABLE);
-  private static final Schema TEST_SCHEMA =
-      new Schema(
-          ImmutableList.of(
-              Types.NestedField.required(1, "id", Types.LongType.get()),
-              Types.NestedField.required(2, "type", Types.StringType.get()),
-              Types.NestedField.required(3, "ts", Types.TimestampType.withoutZone()),
-              Types.NestedField.required(4, "payload", Types.StringType.get())),
-          ImmutableSet.of(1));
-
-  private static final PartitionSpec TEST_SPEC =
-      PartitionSpec.builderFor(TEST_SCHEMA).day("ts").build();
-
-  private static final String RECORD_FORMAT =
-      "{\"id\":%d,\"type\":\"%s\",\"ts\":%d,\"payload\":\"%s\",\"op\":\"%s\"}";
 
   @BeforeEach
   public void setup() {
@@ -127,11 +110,13 @@ public class IntegrationCdcTest extends IntegrationTestBase {
     runTest();
 
     List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
-    assertThat(files).hasSize(3);
+    // partition may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(2, 3);
     assertEquals(4, files.stream().mapToLong(DataFile::recordCount).sum());
 
     List<DeleteFile> deleteFiles = getDeleteFiles(TABLE_IDENTIFIER, branch);
-    assertThat(deleteFiles).hasSize(2);
+    // partition may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(2, 3);
     assertEquals(2, deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum());
 
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
@@ -147,11 +132,13 @@ public class IntegrationCdcTest extends IntegrationTestBase {
     runTest();
 
     files = getDataFiles(TABLE_IDENTIFIER, branch);
-    assertThat(files).hasSize(2);
+    // may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(1, 2);
     assertEquals(4, files.stream().mapToLong(DataFile::recordCount).sum());
 
     deleteFiles = getDeleteFiles(TABLE_IDENTIFIER, branch);
-    assertThat(deleteFiles).hasSize(2);
+    // may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(1, 2);
     assertEquals(2, deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum());
 
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
@@ -161,23 +148,20 @@ public class IntegrationCdcTest extends IntegrationTestBase {
     // start with 3 records, update 1, delete 1. Should be a total of 4 adds and 2 deletes
     // (the update will be 1 add and 1 delete)
 
-    String event1 =
-        format(RECORD_FORMAT, 1, "type1", System.currentTimeMillis(), "hello world!", "I");
-    String event2 =
-        format(RECORD_FORMAT, 2, "type2", System.currentTimeMillis(), "having fun?", "I");
+    TestEvent event1 = new TestEvent(1, "type1", System.currentTimeMillis(), "hello world!", "I");
+    TestEvent event2 = new TestEvent(2, "type2", System.currentTimeMillis(), "having fun?", "I");
 
     long threeDaysAgo = System.currentTimeMillis() - Duration.ofDays(3).toMillis();
-    String event3 = format(RECORD_FORMAT, 3, "type3", threeDaysAgo, "hello from the past!", "I");
+    TestEvent event3 = new TestEvent(3, "type3", threeDaysAgo, "hello from the past!", "I");
 
-    String event4 =
-        format(RECORD_FORMAT, 1, "type1", System.currentTimeMillis(), "hello world!", "D");
-    String event5 = format(RECORD_FORMAT, 3, "type3", threeDaysAgo, "updated!", "U");
+    TestEvent event4 = new TestEvent(1, "type1", System.currentTimeMillis(), "hello world!", "D");
+    TestEvent event5 = new TestEvent(3, "type3", threeDaysAgo, "updated!", "U");
 
-    send(testTopic, TEST_TOPIC_PARTITIONS, event1);
-    send(testTopic, TEST_TOPIC_PARTITIONS, event2);
-    send(testTopic, TEST_TOPIC_PARTITIONS, event3);
-    send(testTopic, TEST_TOPIC_PARTITIONS, event4);
-    send(testTopic, TEST_TOPIC_PARTITIONS, event5);
+    send(testTopic, event1);
+    send(testTopic, event2);
+    send(testTopic, event3);
+    send(testTopic, event4);
+    send(testTopic, event5);
     flush();
 
     Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(this::assertSnapshotAdded);

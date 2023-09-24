@@ -21,7 +21,8 @@ package io.tabular.iceberg.connect;
 import static io.tabular.iceberg.connect.TestConstants.AWS_ACCESS_KEY;
 import static io.tabular.iceberg.connect.TestConstants.AWS_REGION;
 import static io.tabular.iceberg.connect.TestConstants.AWS_SECRET_KEY;
-import static java.lang.String.format;
+import static io.tabular.iceberg.connect.TestEvent.TEST_SCHEMA;
+import static io.tabular.iceberg.connect.TestEvent.TEST_SPEC;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -30,14 +31,11 @@ import java.util.concurrent.TimeUnit;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.DataFile;
-import org.apache.iceberg.PartitionSpec;
-import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.aws.AwsClientProperties;
 import org.apache.iceberg.aws.s3.S3FileIOProperties;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
-import org.apache.iceberg.types.Types;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,17 +50,6 @@ public class IntegrationDynamicTableTest extends IntegrationTestBase {
   private static final String TEST_TABLE2 = "tbl2";
   private static final TableIdentifier TABLE_IDENTIFIER1 = TableIdentifier.of(TEST_DB, TEST_TABLE1);
   private static final TableIdentifier TABLE_IDENTIFIER2 = TableIdentifier.of(TEST_DB, TEST_TABLE2);
-  private static final Schema TEST_SCHEMA =
-      new Schema(
-          Types.NestedField.required(1, "id", Types.LongType.get()),
-          Types.NestedField.required(2, "type", Types.StringType.get()),
-          Types.NestedField.required(3, "ts", Types.TimestampType.withoutZone()),
-          Types.NestedField.required(4, "payload", Types.StringType.get()));
-  private static final PartitionSpec TEST_SPEC =
-      PartitionSpec.builderFor(TEST_SCHEMA).day("ts").build();
-
-  private static final String RECORD_FORMAT =
-      "{\"id\":%d,\"type\":\"%s\",\"ts\":%d,\"payload\":\"%s\"}";
 
   @BeforeEach
   public void setup() {
@@ -133,16 +120,15 @@ public class IntegrationDynamicTableTest extends IntegrationTestBase {
   }
 
   private void runTest() {
-    String event1 =
-        format(RECORD_FORMAT, 1, "type1", System.currentTimeMillis(), TEST_DB + "." + TEST_TABLE1);
-    String event2 =
-        format(RECORD_FORMAT, 2, "type2", System.currentTimeMillis(), TEST_DB + "." + TEST_TABLE2);
-    String event3 =
-        format(RECORD_FORMAT, 3, "type3", System.currentTimeMillis(), TEST_DB + ".tbl3");
+    TestEvent event1 =
+        new TestEvent(1, "type1", System.currentTimeMillis(), TEST_DB + "." + TEST_TABLE1);
+    TestEvent event2 =
+        new TestEvent(2, "type2", System.currentTimeMillis(), TEST_DB + "." + TEST_TABLE2);
+    TestEvent event3 = new TestEvent(3, "type3", System.currentTimeMillis(), TEST_DB + ".tbl3");
 
-    send(testTopic, TEST_TOPIC_PARTITIONS, event1);
-    send(testTopic, TEST_TOPIC_PARTITIONS, event2);
-    send(testTopic, TEST_TOPIC_PARTITIONS, event3);
+    send(testTopic, event1);
+    send(testTopic, event2);
+    send(testTopic, event3);
     flush();
 
     Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(this::assertSnapshotAdded);

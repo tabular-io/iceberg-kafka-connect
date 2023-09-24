@@ -21,6 +21,8 @@ package io.tabular.iceberg.connect;
 import static io.tabular.iceberg.connect.TestConstants.AWS_ACCESS_KEY;
 import static io.tabular.iceberg.connect.TestConstants.AWS_REGION;
 import static io.tabular.iceberg.connect.TestConstants.AWS_SECRET_KEY;
+import static io.tabular.iceberg.connect.TestEvent.TEST_SCHEMA;
+import static io.tabular.iceberg.connect.TestEvent.TEST_SPEC;
 import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -31,14 +33,11 @@ import java.util.concurrent.TimeUnit;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.DataFile;
-import org.apache.iceberg.PartitionSpec;
-import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.aws.AwsClientProperties;
 import org.apache.iceberg.aws.s3.S3FileIOProperties;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
-import org.apache.iceberg.types.Types;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,17 +50,6 @@ public class IntegrationTest extends IntegrationTestBase {
   private static final String TEST_DB = "test";
   private static final String TEST_TABLE = "foobar";
   private static final TableIdentifier TABLE_IDENTIFIER = TableIdentifier.of(TEST_DB, TEST_TABLE);
-  private static final Schema TEST_SCHEMA =
-      new Schema(
-          Types.NestedField.required(1, "id", Types.LongType.get()),
-          Types.NestedField.required(2, "type", Types.StringType.get()),
-          Types.NestedField.required(3, "ts", Types.TimestampType.withoutZone()),
-          Types.NestedField.required(4, "payload", Types.StringType.get()));
-  private static final PartitionSpec TEST_SPEC =
-      PartitionSpec.builderFor(TEST_SCHEMA).day("ts").build();
-
-  private static final String RECORD_FORMAT =
-      "{\"id\":%d,\"type\":\"%s\",\"ts\":%d,\"payload\":\"%s\"}";
 
   @BeforeEach
   public void setup() {
@@ -117,7 +105,8 @@ public class IntegrationTest extends IntegrationTestBase {
     runTest();
 
     List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
-    assertThat(files).hasSize(2);
+    // partition may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(1, 2);
     assertEquals(1, files.get(0).recordCount());
     assertEquals(1, files.get(1).recordCount());
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
@@ -133,19 +122,20 @@ public class IntegrationTest extends IntegrationTestBase {
     runTest();
 
     files = getDataFiles(TABLE_IDENTIFIER, branch);
-    assertThat(files).hasSize(2);
+    // may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(1, 2);
     assertEquals(2, files.stream().mapToLong(DataFile::recordCount).sum());
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
   }
 
   private void runTest() {
-    String event1 = format(RECORD_FORMAT, 1, "type1", System.currentTimeMillis(), "hello world!");
+    TestEvent event1 = new TestEvent(1, "type1", System.currentTimeMillis(), "hello world!");
 
     long threeDaysAgo = System.currentTimeMillis() - Duration.ofDays(3).toMillis();
-    String event2 = format(RECORD_FORMAT, 2, "type2", threeDaysAgo, "having fun?");
+    TestEvent event2 = new TestEvent(2, "type2", threeDaysAgo, "having fun?");
 
-    send(testTopic, TEST_TOPIC_PARTITIONS, event1);
-    send(testTopic, TEST_TOPIC_PARTITIONS, event2);
+    send(testTopic, event1);
+    send(testTopic, event2);
     flush();
 
     Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(this::assertSnapshotAdded);

@@ -18,10 +18,14 @@
  */
 package io.tabular.iceberg.connect;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 public interface TestConstants {
 
   String BUCKET = "bucket";
   String AWS_ACCESS_KEY = "minioadmin";
   String AWS_SECRET_KEY = "minioadmin";
   String AWS_REGION = "us-east-1";
+
+  ObjectMapper MAPPER = new ObjectMapper();
 }
