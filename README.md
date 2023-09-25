@@ -97,18 +97,27 @@ applied. When merging these, the order of precedence is sink config > config dir
 NOTE: Use the distribution that includes the HMS client (or include the HMS client yourself). Use `S3FileIO` when
 using S3 for storage (the default is `HadoopFileIO` with `HiveCatalog`).
 ```
-"iceberg.catalog.type":"hive",
-"iceberg.catalog.uri":"thrift://hive:9083",
-"iceberg.catalog.io-impl":"org.apache.iceberg.aws.s3.S3FileIO",
-"iceberg.catalog.warehouse":"s3a://bucket/warehouse",
-"iceberg.catalog.client.region":"us-east-1",
-"iceberg.catalog.s3.access-key-id":"<AWS access>",
-"iceberg.catalog.s3.secret-access-key":"<AWS secret>",
+"iceberg.catalog.type": "hive",
+"iceberg.catalog.uri": "thrift://hive:9083",
+"iceberg.catalog.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
+"iceberg.catalog.warehouse": "s3a://bucket/warehouse",
+"iceberg.catalog.client.region": "us-east-1",
+"iceberg.catalog.s3.access-key-id": "<AWS access>",
+"iceberg.catalog.s3.secret-access-key": "<AWS secret>",
 ```
 
 ### Glue example
 ```
 "iceberg.catalog.catalog-impl": "org.apache.iceberg.aws.glue.GlueCatalog",
+"iceberg.catalog.warehouse": "s3a://bucket/warehouse",
+"iceberg.catalog.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
+```
+
+### Nessie example
+```
+"iceberg.catalog.catalog-impl": "org.apache.iceberg.nessie.NessieCatalog",
+"iceberg.catalog.uri": "http://localhost:19120/api/v1",
+"iceberg.catalog.ref": "main",
 "iceberg.catalog.warehouse": "s3a://bucket/warehouse",
 "iceberg.catalog.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
 ```
