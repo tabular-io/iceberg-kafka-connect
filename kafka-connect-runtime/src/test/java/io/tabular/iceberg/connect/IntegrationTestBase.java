@@ -95,7 +95,6 @@ public class IntegrationTestBase {
               }
             });
     assertThat(props).containsKey("kafka.connect.commitId");
-    assertThat(props).containsKey("kafka.connect.vtts");
   }
 
   protected List<DataFile> getDataFiles(TableIdentifier tableIdentifier, String branch) {

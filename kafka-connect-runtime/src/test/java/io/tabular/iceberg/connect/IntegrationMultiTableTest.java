@@ -27,8 +27,8 @@ import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.DataFile;
@@ -117,7 +117,8 @@ public class IntegrationMultiTableTest extends IntegrationTestBase {
             .config("iceberg.catalog." + S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
             .config("iceberg.catalog." + S3FileIOProperties.SECRET_ACCESS_KEY, AWS_SECRET_KEY)
             .config("iceberg.catalog." + S3FileIOProperties.PATH_STYLE_ACCESS, true)
-            .config("iceberg.catalog." + AwsClientProperties.CLIENT_REGION, AWS_REGION);
+            .config("iceberg.catalog." + AwsClientProperties.CLIENT_REGION, AWS_REGION)
+            .config("iceberg.kafka.auto.offset.reset", "earliest");
 
     if (branch != null) {
       connectorConfig.config("iceberg.tables.defaultCommitBranch", branch);
@@ -134,7 +135,10 @@ public class IntegrationMultiTableTest extends IntegrationTestBase {
     send(testTopic, event3);
     flush();
 
-    Awaitility.await().atMost(60, TimeUnit.SECONDS).untilAsserted(this::assertSnapshotAdded);
+    Awaitility.await()
+        .atMost(Duration.ofSeconds(30))
+        .pollInterval(Duration.ofSeconds(1))
+        .untilAsserted(this::assertSnapshotAdded);
   }
 
   private void assertSnapshotAdded() {
