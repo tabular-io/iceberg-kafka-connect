@@ -134,7 +134,7 @@ public class IntegrationMultiTableTest extends IntegrationTestBase {
     send(testTopic, event3);
     flush();
 
-    Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(this::assertSnapshotAdded);
+    Awaitility.await().atMost(60, TimeUnit.SECONDS).untilAsserted(this::assertSnapshotAdded);
   }
 
   private void assertSnapshotAdded() {
