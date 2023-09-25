@@ -52,8 +52,8 @@ public class KafkaClientFactory {
 
   public Consumer<String, byte[]> createConsumer(String consumerGroupId) {
     Map<String, Object> consumerProps = new HashMap<>(kafkaProps);
+    consumerProps.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
     consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroupId);
     consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, UUID.randomUUID().toString());
