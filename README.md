@@ -78,13 +78,6 @@ otherwise you will need to include that yourself.
 To set the catalog type, you can set `iceberg.catalog.type` to `rest`, `hive`, or `hadoop`. For other
 catalog types, you need to instead set `iceberg.catalog.catalog-impl` to the name of the catalog class.
 
-## Hadoop configuration
-
-When using HDFS or Hive, the sink will initialize the Hadoop configuration. First, config files
-from the classpath are loaded. Next, if `iceberg.hadoop-conf-dir` is specified, config files
-are loaded from that location. Finally, any `iceberg.hadoop.*` properties from the sink config are
-applied. When merging these, the order of precedence is sink config > config dir > classpath.
-
 ### REST example
 ```
 "iceberg.catalog.type": "rest",
@@ -127,6 +120,12 @@ Depending on your setup, you may need to also set `iceberg.catalog.s3.endpoint`,
 or `iceberg.catalog.s3.path-style-access`. See the [Iceberg docs](https://iceberg.apache.org/docs/latest/) for
 full details on configuring catalogs.
 
+## Hadoop configuration
+
+When using HDFS or Hive, the sink will initialize the Hadoop configuration. First, config files
+from the classpath are loaded. Next, if `iceberg.hadoop-conf-dir` is specified, config files
+are loaded from that location. Finally, any `iceberg.hadoop.*` properties from the sink config are
+applied. When merging these, the order of precedence is sink config > config dir > classpath.
 
 # Examples
 
