@@ -18,11 +18,13 @@
  */
 package io.tabular.iceberg.connect.data;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tabular.iceberg.connect.data.SchemaUtils.AddColumn;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -38,6 +40,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.commons.compress.utils.Lists;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.data.GenericRecord;
@@ -98,6 +101,9 @@ public class RecordConverterTest {
       new org.apache.iceberg.Schema(
           Types.NestedField.required(1, "ii", Types.IntegerType.get()),
           Types.NestedField.required(2, "st", Types.StringType.get()));
+
+  private static final org.apache.iceberg.Schema ID_SCHEMA =
+      new org.apache.iceberg.Schema(Types.NestedField.required(1, "ii", Types.IntegerType.get()));
 
   private static final Schema CONNECT_SCHEMA =
       SchemaBuilder.struct()
@@ -344,6 +350,32 @@ public class RecordConverterTest {
           Temporal ts = converter.convertTimestampValue(input, type);
           assertEquals(expected, ts);
         });
+  }
+
+  @Test
+  public void testMissingColumnDetectionMap() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(ID_SCHEMA);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+
+    Map<String, Object> nestedData = createNestedMapData();
+    List<AddColumn> addCols = Lists.newArrayList();
+    converter.convert(nestedData, addCols::add);
+    // FIXME: assertions
+    assertThat(addCols).hasSizeGreaterThan(0);
+  }
+
+  @Test
+  public void testMissingColumnDetectionStruct() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(ID_SCHEMA);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+
+    Struct nestedData = createNestedStructData();
+    List<AddColumn> addCols = Lists.newArrayList();
+    converter.convert(nestedData, addCols::add);
+    // FIXME: assertions
+    assertThat(addCols).hasSizeGreaterThan(0);
   }
 
   private Map<String, Object> createMapData() {

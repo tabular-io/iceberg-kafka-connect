@@ -101,8 +101,8 @@ public class SchemaUtils {
       return StringType.get();
     } else if (value instanceof Number) {
       Number num = (Number) value;
-      long l = num.longValue();
-      if (num.equals(l)) {
+      Double d = num.doubleValue();
+      if (d.equals(Math.floor(d))) {
         return LongType.get();
       } else {
         return DoubleType.get();

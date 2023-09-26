@@ -301,11 +301,11 @@ public class RecordConverter {
       bd = (BigDecimal) value;
     } else if (value instanceof Number) {
       Number num = (Number) value;
-      long l = num.longValue();
-      if (num.equals(l)) {
+      Double d = num.doubleValue();
+      if (d.equals(Math.floor(d))) {
         bd = BigDecimal.valueOf(num.longValue());
       } else {
-        bd = BigDecimal.valueOf(num.doubleValue());
+        bd = BigDecimal.valueOf(d);
       }
     } else if (value instanceof String) {
       bd = new BigDecimal((String) value);
