@@ -37,30 +37,6 @@ import org.apache.kafka.connect.data.Schema;
 
 public class SchemaUtils {
 
-  public static class AddColumn {
-    private final String parentName;
-    private final String name;
-    private final Type type;
-
-    public AddColumn(String parentName, String name, Type type) {
-      this.parentName = parentName;
-      this.name = name;
-      this.type = type;
-    }
-
-    public String parentName() {
-      return parentName;
-    }
-
-    public String name() {
-      return name;
-    }
-
-    public Type type() {
-      return type;
-    }
-  }
-
   public static Type toIcebergType(Schema valueSchema) {
     switch (valueSchema.type()) {
       case BOOLEAN:

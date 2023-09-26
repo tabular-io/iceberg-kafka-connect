@@ -24,7 +24,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.tabular.iceberg.connect.data.SchemaUtils.AddColumn;
+import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Duration;

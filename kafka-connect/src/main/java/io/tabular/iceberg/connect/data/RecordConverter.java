@@ -22,7 +22,7 @@ import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.tabular.iceberg.connect.data.SchemaUtils.AddColumn;
+import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
