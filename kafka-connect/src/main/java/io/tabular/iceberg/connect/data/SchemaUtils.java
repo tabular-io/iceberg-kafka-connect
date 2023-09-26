@@ -18,13 +18,9 @@
  */
 package io.tabular.iceberg.connect.data;
 
-import io.tabular.iceberg.connect.data.SchemaUnionVisitor.AddColumn;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.iceberg.Table;
-import org.apache.iceberg.UpdateSchema;
-import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types.BinaryType;
 import org.apache.iceberg.types.Types.BooleanType;
@@ -38,34 +34,34 @@ import org.apache.iceberg.types.Types.NestedField;
 import org.apache.iceberg.types.Types.StringType;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.sink.SinkRecord;
 
-public class SchemaUpdater {
+public class SchemaUtils {
 
-  private int fieldId = 1;
+  public static class AddColumn {
+    private final String parentName;
+    private final String name;
+    private final Type type;
 
-  public void addMissingCols(Table table, SinkRecord record) {
-    StructType structType;
-    if (record.valueSchema() == null) {
-      structType = inferIcebergType(record.value()).asStructType();
-    } else {
-      structType = toIcebergType(record.valueSchema()).asStructType();
+    public AddColumn(String parentName, String name, Type type) {
+      this.parentName = parentName;
+      this.name = name;
+      this.type = type;
     }
-    org.apache.iceberg.Schema schema = new org.apache.iceberg.Schema(structType.fields());
 
-    List<AddColumn> addColumns = Lists.newArrayList();
-    SchemaUnionVisitor.visit(table.schema(), schema, addColumns::add);
-    if (!addColumns.isEmpty()) {
-      UpdateSchema updateSchema = table.updateSchema();
-      addColumns.forEach(
-          addCol ->
-              updateSchema.addColumn(
-                  addCol.parentName(), addCol.name(), addCol.type(), addCol.doc()));
-      updateSchema.commit();
+    public String parentName() {
+      return parentName;
+    }
+
+    public String name() {
+      return name;
+    }
+
+    public Type type() {
+      return type;
     }
   }
 
-  private Type toIcebergType(Schema valueSchema) {
+  public static Type toIcebergType(Schema valueSchema) {
     switch (valueSchema.type()) {
       case BOOLEAN:
         return BooleanType.get();
@@ -83,18 +79,15 @@ public class SchemaUpdater {
         return DoubleType.get();
       case ARRAY:
         Type elementType = toIcebergType(valueSchema.valueSchema());
-        return ListType.ofOptional(nextFieldId(), elementType);
+        return ListType.ofOptional(-1, elementType);
       case MAP:
         Type keyType = toIcebergType(valueSchema.keySchema());
         Type valueType = toIcebergType(valueSchema.valueSchema());
-        return MapType.ofOptional(nextFieldId(), nextFieldId(), keyType, valueType);
+        return MapType.ofOptional(-1, -1, keyType, valueType);
       case STRUCT:
         List<NestedField> structFields =
             valueSchema.fields().stream()
-                .map(
-                    field ->
-                        NestedField.optional(
-                            nextFieldId(), field.name(), toIcebergType(field.schema())))
+                .map(field -> NestedField.optional(-1, field.name(), toIcebergType(field.schema())))
                 .collect(Collectors.toList());
         return StructType.of(structFields);
       case STRING:
@@ -103,7 +96,7 @@ public class SchemaUpdater {
     }
   }
 
-  private Type inferIcebergType(Object value) {
+  public static Type inferIcebergType(Object value) {
     if (value == null) {
       return StringType.get();
     } else if (value instanceof Number) {
@@ -122,9 +115,9 @@ public class SchemaUpdater {
       Object[] array = (Object[]) value;
       if (array.length > 0) {
         Type elementType = inferIcebergType(array[0]);
-        return ListType.ofOptional(nextFieldId(), elementType);
+        return ListType.ofOptional(-1, elementType);
       } else {
-        return ListType.ofOptional(nextFieldId(), StringType.get());
+        return ListType.ofOptional(-1, StringType.get());
       }
     } else if (value instanceof Map) {
       Map<?, ?> map = (Map<?, ?>) value;
@@ -133,17 +126,11 @@ public class SchemaUpdater {
               .map(
                   entry ->
                       NestedField.optional(
-                          nextFieldId(),
-                          entry.getKey().toString(),
-                          inferIcebergType(entry.getValue())))
+                          -1, entry.getKey().toString(), inferIcebergType(entry.getValue())))
               .collect(Collectors.toList());
       return StructType.of(structFields);
     } else {
       return StringType.get();
     }
-  }
-
-  private int nextFieldId() {
-    return fieldId++;
   }
 }
