@@ -51,6 +51,10 @@ public class IcebergWriter implements Closeable {
 
   public void write(SinkRecord record) {
     try {
+
+      // FIXME!!! don't do this for every record!!!
+      new SchemaUpdater().addMissingCols(table, record);
+
       // TODO: config to handle tombstones instead of always ignoring?
       if (record.value() != null) {
         Record row = recordConverter.convert(record.value());
