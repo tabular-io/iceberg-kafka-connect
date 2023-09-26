@@ -50,8 +50,18 @@ import org.apache.iceberg.mapping.NameMapping;
 import org.apache.iceberg.mapping.NameMappingParser;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.types.Types;
+import org.apache.iceberg.types.Types.BinaryType;
 import org.apache.iceberg.types.Types.DecimalType;
+import org.apache.iceberg.types.Types.DoubleType;
+import org.apache.iceberg.types.Types.FloatType;
+import org.apache.iceberg.types.Types.IntegerType;
+import org.apache.iceberg.types.Types.ListType;
+import org.apache.iceberg.types.Types.LongType;
+import org.apache.iceberg.types.Types.MapType;
+import org.apache.iceberg.types.Types.StringType;
+import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.types.Types.TimestampType;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -358,11 +368,66 @@ public class RecordConverterTest {
     when(table.schema()).thenReturn(ID_SCHEMA);
     RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
+    Map<String, Object> data = createMapData();
+    List<AddColumn> addCols = Lists.newArrayList();
+    converter.convert(data, addCols::add);
+
+    assertThat(addCols).hasSize(15);
+
+    Map<String, AddColumn> newColMap = Maps.newHashMap();
+    addCols.forEach(addCol -> newColMap.put(addCol.name(), addCol));
+
+    assertThat(newColMap.get("i").type()).isInstanceOf(LongType.class);
+    assertThat(newColMap.get("l").type()).isInstanceOf(LongType.class);
+    assertThat(newColMap.get("d").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("t").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("ts").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("tsz").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("fl").type()).isInstanceOf(DoubleType.class);
+    assertThat(newColMap.get("do").type()).isInstanceOf(DoubleType.class);
+    assertThat(newColMap.get("dec").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("s").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("u").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("f").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("b").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("li").type()).isInstanceOf(ListType.class);
+    assertThat(newColMap.get("ma").type()).isInstanceOf(StructType.class);
+  }
+
+  @Test
+  public void testMissingColumnDetectionMapNested() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(ID_SCHEMA);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+
     Map<String, Object> nestedData = createNestedMapData();
     List<AddColumn> addCols = Lists.newArrayList();
     converter.convert(nestedData, addCols::add);
-    // FIXME: assertions
-    assertThat(addCols).hasSizeGreaterThan(0);
+
+    assertThat(addCols).hasSize(1);
+
+    assertThat(addCols).hasSize(1);
+
+    AddColumn addCol = addCols.get(0);
+    assertThat(addCol.name()).isEqualTo("st");
+
+    StructType addedType = addCol.type().asStructType();
+    assertThat(addedType.fields().size()).isEqualTo(15);
+    assertThat(addedType.field("i").type()).isInstanceOf(LongType.class);
+    assertThat(addedType.field("l").type()).isInstanceOf(LongType.class);
+    assertThat(addedType.field("d").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("t").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("ts").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("tsz").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("fl").type()).isInstanceOf(DoubleType.class);
+    assertThat(addedType.field("do").type()).isInstanceOf(DoubleType.class);
+    assertThat(addedType.field("dec").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("s").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("u").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("f").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("b").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("li").type()).isInstanceOf(ListType.class);
+    assertThat(addedType.field("ma").type()).isInstanceOf(StructType.class);
   }
 
   @Test
@@ -371,11 +436,64 @@ public class RecordConverterTest {
     when(table.schema()).thenReturn(ID_SCHEMA);
     RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
+    Struct data = createStructData();
+    List<AddColumn> addCols = Lists.newArrayList();
+    converter.convert(data, addCols::add);
+
+    assertThat(addCols).hasSize(15);
+
+    Map<String, AddColumn> newColMap = Maps.newHashMap();
+    addCols.forEach(addCol -> newColMap.put(addCol.name(), addCol));
+
+    assertThat(newColMap.get("i").type()).isInstanceOf(IntegerType.class);
+    assertThat(newColMap.get("l").type()).isInstanceOf(LongType.class);
+    assertThat(newColMap.get("d").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("t").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("ts").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("tsz").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("fl").type()).isInstanceOf(FloatType.class);
+    assertThat(newColMap.get("do").type()).isInstanceOf(DoubleType.class);
+    assertThat(newColMap.get("dec").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("s").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("u").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("f").type()).isInstanceOf(BinaryType.class);
+    assertThat(newColMap.get("b").type()).isInstanceOf(BinaryType.class);
+    assertThat(newColMap.get("li").type()).isInstanceOf(ListType.class);
+    assertThat(newColMap.get("ma").type()).isInstanceOf(MapType.class);
+  }
+
+  @Test
+  public void testMissingColumnDetectionStructNested() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(ID_SCHEMA);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+
     Struct nestedData = createNestedStructData();
     List<AddColumn> addCols = Lists.newArrayList();
     converter.convert(nestedData, addCols::add);
-    // FIXME: assertions
-    assertThat(addCols).hasSizeGreaterThan(0);
+
+    assertThat(addCols).hasSize(1);
+
+    AddColumn addCol = addCols.get(0);
+    assertThat(addCol.name()).isEqualTo("st");
+
+    StructType addedType = addCol.type().asStructType();
+    assertThat(addedType.fields().size()).isEqualTo(15);
+    assertThat(addedType.field("i").type()).isInstanceOf(IntegerType.class);
+    assertThat(addedType.field("l").type()).isInstanceOf(LongType.class);
+    assertThat(addedType.field("d").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("t").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("ts").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("tsz").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("fl").type()).isInstanceOf(FloatType.class);
+    assertThat(addedType.field("do").type()).isInstanceOf(DoubleType.class);
+    assertThat(addedType.field("dec").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("s").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("u").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("f").type()).isInstanceOf(BinaryType.class);
+    assertThat(addedType.field("b").type()).isInstanceOf(BinaryType.class);
+    assertThat(addedType.field("li").type()).isInstanceOf(ListType.class);
+    assertThat(addedType.field("ma").type()).isInstanceOf(MapType.class);
   }
 
   private Map<String, Object> createMapData() {

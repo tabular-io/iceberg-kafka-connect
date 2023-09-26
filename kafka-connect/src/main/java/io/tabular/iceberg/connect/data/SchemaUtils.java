@@ -111,10 +111,10 @@ public class SchemaUtils {
       return StringType.get();
     } else if (value instanceof Boolean) {
       return BooleanType.get();
-    } else if (value.getClass().isArray()) {
-      Object[] array = (Object[]) value;
-      if (array.length > 0) {
-        Type elementType = inferIcebergType(array[0]);
+    } else if (value instanceof List) {
+      List<?> list = (List<?>) value;
+      if (!list.isEmpty()) {
+        Type elementType = inferIcebergType(list.get(0));
         return ListType.ofOptional(-1, elementType);
       } else {
         return ListType.ofOptional(-1, StringType.get());
