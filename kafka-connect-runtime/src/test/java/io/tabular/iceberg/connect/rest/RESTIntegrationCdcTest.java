@@ -16,20 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect;
+package io.tabular.iceberg.connect.rest;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tabular.iceberg.connect.AbstractIntegrationCdcTest;
+import io.tabular.iceberg.connect.TestConstants;
 
-public interface TestConstants {
+public class RESTIntegrationCdcTest extends AbstractIntegrationCdcTest {
 
-  String BUCKET = "bucket";
-  String AWS_ACCESS_KEY = "minioadmin";
-  String AWS_SECRET_KEY = "minioadmin";
-  String AWS_REGION = "us-east-1";
-
-  ObjectMapper MAPPER = new ObjectMapper();
-
-  enum CatalogType {
-    REST,
+  @Override
+  protected TestConstants.CatalogType catalogType() {
+    return TestConstants.CatalogType.REST;
   }
 }
