@@ -18,9 +18,6 @@
  */
 package io.tabular.iceberg.connect;
 
-import static io.tabular.iceberg.connect.TestConstants.AWS_ACCESS_KEY;
-import static io.tabular.iceberg.connect.TestConstants.AWS_REGION;
-import static io.tabular.iceberg.connect.TestConstants.AWS_SECRET_KEY;
 import static io.tabular.iceberg.connect.TestEvent.TEST_SCHEMA;
 import static io.tabular.iceberg.connect.TestEvent.TEST_SPEC;
 import static java.lang.String.format;
@@ -30,14 +27,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.time.Duration;
 import java.util.List;
-import org.apache.iceberg.CatalogProperties;
-import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.Table;
-import org.apache.iceberg.aws.AwsClientProperties;
-import org.apache.iceberg.aws.s3.S3FileIOProperties;
 import org.apache.iceberg.catalog.Namespace;
+import org.apache.iceberg.catalog.SupportsNamespaces;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.awaitility.Awaitility;
@@ -47,7 +41,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-public class IntegrationCdcTest extends IntegrationTestBase {
+public abstract class AbstractIntegrationCdcTest extends IntegrationTestBase {
 
   private static final String TEST_DB = "test";
   private static final String TEST_TABLE = "foobar";
@@ -56,15 +50,15 @@ public class IntegrationCdcTest extends IntegrationTestBase {
   @BeforeEach
   public void setup() {
     createTopic(testTopic, TEST_TOPIC_PARTITIONS);
-    catalog.createNamespace(Namespace.of(TEST_DB));
+    ((SupportsNamespaces) catalog).createNamespace(Namespace.of(TEST_DB));
   }
 
   @AfterEach
   public void teardown() {
-    context.stopConnector(connectorName);
+    context.stopKafkaConnector(connectorName);
     deleteTopic(testTopic);
     catalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE));
-    catalog.dropNamespace(Namespace.of(TEST_DB));
+    ((SupportsNamespaces) catalog).dropNamespace(Namespace.of(TEST_DB));
   }
 
   @ParameterizedTest
@@ -126,22 +120,14 @@ public class IntegrationCdcTest extends IntegrationTestBase {
             .config("iceberg.tables.cdcField", "op")
             .config("iceberg.control.commitIntervalMs", 1000)
             .config("iceberg.control.commitTimeoutMs", Integer.MAX_VALUE)
-            .config(
-                "iceberg.catalog." + CatalogUtil.ICEBERG_CATALOG_TYPE,
-                CatalogUtil.ICEBERG_CATALOG_TYPE_REST)
-            .config("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
-            .config("iceberg.catalog." + S3FileIOProperties.ENDPOINT, "http://minio:9000")
-            .config("iceberg.catalog." + S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
-            .config("iceberg.catalog." + S3FileIOProperties.SECRET_ACCESS_KEY, AWS_SECRET_KEY)
-            .config("iceberg.catalog." + S3FileIOProperties.PATH_STYLE_ACCESS, true)
-            .config("iceberg.catalog." + AwsClientProperties.CLIENT_REGION, AWS_REGION)
             .config("iceberg.kafka.auto.offset.reset", "earliest");
+    connectorCatalogProperties().forEach(connectorConfig::config);
 
     if (branch != null) {
       connectorConfig.config("iceberg.tables.defaultCommitBranch", branch);
     }
 
-    context.startConnector(connectorConfig);
+    context.startKafkaConnector(connectorConfig);
 
     // start with 3 records, update 1, delete 1. Should be a total of 4 adds and 2 deletes
     // (the update will be 1 add and 1 delete)
