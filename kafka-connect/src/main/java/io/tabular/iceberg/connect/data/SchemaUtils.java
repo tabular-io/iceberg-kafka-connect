@@ -48,6 +48,7 @@ public class SchemaUtils {
 
   public static void applySchemaUpdates(Table table, List<AddColumn> updates) {
     if (updates == null || updates.isEmpty()) {
+      // no updates to apply
       return;
     }
 
@@ -57,18 +58,22 @@ public class SchemaUtils {
   }
 
   private static void commitSchemaUpdates(Table table, List<AddColumn> updates) {
+    // get the latest schema in case another process updated it
     table.refresh();
 
+    // filter out columns that have already been added
     List<AddColumn> filteredUpdates =
         updates.stream()
             .filter(update -> !columnExists(table.schema(), update))
             .collect(Collectors.toList());
 
     if (filteredUpdates.isEmpty()) {
+      // no updates to apply
       LOG.info("Schema for table {} already up-to-date", table.name());
       return;
     }
 
+    // apply the updates
     UpdateSchema updateSchema = table.updateSchema();
     filteredUpdates.forEach(
         update -> updateSchema.addColumn(update.parentName(), update.name(), update.type()));

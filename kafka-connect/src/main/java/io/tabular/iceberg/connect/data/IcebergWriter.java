@@ -92,8 +92,11 @@ public class IcebergWriter implements Closeable {
     Record row = recordConverter.convert(record.value(), updates::add);
 
     if (updates.size() > 0) {
-      SchemaUtils.applySchemaUpdates(table, updates);
+      // complete the current file
       flush();
+      // apply the schema updates, this will refresh the table
+      SchemaUtils.applySchemaUpdates(table, updates);
+      // initialize a new writer with the new schema
       initNewWriter();
     }
 
