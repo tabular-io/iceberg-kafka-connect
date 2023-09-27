@@ -21,39 +21,51 @@ package io.tabular.iceberg.connect.data;
 import static java.lang.String.format;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
+import java.util.List;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.WriteResult;
+import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 public class IcebergWriter implements Closeable {
   private final Table table;
+  private final String tableName;
   private final TableIdentifier tableIdentifier;
   private final IcebergSinkConfig config;
-  private final RecordConverter recordConverter;
-  private final TaskWriter<Record> writer;
+  private final List<WriterResult> writerResults;
+
+  private RecordConverter recordConverter;
+  private TaskWriter<Record> writer;
 
   public IcebergWriter(Catalog catalog, String tableName, IcebergSinkConfig config) {
     this.tableIdentifier = TableIdentifier.parse(tableName);
     this.table = catalog.loadTable(tableIdentifier);
+    this.tableName = tableName;
     this.config = config;
-    this.recordConverter = new RecordConverter(table, config.getJsonConverter());
+    this.writerResults = Lists.newArrayList();
+    initNewWriter();
+  }
+
+  private void initNewWriter() {
     this.writer = Utilities.createTableWriter(table, tableName, config);
+    this.recordConverter = new RecordConverter(table, config.getJsonConverter());
   }
 
   public void write(SinkRecord record) {
     try {
       // TODO: config to handle tombstones instead of always ignoring?
       if (record.value() != null) {
-        Record row = recordConverter.convert(record.value());
+        Record row = convertToRow(record);
         String cdcField = config.getTablesCdcField();
         if (cdcField == null) {
           writer.write(row);
@@ -69,6 +81,23 @@ public class IcebergWriter implements Closeable {
               record.topic(), record.kafkaPartition(), record.kafkaOffset()),
           e);
     }
+  }
+
+  private Record convertToRow(SinkRecord record) {
+    if (!config.isEvolveSchema()) {
+      return recordConverter.convert(record.value());
+    }
+
+    List<AddColumn> updates = Lists.newArrayList();
+    Record row = recordConverter.convert(record.value(), updates::add);
+
+    if (updates.size() > 0) {
+      SchemaUtils.applySchemaUpdates(table, updates);
+      flush();
+      initNewWriter();
+    }
+
+    return row;
   }
 
   private Operation extractCdcOperation(Object recordValue, String cdcField) {
@@ -95,7 +124,7 @@ public class IcebergWriter implements Closeable {
     }
   }
 
-  public WriterResult complete() {
+  private void flush() {
     WriteResult writeResult;
     try {
       writeResult = writer.complete();
@@ -103,11 +132,21 @@ public class IcebergWriter implements Closeable {
       throw new UncheckedIOException(e);
     }
 
-    return new WriterResult(
-        tableIdentifier,
-        Arrays.asList(writeResult.dataFiles()),
-        Arrays.asList(writeResult.deleteFiles()),
-        table.spec().partitionType());
+    writerResults.add(
+        new WriterResult(
+            tableIdentifier,
+            Arrays.asList(writeResult.dataFiles()),
+            Arrays.asList(writeResult.deleteFiles()),
+            table.spec().partitionType()));
+  }
+
+  public List<WriterResult> complete() {
+    flush();
+
+    List<WriterResult> result = Lists.newArrayList(writerResults);
+    writerResults.clear();
+
+    return result;
   }
 
   @Override

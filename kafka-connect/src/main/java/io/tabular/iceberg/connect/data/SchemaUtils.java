@@ -18,9 +18,12 @@
  */
 package io.tabular.iceberg.connect.data;
 
+import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.apache.iceberg.Table;
+import org.apache.iceberg.UpdateSchema;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types.BinaryType;
 import org.apache.iceberg.types.Types.BooleanType;
@@ -33,9 +36,48 @@ import org.apache.iceberg.types.Types.MapType;
 import org.apache.iceberg.types.Types.NestedField;
 import org.apache.iceberg.types.Types.StringType;
 import org.apache.iceberg.types.Types.StructType;
+import org.apache.iceberg.util.Tasks;
 import org.apache.kafka.connect.data.Schema;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SchemaUtils {
+
+  private static final Logger LOG = LoggerFactory.getLogger(SchemaUtils.class);
+  private static final int COMMIT_RETRY_ATTEMPTS = 2; // 3 total attempts
+
+  public static void applySchemaUpdates(Table table, List<AddColumn> updates) {
+    table.refresh();
+
+    List<AddColumn> filteredUpdates =
+        updates.stream()
+            .filter(update -> !columnExists(table.schema(), update))
+            .collect(Collectors.toList());
+
+    if (filteredUpdates.isEmpty()) {
+      LOG.info("Schema for table {} already up-to-date", table.name());
+      return;
+    }
+
+    Tasks.foreach(filteredUpdates)
+        .retry(COMMIT_RETRY_ATTEMPTS)
+        .run(notUsed -> commitSchemaUpdates(table, filteredUpdates));
+  }
+
+  private static void commitSchemaUpdates(Table table, List<AddColumn> updates) {
+    UpdateSchema updateSchema = table.updateSchema();
+    updates.forEach(
+        update -> updateSchema.addColumn(update.parentName(), update.name(), update.type()));
+    updateSchema.commit();
+  }
+
+  private static boolean columnExists(org.apache.iceberg.Schema schema, AddColumn update) {
+    StructType struct =
+        update.parentName() == null
+            ? schema.asStruct()
+            : schema.findType(update.parentName()).asStructType();
+    return struct.field(update.name()) != null;
+  }
 
   public static Type toIcebergType(Schema valueSchema) {
     switch (valueSchema.type()) {

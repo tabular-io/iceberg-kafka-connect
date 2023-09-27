@@ -71,6 +71,8 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String TABLES_DEFAULT_COMMIT_BRANCH = "iceberg.tables.defaultCommitBranch";
   private static final String TABLES_CDC_FIELD_PROP = "iceberg.tables.cdcField";
   private static final String TABLES_UPSERT_MODE_ENABLED_PROP = "iceberg.tables.upsertModeEnabled";
+  private static final String TABLES_EVOLVE_SCHEMA_ENABLED_PROP =
+      "iceberg.tables.evolveSchemaEnabled";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
   private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group.id";
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.control.commitIntervalMs";
@@ -140,6 +142,12 @@ public class IcebergSinkConfig extends AbstractConfig {
         false,
         Importance.MEDIUM,
         "Set to true to treat all appends as upserts, false otherwise");
+    configDef.define(
+        TABLES_EVOLVE_SCHEMA_ENABLED_PROP,
+        Type.BOOLEAN,
+        false,
+        Importance.MEDIUM,
+        "Set to true to add any missing record fields to the table schema, false otherwise");
     configDef.define(
         CATALOG_NAME_PROP,
         Type.STRING,
@@ -338,6 +346,10 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public boolean isUpsertMode() {
     return getBoolean(TABLES_UPSERT_MODE_ENABLED_PROP);
+  }
+
+  public boolean isEvolveSchema() {
+    return getBoolean(TABLES_EVOLVE_SCHEMA_ENABLED_PROP);
   }
 
   public JsonConverter getJsonConverter() {
