@@ -29,14 +29,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.DataFile;
+import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.aws.AwsClientProperties;
 import org.apache.iceberg.aws.s3.S3FileIOProperties;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.types.Types;
+import org.apache.iceberg.types.Types.LongType;
+import org.apache.iceberg.types.Types.StringType;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -95,7 +102,35 @@ public class IntegrationTest extends IntegrationTestBase {
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
   }
 
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(strings = {"test_branch"})
+  public void testIcebergSinkSchemaEvolution(String branch) {
+    Schema initialSchema =
+        new Schema(ImmutableList.of(Types.NestedField.required(1, "id", Types.LongType.get())));
+    catalog.createTable(TABLE_IDENTIFIER, initialSchema);
+
+    runTest(branch, ImmutableMap.of("iceberg.tables.evolveSchemaEnabled", "true"));
+
+    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
+    // may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(1, 2);
+    assertEquals(2, files.stream().mapToLong(DataFile::recordCount).sum());
+    assertSnapshotProps(TABLE_IDENTIFIER, branch);
+
+    // check the schema
+    Schema tableSchema = catalog.loadTable(TABLE_IDENTIFIER).schema();
+    assertThat(tableSchema.findField("id").type()).isInstanceOf(LongType.class);
+    assertThat(tableSchema.findField("type").type()).isInstanceOf(StringType.class);
+    assertThat(tableSchema.findField("ts").type()).isInstanceOf(LongType.class);
+    assertThat(tableSchema.findField("payload").type()).isInstanceOf(StringType.class);
+  }
+
   private void runTest(String branch) {
+    runTest(branch, ImmutableMap.of());
+  }
+
+  private void runTest(String branch, Map<String, String> extraConfig) {
     // set offset reset to earliest so we don't miss any test messages
     KafkaConnectContainer.Config connectorConfig =
         new KafkaConnectContainer.Config(connectorName)
@@ -124,6 +159,9 @@ public class IntegrationTest extends IntegrationTestBase {
     if (branch != null) {
       connectorConfig.config("iceberg.tables.defaultCommitBranch", branch);
     }
+
+    extraConfig.forEach(connectorConfig::config);
+
     context.startConnector(connectorConfig);
 
     TestEvent event1 = new TestEvent(1, "type1", System.currentTimeMillis(), "hello world!");
