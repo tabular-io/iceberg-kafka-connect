@@ -22,6 +22,7 @@ import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
@@ -43,6 +44,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
+import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.data.GenericRecord;
@@ -51,6 +54,7 @@ import org.apache.iceberg.mapping.MappedField;
 import org.apache.iceberg.mapping.NameMapping;
 import org.apache.iceberg.mapping.NameMappingParser;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.types.Types.DecimalType;
@@ -60,7 +64,6 @@ import org.apache.iceberg.types.Types.NestedField;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.types.Types.TimestampType;
 import org.apache.iceberg.util.DateTimeUtil;
-import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.json.JsonConverter;
 
@@ -74,39 +77,45 @@ public class RecordConverter {
           .appendOffset("+HHmm", "Z")
           .toFormatter();
 
-  private final StructType tableSchema;
+  private final Schema tableSchema;
   private final NameMapping nameMapping;
   private final JsonConverter jsonConverter;
+  private final Map<Integer, Map<String, NestedField>> structNameMap = Maps.newHashMap();
 
   public RecordConverter(Table table, JsonConverter jsonConverter) {
-    this.tableSchema = table.schema().asStruct();
-    this.nameMapping = getNameMapping(table);
+    this.tableSchema = table.schema();
+    this.nameMapping = createNameMapping(table);
     this.jsonConverter = jsonConverter;
   }
 
   public Record convert(Object data) {
+    return convert(data, null);
+  }
+
+  public Record convert(Object data, Consumer<AddColumn> missingColConsumer) {
     if (data instanceof Struct || data instanceof Map) {
-      return convertStructValue(data, tableSchema);
+      return convertStructValue(data, tableSchema.asStruct(), -1, missingColConsumer);
     }
     throw new UnsupportedOperationException("Cannot convert type: " + data.getClass().getName());
   }
 
-  private NameMapping getNameMapping(Table table) {
+  private NameMapping createNameMapping(Table table) {
     String nameMappingString = table.properties().get(TableProperties.DEFAULT_NAME_MAPPING);
     return nameMappingString != null ? NameMappingParser.fromJson(nameMappingString) : null;
   }
 
-  private Object convertValue(Object value, Type type) {
+  private Object convertValue(
+      Object value, Type type, int fieldId, Consumer<AddColumn> missingColConsumer) {
     if (value == null) {
       return null;
     }
     switch (type.typeId()) {
       case STRUCT:
-        return convertStructValue(value, type.asStructType());
+        return convertStructValue(value, type.asStructType(), fieldId, missingColConsumer);
       case LIST:
-        return convertListValue(value, type.asListType());
+        return convertListValue(value, type.asListType(), missingColConsumer);
       case MAP:
-        return convertMapValue(value, type.asMapType());
+        return convertMapValue(value, type.asMapType(), missingColConsumer);
       case INTEGER:
         return convertInt(value);
       case LONG:
@@ -136,66 +145,122 @@ public class RecordConverter {
     throw new UnsupportedOperationException("Unsupported type: " + type.typeId());
   }
 
-  protected GenericRecord convertStructValue(Object value, StructType schema) {
-    GenericRecord record = GenericRecord.create(schema);
-    schema
-        .fields()
-        .forEach(
-            field -> {
-              Object fieldVal = getValueFromStruct(value, field);
-              if (fieldVal != null) {
-                record.setField(field.name(), convertValue(fieldVal, field.type()));
-              }
-            });
-    return record;
-  }
-
-  private Object getValueFromStruct(Object value, NestedField field) {
-    MappedField mappedField = nameMapping == null ? null : nameMapping.find(field.fieldId());
-
-    if (mappedField == null || mappedField.names().isEmpty()) {
-      // if no name mappings then use the field name in the schema
-      return getFieldValue(value, field.name());
-    }
-
-    for (String fieldName : mappedField.names()) {
-      Object result = getFieldValue(value, fieldName);
-      if (result != null) {
-        return result;
-      }
-    }
-
-    return null; // no field matches in the source
-  }
-
-  private Object getFieldValue(Object value, String fieldName) {
+  protected GenericRecord convertStructValue(
+      Object value, StructType schema, int parentFieldId, Consumer<AddColumn> missingColConsumer) {
     if (value instanceof Map) {
-      return ((Map<?, ?>) value).get(fieldName);
+      return convertToStruct((Map<?, ?>) value, schema, parentFieldId, missingColConsumer);
     } else if (value instanceof Struct) {
-      Struct struct = (Struct) value;
-      Field field = struct.schema().field(fieldName);
-      if (field == null) {
-        return null;
-      }
-      return struct.get(field);
+      return convertToStruct((Struct) value, schema, parentFieldId, missingColConsumer);
     }
     throw new IllegalArgumentException("Cannot convert to struct: " + value.getClass().getName());
   }
 
-  protected List<Object> convertListValue(Object value, ListType type) {
+  private GenericRecord convertToStruct(
+      Map<?, ?> map, StructType schema, int structFieldId, Consumer<AddColumn> missingColConsumer) {
+    GenericRecord result = GenericRecord.create(schema);
+    map.forEach(
+        (recordFieldNameObj, recordFieldValue) -> {
+          String recordFieldName = recordFieldNameObj.toString();
+          NestedField tableField = lookupStructField(recordFieldName, schema, structFieldId);
+          if (tableField == null) {
+            if (missingColConsumer != null) {
+              String parentFieldName =
+                  structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
+              Type type = SchemaUtils.inferIcebergType(recordFieldValue);
+              missingColConsumer.accept(new AddColumn(parentFieldName, recordFieldName, type));
+            }
+          } else {
+            result.setField(
+                tableField.name(),
+                convertValue(
+                    recordFieldValue, tableField.type(), tableField.fieldId(), missingColConsumer));
+          }
+        });
+    return result;
+  }
+
+  private GenericRecord convertToStruct(
+      Struct struct, StructType schema, int structFieldId, Consumer<AddColumn> missingColConsumer) {
+    GenericRecord result = GenericRecord.create(schema);
+    struct
+        .schema()
+        .fields()
+        .forEach(
+            recordField -> {
+              NestedField tableField = lookupStructField(recordField.name(), schema, structFieldId);
+              if (tableField == null) {
+                if (missingColConsumer != null) {
+                  String parentFieldName =
+                      structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
+                  Type type = SchemaUtils.toIcebergType(recordField.schema());
+                  missingColConsumer.accept(
+                      new AddColumn(parentFieldName, recordField.name(), type));
+                }
+              } else {
+                result.setField(
+                    tableField.name(),
+                    convertValue(
+                        struct.get(recordField),
+                        tableField.type(),
+                        tableField.fieldId(),
+                        missingColConsumer));
+              }
+            });
+    return result;
+  }
+
+  private NestedField lookupStructField(String fieldName, StructType schema, int structFieldId) {
+    if (nameMapping == null) {
+      return schema.field(fieldName);
+    }
+
+    return structNameMap
+        .computeIfAbsent(structFieldId, notUsed -> createStructNameMap(schema))
+        .get(fieldName);
+  }
+
+  private Map<String, NestedField> createStructNameMap(StructType schema) {
+    Map<String, NestedField> map = Maps.newHashMap();
+    schema
+        .fields()
+        .forEach(
+            col -> {
+              MappedField mappedField = nameMapping.find(col.fieldId());
+              if (mappedField != null && !mappedField.names().isEmpty()) {
+                mappedField.names().forEach(name -> map.put(name, col));
+              } else {
+                map.put(col.name(), col);
+              }
+            });
+    return map;
+  }
+
+  protected List<Object> convertListValue(
+      Object value, ListType type, Consumer<AddColumn> missingColConsumer) {
     Preconditions.checkArgument(value instanceof List);
     List<?> list = (List<?>) value;
     return list.stream()
-        .map(element -> convertValue(element, type.elementType()))
+        .map(
+            element -> {
+              int fieldId = type.fields().get(0).fieldId();
+              return convertValue(element, type.elementType(), fieldId, missingColConsumer);
+            })
         .collect(toList());
   }
 
-  protected Map<Object, Object> convertMapValue(Object value, MapType type) {
+  protected Map<Object, Object> convertMapValue(
+      Object value, MapType type, Consumer<AddColumn> missingColConsumer) {
     Preconditions.checkArgument(value instanceof Map);
     Map<?, ?> map = (Map<?, ?>) value;
     Map<Object, Object> result = new HashMap<>();
     map.forEach(
-        (k, v) -> result.put(convertValue(k, type.keyType()), convertValue(v, type.valueType())));
+        (k, v) -> {
+          int keyFieldId = type.fields().get(0).fieldId();
+          int valueFieldId = type.fields().get(0).fieldId();
+          result.put(
+              convertValue(k, type.keyType(), keyFieldId, missingColConsumer),
+              convertValue(v, type.valueType(), valueFieldId, missingColConsumer));
+        });
     return result;
   }
 
@@ -241,11 +306,11 @@ public class RecordConverter {
       bd = (BigDecimal) value;
     } else if (value instanceof Number) {
       Number num = (Number) value;
-      long l = num.longValue();
-      if (num.equals(l)) {
+      Double d = num.doubleValue();
+      if (d.equals(Math.floor(d))) {
         bd = BigDecimal.valueOf(num.longValue());
       } else {
-        bd = BigDecimal.valueOf(num.doubleValue());
+        bd = BigDecimal.valueOf(d);
       }
     } else if (value instanceof String) {
       bd = new BigDecimal((String) value);
