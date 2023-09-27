@@ -6,7 +6,7 @@ The Apache Iceberg Sink Connector for Kafka Connect is a sink connector for writ
 * Exactly-once delivery semantics
 * Multi-table fan-out
 * Row mutations (update/delete rows), upsert mode
-* Message conversion using the Iceberg schema as the source of truth
+* Evolution of table schema to match record schema
 * Field name mapping via Iceberg’s column mapping functionality
 
 # Installation
