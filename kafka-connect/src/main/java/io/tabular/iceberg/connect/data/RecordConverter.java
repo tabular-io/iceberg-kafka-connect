@@ -89,7 +89,7 @@ public class RecordConverter {
   }
 
   public Record convert(Object data) {
-    return convert(data, notUsed -> {});
+    return convert(data, null);
   }
 
   public Record convert(Object data, Consumer<AddColumn> missingColConsumer) {
@@ -163,10 +163,12 @@ public class RecordConverter {
           String recordFieldName = recordFieldNameObj.toString();
           NestedField tableField = lookupStructField(recordFieldName, schema, structFieldId);
           if (tableField == null) {
-            String parentFieldName =
-                structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
-            Type type = SchemaUtils.inferIcebergType(recordFieldValue);
-            missingColConsumer.accept(new AddColumn(parentFieldName, recordFieldName, type));
+            if (missingColConsumer != null) {
+              String parentFieldName =
+                  structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
+              Type type = SchemaUtils.inferIcebergType(recordFieldValue);
+              missingColConsumer.accept(new AddColumn(parentFieldName, recordFieldName, type));
+            }
           } else {
             result.setField(
                 tableField.name(),
@@ -187,10 +189,13 @@ public class RecordConverter {
             recordField -> {
               NestedField tableField = lookupStructField(recordField.name(), schema, structFieldId);
               if (tableField == null) {
-                String parentFieldName =
-                    structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
-                Type type = SchemaUtils.toIcebergType(recordField.schema());
-                missingColConsumer.accept(new AddColumn(parentFieldName, recordField.name(), type));
+                if (missingColConsumer != null) {
+                  String parentFieldName =
+                      structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
+                  Type type = SchemaUtils.toIcebergType(recordField.schema());
+                  missingColConsumer.accept(
+                      new AddColumn(parentFieldName, recordField.name(), type));
+                }
               } else {
                 result.setField(
                     tableField.name(),

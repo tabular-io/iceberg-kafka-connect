@@ -53,8 +53,7 @@ public class IcebergWriter implements Closeable {
     try {
       // TODO: config to handle tombstones instead of always ignoring?
       if (record.value() != null) {
-        // FIXME: handle schema evolution
-        Record row = recordConverter.convert(record.value(), notUsed -> {});
+        Record row = recordConverter.convert(record.value());
         String cdcField = config.getTablesCdcField();
         if (cdcField == null) {
           writer.write(row);
