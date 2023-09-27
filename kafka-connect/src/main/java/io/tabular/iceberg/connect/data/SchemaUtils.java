@@ -47,6 +47,16 @@ public class SchemaUtils {
   private static final int COMMIT_RETRY_ATTEMPTS = 2; // 3 total attempts
 
   public static void applySchemaUpdates(Table table, List<AddColumn> updates) {
+    if (updates == null || updates.isEmpty()) {
+      return;
+    }
+
+    Tasks.foreach(updates)
+        .retry(COMMIT_RETRY_ATTEMPTS)
+        .run(notUsed -> commitSchemaUpdates(table, updates));
+  }
+
+  private static void commitSchemaUpdates(Table table, List<AddColumn> updates) {
     table.refresh();
 
     List<AddColumn> filteredUpdates =
@@ -59,16 +69,11 @@ public class SchemaUtils {
       return;
     }
 
-    Tasks.foreach(filteredUpdates)
-        .retry(COMMIT_RETRY_ATTEMPTS)
-        .run(notUsed -> commitSchemaUpdates(table, filteredUpdates));
-  }
-
-  private static void commitSchemaUpdates(Table table, List<AddColumn> updates) {
     UpdateSchema updateSchema = table.updateSchema();
-    updates.forEach(
+    filteredUpdates.forEach(
         update -> updateSchema.addColumn(update.parentName(), update.name(), update.type()));
     updateSchema.commit();
+    LOG.info("Schema for table {} updated with new columns", table.name());
   }
 
   private static boolean columnExists(org.apache.iceberg.Schema schema, AddColumn update) {
