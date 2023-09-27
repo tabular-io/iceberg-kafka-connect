@@ -19,6 +19,7 @@
 package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -52,7 +53,7 @@ public class SchemaUtils {
       return;
     }
 
-    Tasks.foreach(updates)
+    Tasks.foreach(Collections.singleton(updates))
         .retry(COMMIT_RETRY_ATTEMPTS)
         .run(notUsed -> commitSchemaUpdates(table, updates));
   }

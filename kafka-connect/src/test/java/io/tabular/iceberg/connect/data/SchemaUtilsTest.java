@@ -19,9 +19,20 @@
 package io.tabular.iceberg.connect.data;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
+import java.util.List;
+import org.apache.iceberg.Table;
+import org.apache.iceberg.UpdateSchema;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.types.Type;
+import org.apache.iceberg.types.Types;
 import org.apache.iceberg.types.Types.BinaryType;
 import org.apache.iceberg.types.Types.BooleanType;
 import org.apache.iceberg.types.Types.DoubleType;
@@ -37,6 +48,42 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.junit.jupiter.api.Test;
 
 public class SchemaUtilsTest {
+
+  private static final org.apache.iceberg.Schema SIMPLE_SCHEMA =
+      new org.apache.iceberg.Schema(Types.NestedField.required(1, "i", Types.IntegerType.get()));
+
+  @Test
+  public void testApplySchemaUpdates() {
+    UpdateSchema updateSchema = mock(UpdateSchema.class);
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(SIMPLE_SCHEMA);
+    when(table.updateSchema()).thenReturn(updateSchema);
+
+    List<AddColumn> updates =
+        ImmutableList.of(
+            new AddColumn(null, "i", Types.IntegerType.get()),
+            new AddColumn(null, "s", Types.StringType.get()));
+
+    SchemaUtils.applySchemaUpdates(table, updates);
+    verify(table).refresh();
+    verify(table).updateSchema();
+    verify(updateSchema).addColumn(any(), any(String.class), any(Type.class));
+    verify(updateSchema).commit();
+  }
+
+  @Test
+  public void testApplySchemaUpdatesNoUpdates() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(SIMPLE_SCHEMA);
+
+    SchemaUtils.applySchemaUpdates(table, null);
+    verify(table, times(0)).refresh();
+    verify(table, times(0)).updateSchema();
+
+    SchemaUtils.applySchemaUpdates(table, ImmutableList.of());
+    verify(table, times(0)).refresh();
+    verify(table, times(0)).updateSchema();
+  }
 
   @Test
   public void testToIcebergType() {
