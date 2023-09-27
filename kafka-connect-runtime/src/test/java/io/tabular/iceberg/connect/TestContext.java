@@ -23,6 +23,7 @@ import static io.tabular.iceberg.connect.TestConstants.AWS_REGION;
 import static io.tabular.iceberg.connect.TestConstants.AWS_SECRET_KEY;
 import static io.tabular.iceberg.connect.TestConstants.BUCKET;
 import static io.tabular.iceberg.connect.TestContextUtil.MINIO_PORT;
+import static io.tabular.iceberg.connect.TestContextUtil.NESSIE_CATALOG_PORT;
 import static io.tabular.iceberg.connect.TestContextUtil.REST_CATALOG_PORT;
 import static io.tabular.iceberg.connect.TestContextUtil.initLocalS3Client;
 
@@ -32,6 +33,7 @@ import org.apache.iceberg.aws.AwsClientProperties;
 import org.apache.iceberg.aws.s3.S3FileIO;
 import org.apache.iceberg.aws.s3.S3FileIOProperties;
 import org.apache.iceberg.catalog.Catalog;
+import org.apache.iceberg.nessie.NessieCatalog;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.rest.RESTCatalog;
 import org.testcontainers.containers.GenericContainer;
@@ -49,6 +51,7 @@ public class TestContext {
   private final KafkaContainer kafka;
   private final KafkaConnectContainer kafkaConnect;
   private final GenericContainer restCatalog;
+  private final GenericContainer nessieCatalog;
   private final GenericContainer minio;
 
   private TestContext() {
@@ -58,11 +61,14 @@ public class TestContext {
 
     restCatalog = TestContextUtil.restCatalogContainer(network, minio);
 
+    nessieCatalog = TestContextUtil.nessieCatalogContainer(network, minio);
+
     kafka = TestContextUtil.kafkaContainer(network);
 
-    kafkaConnect = TestContextUtil.kafkaConnectContainer(network, restCatalog, kafka);
+    kafkaConnect =
+        TestContextUtil.kafkaConnectContainer(network, restCatalog, nessieCatalog, kafka);
 
-    Startables.deepStart(Stream.of(minio, restCatalog, kafka, kafkaConnect)).join();
+    Startables.deepStart(Stream.of(minio, restCatalog, nessieCatalog, kafka, kafkaConnect)).join();
 
     try (S3Client s3 = initLocalS3Client(localMinioPort())) {
       s3.createBucket(req -> req.bucket(BUCKET));
@@ -75,6 +81,7 @@ public class TestContext {
     kafkaConnect.close();
     kafka.close();
     restCatalog.close();
+    nessieCatalog.close();
     minio.close();
     network.close();
   }
@@ -103,6 +110,25 @@ public class TestContext {
         "local",
         ImmutableMap.<String, String>builder()
             .put(CatalogProperties.URI, localCatalogUri)
+            .put(CatalogProperties.FILE_IO_IMPL, S3FileIO.class.getName())
+            .put(S3FileIOProperties.ENDPOINT, "http://localhost:" + localMinioPort())
+            .put(S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
+            .put(S3FileIOProperties.SECRET_ACCESS_KEY, AWS_SECRET_KEY)
+            .put(S3FileIOProperties.PATH_STYLE_ACCESS, "true")
+            .put(AwsClientProperties.CLIENT_REGION, AWS_REGION)
+            .build());
+    return result;
+  }
+
+  protected Catalog initNessieCatalog() {
+    String localCatalogUri =
+        "http://localhost:" + nessieCatalog.getMappedPort(NESSIE_CATALOG_PORT) + "/api/v1";
+    NessieCatalog result = new NessieCatalog();
+    result.initialize(
+        "local",
+        ImmutableMap.<String, String>builder()
+            .put(CatalogProperties.URI, localCatalogUri)
+            .put(CatalogProperties.WAREHOUSE_LOCATION, "s3://" + BUCKET + "/warehouse")
             .put(CatalogProperties.FILE_IO_IMPL, S3FileIO.class.getName())
             .put(S3FileIOProperties.ENDPOINT, "http://localhost:" + localMinioPort())
             .put(S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)

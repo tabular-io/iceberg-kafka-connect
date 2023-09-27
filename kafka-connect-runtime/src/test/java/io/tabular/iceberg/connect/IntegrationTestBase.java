@@ -90,6 +90,8 @@ public abstract class IntegrationTestBase {
   private Catalog intCatalog() {
     if (catalogType() == TestConstants.CatalogType.REST) {
       return context.initRestCatalog();
+    } else if (catalogType() == TestConstants.CatalogType.NESSIE) {
+      return context.initNessieCatalog();
     }
     return null;
   }
@@ -97,6 +99,8 @@ public abstract class IntegrationTestBase {
   protected Map<String, Object> connectorCatalogProperties() {
     if (catalogType() == TestConstants.CatalogType.REST) {
       return TestContextUtil.connectorRestCatalogProperties();
+    } else if (catalogType() == TestConstants.CatalogType.NESSIE) {
+      return TestContextUtil.connectorNessieCatalogProperties();
     }
     return Collections.emptyMap();
   }
