@@ -163,7 +163,7 @@ public class RecordConverter {
           String recordFieldName = recordFieldNameObj.toString();
           NestedField tableField = lookupStructField(recordFieldName, schema, structFieldId);
           if (tableField == null) {
-            if (missingColConsumer != null) {
+            if (missingColConsumer != null && recordFieldValue != null) {
               String parentFieldName =
                   structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
               Type type = SchemaUtils.inferIcebergType(recordFieldValue);
