@@ -18,32 +18,22 @@
  */
 package io.tabular.iceberg.connect;
 
-import static io.tabular.iceberg.connect.TestConstants.AWS_ACCESS_KEY;
-import static io.tabular.iceberg.connect.TestConstants.AWS_REGION;
-import static io.tabular.iceberg.connect.TestConstants.AWS_SECRET_KEY;
 import static io.tabular.iceberg.connect.TestEvent.TEST_SCHEMA;
 import static io.tabular.iceberg.connect.TestEvent.TEST_SPEC;
 import static java.lang.String.format;
+import static org.apache.iceberg.TableProperties.FORMAT_VERSION;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
-import org.apache.iceberg.CatalogProperties;
-import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.DataFile;
-import org.apache.iceberg.Schema;
+import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.Table;
-import org.apache.iceberg.aws.AwsClientProperties;
-import org.apache.iceberg.aws.s3.S3FileIOProperties;
 import org.apache.iceberg.catalog.Namespace;
+import org.apache.iceberg.catalog.SupportsNamespaces;
 import org.apache.iceberg.catalog.TableIdentifier;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.iceberg.types.Types;
-import org.apache.iceberg.types.Types.LongType;
-import org.apache.iceberg.types.Types.StringType;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,7 +41,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-public class IntegrationTest extends IntegrationTestBase {
+public abstract class AbstractIntegrationCdcTest extends IntegrationTestBase {
 
   private static final String TEST_DB = "test";
   private static final String TEST_TABLE = "foobar";
@@ -60,30 +50,36 @@ public class IntegrationTest extends IntegrationTestBase {
   @BeforeEach
   public void setup() {
     createTopic(testTopic, TEST_TOPIC_PARTITIONS);
-    catalog.createNamespace(Namespace.of(TEST_DB));
+    ((SupportsNamespaces) catalog).createNamespace(Namespace.of(TEST_DB));
   }
 
   @AfterEach
   public void teardown() {
-    context.stopConnector(connectorName);
+    context.stopKafkaConnector(connectorName);
     deleteTopic(testTopic);
     catalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE));
-    catalog.dropNamespace(Namespace.of(TEST_DB));
+    ((SupportsNamespaces) catalog).dropNamespace(Namespace.of(TEST_DB));
   }
 
   @ParameterizedTest
   @NullSource
   @ValueSource(strings = {"test_branch"})
   public void testIcebergSinkPartitionedTable(String branch) {
-    catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA, TEST_SPEC);
+    catalog.createTable(
+        TABLE_IDENTIFIER, TEST_SCHEMA, TEST_SPEC, ImmutableMap.of(FORMAT_VERSION, "2"));
 
     runTest(branch);
 
     List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
     // partition may involve 1 or 2 workers
-    assertThat(files).hasSizeBetween(1, 2);
-    assertEquals(1, files.get(0).recordCount());
-    assertEquals(1, files.get(1).recordCount());
+    assertThat(files).hasSizeBetween(2, 3);
+    assertEquals(4, files.stream().mapToLong(DataFile::recordCount).sum());
+
+    List<DeleteFile> deleteFiles = getDeleteFiles(TABLE_IDENTIFIER, branch);
+    // partition may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(2, 3);
+    assertEquals(2, deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum());
+
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
   }
 
@@ -91,46 +87,24 @@ public class IntegrationTest extends IntegrationTestBase {
   @NullSource
   @ValueSource(strings = {"test_branch"})
   public void testIcebergSinkUnpartitionedTable(String branch) {
-    catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA);
+    catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA, null, ImmutableMap.of(FORMAT_VERSION, "2"));
 
     runTest(branch);
 
     List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(1, 2);
-    assertEquals(2, files.stream().mapToLong(DataFile::recordCount).sum());
-    assertSnapshotProps(TABLE_IDENTIFIER, branch);
-  }
+    assertEquals(4, files.stream().mapToLong(DataFile::recordCount).sum());
 
-  @ParameterizedTest
-  @NullSource
-  @ValueSource(strings = {"test_branch"})
-  public void testIcebergSinkSchemaEvolution(String branch) {
-    Schema initialSchema =
-        new Schema(ImmutableList.of(Types.NestedField.required(1, "id", Types.LongType.get())));
-    catalog.createTable(TABLE_IDENTIFIER, initialSchema);
-
-    runTest(branch, ImmutableMap.of("iceberg.tables.evolveSchemaEnabled", "true"));
-
-    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
+    List<DeleteFile> deleteFiles = getDeleteFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(1, 2);
-    assertEquals(2, files.stream().mapToLong(DataFile::recordCount).sum());
-    assertSnapshotProps(TABLE_IDENTIFIER, branch);
+    assertEquals(2, deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum());
 
-    // check the schema
-    Schema tableSchema = catalog.loadTable(TABLE_IDENTIFIER).schema();
-    assertThat(tableSchema.findField("id").type()).isInstanceOf(LongType.class);
-    assertThat(tableSchema.findField("type").type()).isInstanceOf(StringType.class);
-    assertThat(tableSchema.findField("ts").type()).isInstanceOf(LongType.class);
-    assertThat(tableSchema.findField("payload").type()).isInstanceOf(StringType.class);
+    assertSnapshotProps(TABLE_IDENTIFIER, branch);
   }
 
   private void runTest(String branch) {
-    runTest(branch, ImmutableMap.of());
-  }
-
-  private void runTest(String branch, Map<String, String> extraConfig) {
     // set offset reset to earliest so we don't miss any test messages
     KafkaConnectContainer.Config connectorConfig =
         new KafkaConnectContainer.Config(connectorName)
@@ -143,34 +117,35 @@ public class IntegrationTest extends IntegrationTestBase {
             .config("value.converter", "org.apache.kafka.connect.json.JsonConverter")
             .config("value.converter.schemas.enable", false)
             .config("iceberg.tables", format("%s.%s", TEST_DB, TEST_TABLE))
+            .config("iceberg.tables.cdcField", "op")
             .config("iceberg.control.commitIntervalMs", 1000)
             .config("iceberg.control.commitTimeoutMs", Integer.MAX_VALUE)
-            .config(
-                "iceberg.catalog." + CatalogUtil.ICEBERG_CATALOG_TYPE,
-                CatalogUtil.ICEBERG_CATALOG_TYPE_REST)
-            .config("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:8181")
-            .config("iceberg.catalog." + S3FileIOProperties.ENDPOINT, "http://minio:9000")
-            .config("iceberg.catalog." + S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
-            .config("iceberg.catalog." + S3FileIOProperties.SECRET_ACCESS_KEY, AWS_SECRET_KEY)
-            .config("iceberg.catalog." + S3FileIOProperties.PATH_STYLE_ACCESS, true)
-            .config("iceberg.catalog." + AwsClientProperties.CLIENT_REGION, AWS_REGION)
             .config("iceberg.kafka.auto.offset.reset", "earliest");
+    connectorCatalogProperties().forEach(connectorConfig::config);
 
     if (branch != null) {
       connectorConfig.config("iceberg.tables.defaultCommitBranch", branch);
     }
 
-    extraConfig.forEach(connectorConfig::config);
+    context.startKafkaConnector(connectorConfig);
 
-    context.startConnector(connectorConfig);
+    // start with 3 records, update 1, delete 1. Should be a total of 4 adds and 2 deletes
+    // (the update will be 1 add and 1 delete)
 
-    TestEvent event1 = new TestEvent(1, "type1", System.currentTimeMillis(), "hello world!");
+    TestEvent event1 = new TestEvent(1, "type1", System.currentTimeMillis(), "hello world!", "I");
+    TestEvent event2 = new TestEvent(2, "type2", System.currentTimeMillis(), "having fun?", "I");
 
     long threeDaysAgo = System.currentTimeMillis() - Duration.ofDays(3).toMillis();
-    TestEvent event2 = new TestEvent(2, "type2", threeDaysAgo, "having fun?");
+    TestEvent event3 = new TestEvent(3, "type3", threeDaysAgo, "hello from the past!", "I");
+
+    TestEvent event4 = new TestEvent(1, "type1", System.currentTimeMillis(), "hello world!", "D");
+    TestEvent event5 = new TestEvent(3, "type3", threeDaysAgo, "updated!", "U");
 
     send(testTopic, event1);
     send(testTopic, event2);
+    send(testTopic, event3);
+    send(testTopic, event4);
+    send(testTopic, event5);
     flush();
 
     Awaitility.await()

@@ -22,7 +22,7 @@ import static io.tabular.iceberg.connect.TestConstants.MAPPER;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -33,10 +33,10 @@ import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
-import org.apache.iceberg.rest.RESTCatalog;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -46,11 +46,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import software.amazon.awssdk.services.s3.S3Client;
 
-public class IntegrationTestBase {
+public abstract class IntegrationTestBase {
 
   protected final TestContext context = TestContext.INSTANCE;
   protected S3Client s3;
-  protected RESTCatalog catalog;
+  protected Catalog catalog;
   protected Admin admin;
 
   private KafkaProducer<String, String> producer;
@@ -62,10 +62,10 @@ public class IntegrationTestBase {
 
   @BeforeEach
   public void baseSetup() {
-    s3 = context.initLocalS3Client();
-    catalog = context.initLocalCatalog();
-    producer = context.initLocalProducer();
-    admin = context.initLocalAdmin();
+    s3 = TestContextUtil.initLocalS3Client(context.localMinioPort());
+    catalog = intCatalog();
+    producer = TestContextUtil.initLocalProducer(context.kafkaBootstrapServers());
+    admin = TestContextUtil.initLocalAdmin(context.kafkaBootstrapServers());
 
     this.connectorName = "test_connector-" + UUID.randomUUID();
     this.testTopic = "test-topic-" + UUID.randomUUID();
@@ -74,13 +74,35 @@ public class IntegrationTestBase {
   @AfterEach
   public void baseTeardown() {
     try {
-      catalog.close();
-    } catch (IOException e) {
-      // NO-OP
+      if (catalog instanceof AutoCloseable) {
+        ((AutoCloseable) catalog).close();
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
     producer.close();
     admin.close();
     s3.close();
+  }
+
+  protected abstract TestConstants.CatalogType catalogType();
+
+  private Catalog intCatalog() {
+    if (catalogType() == TestConstants.CatalogType.REST) {
+      return context.initRestCatalog();
+    } else if (catalogType() == TestConstants.CatalogType.NESSIE) {
+      return context.initNessieCatalog();
+    }
+    return null;
+  }
+
+  protected Map<String, Object> connectorCatalogProperties() {
+    if (catalogType() == TestConstants.CatalogType.REST) {
+      return TestContextUtil.connectorRestCatalogProperties();
+    } else if (catalogType() == TestConstants.CatalogType.NESSIE) {
+      return TestContextUtil.connectorNessieCatalogProperties();
+    }
+    return Collections.emptyMap();
   }
 
   protected void assertSnapshotProps(TableIdentifier tableIdentifier, String branch) {
