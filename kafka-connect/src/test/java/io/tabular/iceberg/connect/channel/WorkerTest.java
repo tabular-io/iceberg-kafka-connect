@@ -77,7 +77,7 @@ public class WorkerTest extends ChannelTestBase {
             ImmutableList.of(),
             StructType.of());
     IcebergWriter writer = mock(IcebergWriter.class);
-    when(writer.complete()).thenReturn(writeResult);
+    when(writer.complete()).thenReturn(ImmutableList.of(writeResult));
 
     IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
     when(writerFactory.createWriter(any())).thenReturn(writer);

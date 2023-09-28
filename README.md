@@ -6,7 +6,7 @@ The Apache Iceberg Sink Connector for Kafka Connect is a sink connector for writ
 * Exactly-once delivery semantics
 * Multi-table fan-out
 * Row mutations (update/delete rows), upsert mode
-* Message conversion using the Iceberg schema as the source of truth
+* Evolution of table schema to match record schema
 * Field name mapping via Iceberg’s column mapping functionality
 
 # Installation
@@ -28,6 +28,7 @@ The zip archive will be found under `./kafka-connect-runtime/build/distributions
 | iceberg.tables.defaultCommitBranch        | Default branch for commits, main is used if not specified                                                     |
 | iceberg.tables.cdcField                   | Name of the field containing the CDC operation, `I`, `U`, or `D`, default is none                             |
 | iceberg.tables.upsertModeEnabled          | Set to `true` to enable upsert mode, default is `false`                                                       |
+| iceberg.tables.evolveSchemaEnabled        | Set to `true` to add any missing record fields to the table schema, default is `false`                        |
 | iceberg.table.\<table name\>.idColumns    | Comma-separated list of columns that identify a row in the table (primary key)                                |
 | iceberg.table.\<table name\>.routeRegex   | The regex used to match a record's `routeField` to a table                                                    |
 | iceberg.table.\<table name\>.commitBranch | Table-specific branch for commits, use `iceberg.tables.defaultCommitBranch` if not specified                  |

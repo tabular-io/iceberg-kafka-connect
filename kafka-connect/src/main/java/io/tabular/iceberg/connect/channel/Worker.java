@@ -113,7 +113,7 @@ public class Worker extends Channel {
     }
 
     List<WriterResult> writeResults =
-        writers.values().stream().map(IcebergWriter::complete).collect(toList());
+        writers.values().stream().flatMap(writer -> writer.complete().stream()).collect(toList());
     Map<TopicPartition, Offset> offsets = new HashMap<>(sourceOffsets);
 
     tableExistsMap.clear();
