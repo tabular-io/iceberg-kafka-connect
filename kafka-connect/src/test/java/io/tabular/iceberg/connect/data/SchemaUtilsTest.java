@@ -26,6 +26,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.UpdateSchema;
@@ -35,6 +40,8 @@ import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.types.Types.BinaryType;
 import org.apache.iceberg.types.Types.BooleanType;
+import org.apache.iceberg.types.Types.DateType;
+import org.apache.iceberg.types.Types.DecimalType;
 import org.apache.iceberg.types.Types.DoubleType;
 import org.apache.iceberg.types.Types.FloatType;
 import org.apache.iceberg.types.Types.IntegerType;
@@ -43,8 +50,14 @@ import org.apache.iceberg.types.Types.LongType;
 import org.apache.iceberg.types.Types.MapType;
 import org.apache.iceberg.types.Types.StringType;
 import org.apache.iceberg.types.Types.StructType;
+import org.apache.iceberg.types.Types.TimeType;
+import org.apache.iceberg.types.Types.TimestampType;
+import org.apache.kafka.connect.data.Date;
+import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Time;
+import org.apache.kafka.connect.data.Timestamp;
 import org.junit.jupiter.api.Test;
 
 public class SchemaUtilsTest {
@@ -96,15 +109,32 @@ public class SchemaUtilsTest {
     assertThat(SchemaUtils.toIcebergType(Schema.FLOAT32_SCHEMA)).isInstanceOf(FloatType.class);
     assertThat(SchemaUtils.toIcebergType(Schema.FLOAT64_SCHEMA)).isInstanceOf(DoubleType.class);
     assertThat(SchemaUtils.toIcebergType(Schema.STRING_SCHEMA)).isInstanceOf(StringType.class);
+    assertThat(SchemaUtils.toIcebergType(Date.SCHEMA)).isInstanceOf(DateType.class);
+    assertThat(SchemaUtils.toIcebergType(Time.SCHEMA)).isInstanceOf(TimeType.class);
 
-    Schema arraySchema = SchemaBuilder.array(Schema.STRING_SCHEMA).build();
-    assertThat(SchemaUtils.toIcebergType(arraySchema)).isInstanceOf(ListType.class);
+    Type timestampType = SchemaUtils.toIcebergType(Timestamp.SCHEMA);
+    assertThat(timestampType).isInstanceOf(TimestampType.class);
+    assertThat(((TimestampType) timestampType).shouldAdjustToUTC()).isTrue();
 
-    Schema mapSchema = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).build();
-    assertThat(SchemaUtils.toIcebergType(mapSchema)).isInstanceOf(MapType.class);
+    Type decimalType = SchemaUtils.toIcebergType(Decimal.schema(4));
+    assertThat(decimalType).isInstanceOf(DecimalType.class);
+    assertThat(((DecimalType) decimalType).scale()).isEqualTo(4);
 
-    Schema structSchema = SchemaBuilder.struct().field("i", Schema.INT32_SCHEMA).build();
-    assertThat(SchemaUtils.toIcebergType(structSchema)).isInstanceOf(StructType.class);
+    Type listType = SchemaUtils.toIcebergType(SchemaBuilder.array(Schema.STRING_SCHEMA).build());
+    assertThat(listType).isInstanceOf(ListType.class);
+    assertThat(listType.asListType().elementType()).isInstanceOf(StringType.class);
+
+    Type mapType =
+        SchemaUtils.toIcebergType(
+            SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).build());
+    assertThat(mapType).isInstanceOf(MapType.class);
+    assertThat(mapType.asMapType().keyType()).isInstanceOf(StringType.class);
+    assertThat(mapType.asMapType().valueType()).isInstanceOf(StringType.class);
+
+    Type structType =
+        SchemaUtils.toIcebergType(SchemaBuilder.struct().field("i", Schema.INT32_SCHEMA).build());
+    assertThat(structType).isInstanceOf(StructType.class);
+    assertThat(structType.asStructType().fieldType("i")).isInstanceOf(IntegerType.class);
   }
 
   @Test
@@ -116,6 +146,25 @@ public class SchemaUtilsTest {
     assertThat(SchemaUtils.inferIcebergType("foobar")).isInstanceOf(StringType.class);
     assertThat(SchemaUtils.inferIcebergType(null)).isInstanceOf(StringType.class);
     assertThat(SchemaUtils.inferIcebergType(true)).isInstanceOf(BooleanType.class);
+    assertThat(SchemaUtils.inferIcebergType(LocalDate.now())).isInstanceOf(DateType.class);
+    assertThat(SchemaUtils.inferIcebergType(LocalTime.now())).isInstanceOf(TimeType.class);
+
+    Type timestampType = SchemaUtils.inferIcebergType(new java.util.Date());
+    assertThat(timestampType).isInstanceOf(TimestampType.class);
+    assertThat(((TimestampType) timestampType).shouldAdjustToUTC()).isTrue();
+
+    timestampType = SchemaUtils.inferIcebergType(OffsetDateTime.now());
+    assertThat(timestampType).isInstanceOf(TimestampType.class);
+    assertThat(((TimestampType) timestampType).shouldAdjustToUTC()).isTrue();
+
+    timestampType = SchemaUtils.inferIcebergType(LocalDateTime.now());
+    assertThat(timestampType).isInstanceOf(TimestampType.class);
+    assertThat(((TimestampType) timestampType).shouldAdjustToUTC()).isFalse();
+
+    Type decimalType = SchemaUtils.inferIcebergType(new BigDecimal("12.345"));
+    assertThat(decimalType).isInstanceOf(DecimalType.class);
+    assertThat(((DecimalType) decimalType).scale()).isEqualTo(3);
+
     assertThat(SchemaUtils.inferIcebergType(ImmutableList.of("foobar")))
         .isInstanceOf(ListType.class);
     assertThat(SchemaUtils.inferIcebergType(ImmutableMap.of("foo", "bar")))

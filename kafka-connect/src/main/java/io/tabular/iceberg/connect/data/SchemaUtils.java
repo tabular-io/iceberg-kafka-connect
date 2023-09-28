@@ -19,6 +19,11 @@
 package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +33,8 @@ import org.apache.iceberg.UpdateSchema;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types.BinaryType;
 import org.apache.iceberg.types.Types.BooleanType;
+import org.apache.iceberg.types.Types.DateType;
+import org.apache.iceberg.types.Types.DecimalType;
 import org.apache.iceberg.types.Types.DoubleType;
 import org.apache.iceberg.types.Types.FloatType;
 import org.apache.iceberg.types.Types.IntegerType;
@@ -37,8 +44,14 @@ import org.apache.iceberg.types.Types.MapType;
 import org.apache.iceberg.types.Types.NestedField;
 import org.apache.iceberg.types.Types.StringType;
 import org.apache.iceberg.types.Types.StructType;
+import org.apache.iceberg.types.Types.TimeType;
+import org.apache.iceberg.types.Types.TimestampType;
 import org.apache.iceberg.util.Tasks;
+import org.apache.kafka.connect.data.Date;
+import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Time;
+import org.apache.kafka.connect.data.Timestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -95,12 +108,27 @@ public class SchemaUtils {
       case BOOLEAN:
         return BooleanType.get();
       case BYTES:
+        if (valueSchema.name() != null && valueSchema.name().equals(Decimal.LOGICAL_NAME)) {
+          int scale = Integer.parseInt(valueSchema.parameters().get(Decimal.SCALE_FIELD));
+          return DecimalType.of(38, scale);
+        }
         return BinaryType.get();
       case INT8:
       case INT16:
+        return IntegerType.get();
       case INT32:
+        if (valueSchema.name() != null) {
+          if (valueSchema.name().equals(Date.LOGICAL_NAME)) {
+            return DateType.get();
+          } else if (valueSchema.name().equals(Time.LOGICAL_NAME)) {
+            return TimeType.get();
+          }
+        }
         return IntegerType.get();
       case INT64:
+        if (valueSchema.name() != null && valueSchema.name().equals(Timestamp.LOGICAL_NAME)) {
+          return TimestampType.withZone();
+        }
         return LongType.get();
       case FLOAT32:
         return FloatType.get();
@@ -128,6 +156,13 @@ public class SchemaUtils {
   public static Type inferIcebergType(Object value) {
     if (value == null) {
       return StringType.get();
+    } else if (value instanceof String) {
+      return StringType.get();
+    } else if (value instanceof Boolean) {
+      return BooleanType.get();
+    } else if (value instanceof BigDecimal) {
+      BigDecimal bd = (BigDecimal) value;
+      return DecimalType.of(bd.precision(), bd.scale());
     } else if (value instanceof Number) {
       Number num = (Number) value;
       Double d = num.doubleValue();
@@ -136,10 +171,14 @@ public class SchemaUtils {
       } else {
         return DoubleType.get();
       }
-    } else if (value instanceof String) {
-      return StringType.get();
-    } else if (value instanceof Boolean) {
-      return BooleanType.get();
+    } else if (value instanceof LocalDate) {
+      return DateType.get();
+    } else if (value instanceof LocalTime) {
+      return TimeType.get();
+    } else if (value instanceof java.util.Date || value instanceof OffsetDateTime) {
+      return TimestampType.withZone();
+    } else if (value instanceof LocalDateTime) {
+      return TimestampType.withoutZone();
     } else if (value instanceof List) {
       List<?> list = (List<?>) value;
       if (!list.isEmpty()) {
