@@ -21,6 +21,7 @@ package io.tabular.iceberg.connect.channel;
 import static io.tabular.iceberg.connect.events.EventTestUtil.createDataFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -80,7 +81,7 @@ public class WorkerTest extends ChannelTestBase {
     when(writer.complete()).thenReturn(ImmutableList.of(writeResult));
 
     IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
-    when(writerFactory.createWriter(any(), any(), any())).thenReturn(writer);
+    when(writerFactory.createWriter(any(), any(), anyBoolean())).thenReturn(writer);
 
     Worker worker = new Worker(catalog, config, clientFactory, writerFactory, context);
     worker.start();
