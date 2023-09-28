@@ -23,9 +23,9 @@ import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.data.IcebergWriter;
 import io.tabular.iceberg.connect.data.IcebergWriterFactory;
 import io.tabular.iceberg.connect.data.Offset;
+import io.tabular.iceberg.connect.data.RecordWriter;
 import io.tabular.iceberg.connect.data.Utilities;
 import io.tabular.iceberg.connect.data.WriterResult;
 import io.tabular.iceberg.connect.events.CommitReadyPayload;
@@ -44,7 +44,6 @@ import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import org.apache.iceberg.catalog.Catalog;
-import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -60,8 +59,7 @@ public class Worker extends Channel {
   private final IcebergWriterFactory writerFactory;
   private final SinkTaskContext context;
   private final String controlGroupId;
-  private final Map<String, IcebergWriter> writers;
-  private final Map<String, Boolean> tableExistsMap;
+  private final Map<String, RecordWriter> writers;
   private final Map<TopicPartition, Offset> sourceOffsets;
 
   public Worker(
@@ -79,7 +77,6 @@ public class Worker extends Channel {
     this.context = context;
     this.controlGroupId = config.getControlGroupId();
     this.writers = new HashMap<>();
-    this.tableExistsMap = new HashMap<>();
     this.sourceOffsets = new HashMap<>();
   }
 
@@ -116,7 +113,6 @@ public class Worker extends Channel {
         writers.values().stream().flatMap(writer -> writer.complete().stream()).collect(toList());
     Map<TopicPartition, Offset> offsets = new HashMap<>(sourceOffsets);
 
-    tableExistsMap.clear();
     writers.clear();
     sourceOffsets.clear();
 
@@ -169,7 +165,7 @@ public class Worker extends Channel {
   @Override
   public void stop() {
     super.stop();
-    writers.values().forEach(IcebergWriter::close);
+    writers.values().forEach(RecordWriter::close);
   }
 
   public void save(Collection<SinkRecord> sinkRecords) {
@@ -199,7 +195,7 @@ public class Worker extends Channel {
           .getTables()
           .forEach(
               tableName -> {
-                getWriterForTable(tableName).write(record);
+                getWriterForTable(tableName, record, false).write(record);
               });
 
     } else {
@@ -215,7 +211,7 @@ public class Worker extends Channel {
                         .ifPresent(
                             regex -> {
                               if (regex.matcher(routeValue).matches()) {
-                                getWriterForTable(tableName).write(record);
+                                getWriterForTable(tableName, record, false).write(record);
                               }
                             }));
       }
@@ -229,15 +225,8 @@ public class Worker extends Channel {
     String routeValue = extractRouteValue(record.value(), routeField);
     if (routeValue != null) {
       String tableName = routeValue.toLowerCase();
-      if (tableExists(tableName)) {
-        getWriterForTable(tableName).write(record);
-      }
+      getWriterForTable(tableName, record, true).write(record);
     }
-  }
-
-  private boolean tableExists(String tableName) {
-    return tableExistsMap.computeIfAbsent(
-        tableName, notUsed -> catalog.tableExists(TableIdentifier.parse(tableName)));
   }
 
   private String extractRouteValue(Object recordValue, String routeField) {
@@ -248,7 +237,9 @@ public class Worker extends Channel {
     return routeValue == null ? null : routeValue.toString();
   }
 
-  private IcebergWriter getWriterForTable(String tableName) {
-    return writers.computeIfAbsent(tableName, notUsed -> writerFactory.createWriter(tableName));
+  private RecordWriter getWriterForTable(
+      String tableName, SinkRecord sample, boolean ignoreMissingTable) {
+    return writers.computeIfAbsent(
+        tableName, notUsed -> writerFactory.createWriter(tableName, sample, ignoreMissingTable));
   }
 }

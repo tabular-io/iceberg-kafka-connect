@@ -71,6 +71,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String TABLES_DEFAULT_COMMIT_BRANCH = "iceberg.tables.defaultCommitBranch";
   private static final String TABLES_CDC_FIELD_PROP = "iceberg.tables.cdcField";
   private static final String TABLES_UPSERT_MODE_ENABLED_PROP = "iceberg.tables.upsertModeEnabled";
+  private static final String TABLES_AUTO_CREATE_ENABLED_PROP = "iceberg.tables.autoCreateEnabled";
   private static final String TABLES_EVOLVE_SCHEMA_ENABLED_PROP =
       "iceberg.tables.evolveSchemaEnabled";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
@@ -142,6 +143,12 @@ public class IcebergSinkConfig extends AbstractConfig {
         false,
         Importance.MEDIUM,
         "Set to true to treat all appends as upserts, false otherwise");
+    configDef.define(
+        TABLES_AUTO_CREATE_ENABLED_PROP,
+        Type.BOOLEAN,
+        false,
+        Importance.MEDIUM,
+        "Set to true to automatically create destination tables, false otherwise");
     configDef.define(
         TABLES_EVOLVE_SCHEMA_ENABLED_PROP,
         Type.BOOLEAN,
@@ -346,6 +353,10 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public boolean isUpsertMode() {
     return getBoolean(TABLES_UPSERT_MODE_ENABLED_PROP);
+  }
+
+  public boolean isAutoCreate() {
+    return getBoolean(TABLES_AUTO_CREATE_ENABLED_PROP);
   }
 
   public boolean isEvolveSchema() {
