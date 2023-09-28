@@ -56,9 +56,11 @@ public final class TestContextUtil {
   private static final String KAFKA_IMAGE = "confluentinc/cp-kafka:7.4.1";
   private static final String CONNECT_IMAGE = "confluentinc/cp-kafka-connect:7.4.1";
   private static final String REST_CATALOG_IMAGE = "tabulario/iceberg-rest:0.6.0";
+  private static final String NESSIE_CATALOG_IMAGE = "projectnessie/nessie:0.59.0";
 
   public static final int MINIO_PORT = 9000;
   public static final int REST_CATALOG_PORT = 8181;
+  public static final int NESSIE_CATALOG_PORT = 19121;
 
   private TestContextUtil() {}
 
@@ -76,10 +78,13 @@ public final class TestContextUtil {
   }
 
   static KafkaConnectContainer kafkaConnectContainer(
-      Network network, GenericContainer catalog, KafkaContainer kafka) {
+      Network network,
+      GenericContainer restCatalog,
+      GenericContainer nessieCatalog,
+      KafkaContainer kafka) {
     return new KafkaConnectContainer(DockerImageName.parse(CONNECT_IMAGE))
         .withNetwork(network)
-        .dependsOn(catalog, kafka)
+        .dependsOn(restCatalog, nessieCatalog, kafka)
         .withFileSystemBind(LOCAL_INSTALL_DIR, KC_PLUGIN_DIR)
         .withEnv("CONNECT_PLUGIN_PATH", KC_PLUGIN_DIR)
         .withEnv("CONNECT_BOOTSTRAP_SERVERS", kafka.getNetworkAliases().get(0) + ":9092")
@@ -132,12 +137,47 @@ public final class TestContextUtil {
         .withEnv("AWS_REGION", AWS_REGION);
   }
 
+  static GenericContainer nessieCatalogContainer(Network network, GenericContainer minio) {
+    return new GenericContainer<>(DockerImageName.parse(NESSIE_CATALOG_IMAGE))
+        .withNetwork(network)
+        .withNetworkAliases("nessie")
+        .dependsOn(minio)
+        .withExposedPorts(19121)
+        .withEnv("QUARKUS_HTTP_PORT", String.valueOf(NESSIE_CATALOG_PORT))
+        .withEnv("NESSIE_VERSION_STORE_TYPE", "INMEMORY")
+        .withEnv("CATALOG_WAREHOUSE", "s3://" + BUCKET + "/warehouse")
+        .withEnv("CATALOG_IO__IMPL", S3FileIO.class.getName())
+        .withEnv("CATALOG_S3_ENDPOINT", "http://minio:" + MINIO_PORT)
+        .withEnv("CATALOG_S3_ACCESS__KEY__ID", AWS_ACCESS_KEY)
+        .withEnv("CATALOG_S3_SECRET__ACCESS__KEY", AWS_SECRET_KEY)
+        .withEnv("CATALOG_S3_PATH__STYLE__ACCESS", "true")
+        .withEnv("AWS_REGION", AWS_REGION);
+  }
+
   static Map<String, Object> connectorRestCatalogProperties() {
     return ImmutableMap.<String, Object>builder()
         .put(
             "iceberg.catalog." + CatalogUtil.ICEBERG_CATALOG_TYPE,
             CatalogUtil.ICEBERG_CATALOG_TYPE_REST)
         .put("iceberg.catalog." + CatalogProperties.URI, "http://rest:" + REST_CATALOG_PORT)
+        .put("iceberg.catalog." + S3FileIOProperties.ENDPOINT, "http://minio:" + MINIO_PORT)
+        .put("iceberg.catalog." + S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
+        .put("iceberg.catalog." + S3FileIOProperties.SECRET_ACCESS_KEY, AWS_SECRET_KEY)
+        .put("iceberg.catalog." + S3FileIOProperties.PATH_STYLE_ACCESS, true)
+        .put("iceberg.catalog." + AwsClientProperties.CLIENT_REGION, AWS_REGION)
+        .build();
+  }
+
+  static Map<String, Object> connectorNessieCatalogProperties() {
+    return ImmutableMap.<String, Object>builder()
+        .put("iceberg.catalog.catalog-impl", "org.apache.iceberg.nessie.NessieCatalog")
+        .put(
+            "iceberg.catalog." + CatalogProperties.URI,
+            "http://nessie:" + NESSIE_CATALOG_PORT + "/api/v1")
+        .put(
+            "iceberg.catalog." + CatalogProperties.WAREHOUSE_LOCATION,
+            "s3://" + BUCKET + "/warehouse")
+        .put("iceberg.catalog." + CatalogProperties.FILE_IO_IMPL, S3FileIO.class.getName())
         .put("iceberg.catalog." + S3FileIOProperties.ENDPOINT, "http://minio:" + MINIO_PORT)
         .put("iceberg.catalog." + S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
         .put("iceberg.catalog." + S3FileIOProperties.SECRET_ACCESS_KEY, AWS_SECRET_KEY)
