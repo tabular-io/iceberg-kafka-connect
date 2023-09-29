@@ -22,13 +22,11 @@ import static java.lang.String.format;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
-import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
 import java.util.List;
 import org.apache.iceberg.Table;
-import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.io.TaskWriter;
@@ -37,19 +35,17 @@ import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 
-public class IcebergWriter implements Closeable {
+public class IcebergWriter implements RecordWriter {
   private final Table table;
   private final String tableName;
-  private final TableIdentifier tableIdentifier;
   private final IcebergSinkConfig config;
   private final List<WriterResult> writerResults;
 
   private RecordConverter recordConverter;
   private TaskWriter<Record> writer;
 
-  public IcebergWriter(Catalog catalog, String tableName, IcebergSinkConfig config) {
-    this.tableIdentifier = TableIdentifier.parse(tableName);
-    this.table = catalog.loadTable(tableIdentifier);
+  public IcebergWriter(Table table, String tableName, IcebergSinkConfig config) {
+    this.table = table;
     this.tableName = tableName;
     this.config = config;
     this.writerResults = Lists.newArrayList();
@@ -61,6 +57,7 @@ public class IcebergWriter implements Closeable {
     this.recordConverter = new RecordConverter(table, config.getJsonConverter());
   }
 
+  @Override
   public void write(SinkRecord record) {
     try {
       // TODO: config to handle tombstones instead of always ignoring?
@@ -139,12 +136,13 @@ public class IcebergWriter implements Closeable {
 
     writerResults.add(
         new WriterResult(
-            tableIdentifier,
+            TableIdentifier.parse(tableName),
             Arrays.asList(writeResult.dataFiles()),
             Arrays.asList(writeResult.deleteFiles()),
             table.spec().partitionType()));
   }
 
+  @Override
   public List<WriterResult> complete() {
     flush();
 

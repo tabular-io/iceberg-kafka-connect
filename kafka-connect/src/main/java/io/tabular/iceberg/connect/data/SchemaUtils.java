@@ -104,101 +104,123 @@ public class SchemaUtils {
   }
 
   public static Type toIcebergType(Schema valueSchema) {
-    switch (valueSchema.type()) {
-      case BOOLEAN:
-        return BooleanType.get();
-      case BYTES:
-        if (valueSchema.name() != null && valueSchema.name().equals(Decimal.LOGICAL_NAME)) {
-          int scale = Integer.parseInt(valueSchema.parameters().get(Decimal.SCALE_FIELD));
-          return DecimalType.of(38, scale);
-        }
-        return BinaryType.get();
-      case INT8:
-      case INT16:
-        return IntegerType.get();
-      case INT32:
-        if (valueSchema.name() != null) {
-          if (valueSchema.name().equals(Date.LOGICAL_NAME)) {
-            return DateType.get();
-          } else if (valueSchema.name().equals(Time.LOGICAL_NAME)) {
-            return TimeType.get();
-          }
-        }
-        return IntegerType.get();
-      case INT64:
-        if (valueSchema.name() != null && valueSchema.name().equals(Timestamp.LOGICAL_NAME)) {
-          return TimestampType.withZone();
-        }
-        return LongType.get();
-      case FLOAT32:
-        return FloatType.get();
-      case FLOAT64:
-        return DoubleType.get();
-      case ARRAY:
-        Type elementType = toIcebergType(valueSchema.valueSchema());
-        return ListType.ofOptional(-1, elementType);
-      case MAP:
-        Type keyType = toIcebergType(valueSchema.keySchema());
-        Type valueType = toIcebergType(valueSchema.valueSchema());
-        return MapType.ofOptional(-1, -1, keyType, valueType);
-      case STRUCT:
-        List<NestedField> structFields =
-            valueSchema.fields().stream()
-                .map(field -> NestedField.optional(-1, field.name(), toIcebergType(field.schema())))
-                .collect(Collectors.toList());
-        return StructType.of(structFields);
-      case STRING:
-      default:
-        return StringType.get();
-    }
+    return new SchemaGenerator().toIcebergType(valueSchema);
   }
 
   public static Type inferIcebergType(Object value) {
-    if (value == null) {
-      return StringType.get();
-    } else if (value instanceof String) {
-      return StringType.get();
-    } else if (value instanceof Boolean) {
-      return BooleanType.get();
-    } else if (value instanceof BigDecimal) {
-      BigDecimal bd = (BigDecimal) value;
-      return DecimalType.of(bd.precision(), bd.scale());
-    } else if (value instanceof Number) {
-      Number num = (Number) value;
-      Double d = num.doubleValue();
-      if (d.equals(Math.floor(d))) {
-        return LongType.get();
-      } else {
-        return DoubleType.get();
+    return new SchemaGenerator().inferIcebergType(value);
+  }
+
+  static class SchemaGenerator {
+
+    private int fieldId = 1;
+
+    Type toIcebergType(Schema valueSchema) {
+      switch (valueSchema.type()) {
+        case BOOLEAN:
+          return BooleanType.get();
+        case BYTES:
+          if (valueSchema.name() != null && valueSchema.name().equals(Decimal.LOGICAL_NAME)) {
+            int scale = Integer.parseInt(valueSchema.parameters().get(Decimal.SCALE_FIELD));
+            return DecimalType.of(38, scale);
+          }
+          return BinaryType.get();
+        case INT8:
+        case INT16:
+          return IntegerType.get();
+        case INT32:
+          if (valueSchema.name() != null) {
+            if (valueSchema.name().equals(Date.LOGICAL_NAME)) {
+              return DateType.get();
+            } else if (valueSchema.name().equals(Time.LOGICAL_NAME)) {
+              return TimeType.get();
+            }
+          }
+          return IntegerType.get();
+        case INT64:
+          if (valueSchema.name() != null && valueSchema.name().equals(Timestamp.LOGICAL_NAME)) {
+            return TimestampType.withZone();
+          }
+          return LongType.get();
+        case FLOAT32:
+          return FloatType.get();
+        case FLOAT64:
+          return DoubleType.get();
+        case ARRAY:
+          Type elementType = toIcebergType(valueSchema.valueSchema());
+          return ListType.ofOptional(nextId(), elementType);
+        case MAP:
+          Type keyType = toIcebergType(valueSchema.keySchema());
+          Type valueType = toIcebergType(valueSchema.valueSchema());
+          return MapType.ofOptional(nextId(), nextId(), keyType, valueType);
+        case STRUCT:
+          List<NestedField> structFields =
+              valueSchema.fields().stream()
+                  .map(
+                      field ->
+                          NestedField.optional(
+                              nextId(), field.name(), toIcebergType(field.schema())))
+                  .collect(Collectors.toList());
+          return StructType.of(structFields);
+        case STRING:
+        default:
+          return StringType.get();
       }
-    } else if (value instanceof LocalDate) {
-      return DateType.get();
-    } else if (value instanceof LocalTime) {
-      return TimeType.get();
-    } else if (value instanceof java.util.Date || value instanceof OffsetDateTime) {
-      return TimestampType.withZone();
-    } else if (value instanceof LocalDateTime) {
-      return TimestampType.withoutZone();
-    } else if (value instanceof List) {
-      List<?> list = (List<?>) value;
-      if (!list.isEmpty()) {
-        Type elementType = inferIcebergType(list.get(0));
-        return ListType.ofOptional(-1, elementType);
+    }
+
+    Type inferIcebergType(Object value) {
+      if (value == null) {
+        return StringType.get();
+      } else if (value instanceof String) {
+        return StringType.get();
+      } else if (value instanceof Boolean) {
+        return BooleanType.get();
+      } else if (value instanceof BigDecimal) {
+        BigDecimal bd = (BigDecimal) value;
+        return DecimalType.of(bd.precision(), bd.scale());
+      } else if (value instanceof Number) {
+        Number num = (Number) value;
+        Double d = num.doubleValue();
+        if (d.equals(Math.floor(d))) {
+          return LongType.get();
+        } else {
+          return DoubleType.get();
+        }
+      } else if (value instanceof LocalDate) {
+        return DateType.get();
+      } else if (value instanceof LocalTime) {
+        return TimeType.get();
+      } else if (value instanceof java.util.Date || value instanceof OffsetDateTime) {
+        return TimestampType.withZone();
+      } else if (value instanceof LocalDateTime) {
+        return TimestampType.withoutZone();
+      } else if (value instanceof List) {
+        List<?> list = (List<?>) value;
+        if (!list.isEmpty()) {
+          Type elementType = inferIcebergType(list.get(0));
+          return ListType.ofOptional(nextId(), elementType);
+        } else {
+          return ListType.ofOptional(nextId(), StringType.get());
+        }
+      } else if (value instanceof Map) {
+        Map<?, ?> map = (Map<?, ?>) value;
+        List<NestedField> structFields =
+            map.entrySet().stream()
+                .map(
+                    entry ->
+                        NestedField.optional(
+                            nextId(),
+                            entry.getKey().toString(),
+                            inferIcebergType(entry.getValue())))
+                .collect(Collectors.toList());
+        return StructType.of(structFields);
       } else {
-        return ListType.ofOptional(-1, StringType.get());
+        return StringType.get();
       }
-    } else if (value instanceof Map) {
-      Map<?, ?> map = (Map<?, ?>) value;
-      List<NestedField> structFields =
-          map.entrySet().stream()
-              .map(
-                  entry ->
-                      NestedField.optional(
-                          -1, entry.getKey().toString(), inferIcebergType(entry.getValue())))
-              .collect(Collectors.toList());
-      return StructType.of(structFields);
-    } else {
-      return StringType.get();
+    }
+
+    private int nextId() {
+      return fieldId++;
     }
   }
 }

@@ -23,6 +23,7 @@ import static io.tabular.iceberg.connect.TestEvent.TEST_SPEC;
 import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.time.Duration;
 import java.util.List;
@@ -33,6 +34,7 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.SupportsNamespaces;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Types;
@@ -112,7 +114,25 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
     assertEquals(2, files.stream().mapToLong(DataFile::recordCount).sum());
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
 
-    // check the schema
+    assertGeneratedSchema();
+  }
+
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(strings = {"test_branch"})
+  public void testIcebergSinkAutoCreate(String branch) {
+    runTest(branch, ImmutableMap.of("iceberg.tables.autoCreateEnabled", "true"));
+
+    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
+    // may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(1, 2);
+    assertEquals(2, files.stream().mapToLong(DataFile::recordCount).sum());
+    assertSnapshotProps(TABLE_IDENTIFIER, branch);
+
+    assertGeneratedSchema();
+  }
+
+  private void assertGeneratedSchema() {
     Schema tableSchema = catalog.loadTable(TABLE_IDENTIFIER).schema();
     assertThat(tableSchema.findField("id").type()).isInstanceOf(LongType.class);
     assertThat(tableSchema.findField("type").type()).isInstanceOf(StringType.class);
@@ -166,7 +186,11 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
   }
 
   private void assertSnapshotAdded() {
-    Table table = catalog.loadTable(TABLE_IDENTIFIER);
-    assertThat(table.snapshots()).hasSize(1);
+    try {
+      Table table = catalog.loadTable(TABLE_IDENTIFIER);
+      assertThat(table.snapshots()).hasSize(1);
+    } catch (NoSuchTableException e) {
+      fail();
+    }
   }
 }

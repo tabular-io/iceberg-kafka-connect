@@ -19,7 +19,13 @@
 package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import org.apache.iceberg.Schema;
+import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
+import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.exceptions.NoSuchTableException;
+import org.apache.iceberg.types.Types.StructType;
+import org.apache.kafka.connect.sink.SinkRecord;
 
 public class IcebergWriterFactory {
 
@@ -31,7 +37,29 @@ public class IcebergWriterFactory {
     this.config = config;
   }
 
-  public IcebergWriter createWriter(String tableName) {
-    return new IcebergWriter(catalog, tableName, config);
+  public RecordWriter createWriter(
+      String tableName, SinkRecord sample, boolean ignoreMissingTable) {
+    TableIdentifier identifier = TableIdentifier.parse(tableName);
+    Table table;
+    try {
+      table = catalog.loadTable(identifier);
+    } catch (NoSuchTableException e) {
+      if (ignoreMissingTable) {
+        return new RecordWriter() {};
+      } else if (!config.isAutoCreate()) {
+        throw e;
+      }
+
+      StructType structType;
+      if (sample.valueSchema() == null) {
+        structType = SchemaUtils.inferIcebergType(sample.value()).asStructType();
+      } else {
+        structType = SchemaUtils.toIcebergType(sample.valueSchema()).asStructType();
+      }
+
+      table = catalog.createTable(identifier, new Schema(structType.fields()));
+    }
+
+    return new IcebergWriter(table, tableName, config);
   }
 }
