@@ -18,8 +18,6 @@
  */
 package io.tabular.iceberg.connect.events;
 
-import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
-
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Map;

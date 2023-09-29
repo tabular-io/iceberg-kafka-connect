@@ -45,7 +45,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 @SuppressWarnings("rawtypes")
 public class TestContext {
 
-  public static TestContext INSTANCE = new TestContext();
+  public static final TestContext INSTANCE = new TestContext();
 
   private final Network network;
   private final KafkaContainer kafka;

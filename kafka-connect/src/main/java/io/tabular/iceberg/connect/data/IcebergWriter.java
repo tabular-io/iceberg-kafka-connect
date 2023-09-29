@@ -18,8 +18,6 @@
  */
 package io.tabular.iceberg.connect.data;
 
-import static java.lang.String.format;
-
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
 import java.io.IOException;
@@ -73,7 +71,7 @@ public class IcebergWriter implements RecordWriter {
       }
     } catch (Exception e) {
       throw new DataException(
-          format(
+          String.format(
               "An error occurred converting record, topic: %s, partition, %d, offset: %d",
               record.topic(), record.kafkaPartition(), record.kafkaOffset()),
           e);

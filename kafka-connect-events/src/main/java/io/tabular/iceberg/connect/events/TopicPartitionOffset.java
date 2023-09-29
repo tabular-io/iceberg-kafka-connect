@@ -18,8 +18,6 @@
  */
 package io.tabular.iceberg.connect.events;
 
-import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
-
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 

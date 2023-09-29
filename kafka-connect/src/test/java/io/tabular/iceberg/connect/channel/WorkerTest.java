@@ -18,7 +18,6 @@
  */
 package io.tabular.iceberg.connect.channel;
 
-import static io.tabular.iceberg.connect.events.EventTestUtil.createDataFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -32,6 +31,7 @@ import io.tabular.iceberg.connect.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.events.Event;
+import io.tabular.iceberg.connect.events.EventTestUtil;
 import io.tabular.iceberg.connect.events.EventType;
 import java.util.Map;
 import java.util.UUID;
@@ -74,7 +74,7 @@ public class WorkerTest extends ChannelTestBase {
     WriterResult writeResult =
         new WriterResult(
             TableIdentifier.parse(TABLE_NAME),
-            ImmutableList.of(createDataFile()),
+            ImmutableList.of(EventTestUtil.createDataFile()),
             ImmutableList.of(),
             StructType.of());
     IcebergWriter writer = mock(IcebergWriter.class);

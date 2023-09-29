@@ -22,10 +22,9 @@ import static io.tabular.iceberg.connect.TestConstants.MAPPER;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.google.api.client.util.Lists;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -36,9 +35,10 @@ import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.core5.http.HttpStatus;
 import org.apache.hc.core5.http.io.entity.StringEntity;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
+import org.awaitility.Awaitility;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.HttpWaitStrategy;
-import org.testcontainers.shaded.org.awaitility.Awaitility;
 import org.testcontainers.utility.DockerImageName;
 
 public class KafkaConnectContainer extends GenericContainer<KafkaConnectContainer> {
@@ -49,7 +49,7 @@ public class KafkaConnectContainer extends GenericContainer<KafkaConnectContaine
   public static class Config {
 
     private final String name;
-    private final Map<String, Object> config = new HashMap<>();
+    private final Map<String, Object> config = Maps.newHashMap();
 
     public Config(String name) {
       this.name = name;
@@ -119,7 +119,7 @@ public class KafkaConnectContainer extends GenericContainer<KafkaConnectContaine
                         JsonNode root = MAPPER.readTree(response.getEntity().getContent());
                         String connectorState = root.get("connector").get("state").asText();
                         ArrayNode taskNodes = (ArrayNode) root.get("tasks");
-                        List<String> taskStates = new ArrayList<>();
+                        List<String> taskStates = Lists.newArrayList();
                         taskNodes.forEach(node -> taskStates.add(node.get("state").asText()));
                         return "RUNNING".equals(connectorState)
                             && taskStates.stream().allMatch("RUNNING"::equals);

@@ -24,12 +24,12 @@ import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.events.Event;
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -51,7 +51,7 @@ public abstract class Channel {
   private final Producer<String, byte[]> producer;
   private final Consumer<String, byte[]> consumer;
   private final Admin admin;
-  private final Map<Integer, Long> controlTopicOffsets = new HashMap<>();
+  private final Map<Integer, Long> controlTopicOffsets = Maps.newHashMap();
   private final String producerId;
 
   public Channel(
@@ -76,7 +76,7 @@ public abstract class Channel {
   }
 
   protected void send(List<Event> events, Map<TopicPartition, Offset> sourceOffsets) {
-    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = Maps.newHashMap();
     sourceOffsets.forEach((k, v) -> offsetsToCommit.put(k, new OffsetAndMetadata(v.getOffset())));
 
     List<ProducerRecord<String, byte[]>> recordList =
@@ -140,7 +140,7 @@ public abstract class Channel {
   }
 
   protected void commitConsumerOffsets() {
-    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = Maps.newHashMap();
     getControlTopicOffsets()
         .forEach(
             (k, v) ->

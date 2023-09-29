@@ -18,6 +18,7 @@
  */
 package io.tabular.iceberg.connect.data;
 
+import static java.util.stream.Collectors.toSet;
 import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT;
 import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT_DEFAULT;
 import static org.apache.iceberg.TableProperties.WRITE_TARGET_FILE_SIZE_BYTES;
@@ -34,7 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.Table;
@@ -149,7 +149,7 @@ public class Utilities {
       equalityFieldIds =
           idCols.stream()
               .map(colName -> table.schema().findField(colName).fieldId())
-              .collect(Collectors.toSet());
+              .collect(toSet());
     }
 
     FileAppenderFactory<Record> appenderFactory;
@@ -220,4 +220,6 @@ public class Utilities {
     }
     return writer;
   }
+
+  private Utilities() {}
 }

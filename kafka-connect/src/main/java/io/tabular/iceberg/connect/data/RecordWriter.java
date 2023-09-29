@@ -18,8 +18,8 @@
  */
 package io.tabular.iceberg.connect.data;
 
-import java.util.Collections;
 import java.util.List;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 public interface RecordWriter extends Cloneable {
@@ -27,7 +27,7 @@ public interface RecordWriter extends Cloneable {
   default void write(SinkRecord record) {}
 
   default List<WriterResult> complete() {
-    return Collections.emptyList();
+    return ImmutableList.of();
   }
 
   default void close() {}

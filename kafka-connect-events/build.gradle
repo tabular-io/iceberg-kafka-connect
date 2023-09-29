@@ -5,6 +5,7 @@ plugins {
 dependencies {
   implementation libs.iceberg.core
   implementation libs.iceberg.common
+  implementation libs.iceberg.guava
   implementation libs.avro
 
   testImplementation libs.junit.api

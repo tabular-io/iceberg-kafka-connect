@@ -18,8 +18,6 @@
  */
 package io.tabular.iceberg.connect.channel;
 
-import static io.tabular.iceberg.connect.events.EventTestUtil.createDataFile;
-import static io.tabular.iceberg.connect.events.EventTestUtil.createDeleteFile;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -35,6 +33,7 @@ import io.tabular.iceberg.connect.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.events.CommitTablePayload;
 import io.tabular.iceberg.connect.events.Event;
+import io.tabular.iceberg.connect.events.EventTestUtil;
 import io.tabular.iceberg.connect.events.EventType;
 import io.tabular.iceberg.connect.events.TableName;
 import io.tabular.iceberg.connect.events.TopicPartitionOffset;
@@ -53,7 +52,8 @@ public class CoordinatorTest extends ChannelTestBase {
   @Test
   public void testCommitAppend() {
     long ts = System.currentTimeMillis();
-    UUID commitId = coordinatorTest(ImmutableList.of(createDataFile()), ImmutableList.of(), ts);
+    UUID commitId =
+        coordinatorTest(ImmutableList.of(EventTestUtil.createDataFile()), ImmutableList.of(), ts);
 
     assertEquals(3, producer.history().size());
     assertCommitTable(1, commitId, ts);
@@ -76,7 +76,9 @@ public class CoordinatorTest extends ChannelTestBase {
     long ts = System.currentTimeMillis();
     UUID commitId =
         coordinatorTest(
-            ImmutableList.of(createDataFile()), ImmutableList.of(createDeleteFile()), ts);
+            ImmutableList.of(EventTestUtil.createDataFile()),
+            ImmutableList.of(EventTestUtil.createDeleteFile()),
+            ts);
 
     assertEquals(3, producer.history().size());
     assertCommitTable(1, commitId, ts);
@@ -111,7 +113,7 @@ public class CoordinatorTest extends ChannelTestBase {
   public void testCommitError() {
     doThrow(RuntimeException.class).when(appendOp).commit();
 
-    coordinatorTest(ImmutableList.of(createDataFile()), ImmutableList.of(), 0L);
+    coordinatorTest(ImmutableList.of(EventTestUtil.createDataFile()), ImmutableList.of(), 0L);
 
     // no commit messages sent
     assertEquals(1, producer.history().size());

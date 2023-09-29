@@ -18,9 +18,9 @@
  */
 package io.tabular.iceberg.connect.channel;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -41,7 +41,7 @@ public class KafkaClientFactory {
   }
 
   public Producer<String, byte[]> createProducer(String transactionalId) {
-    Map<String, Object> producerProps = new HashMap<>(kafkaProps);
+    Map<String, Object> producerProps = Maps.newHashMap(kafkaProps);
     producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
     producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, UUID.randomUUID().toString());
     KafkaProducer<String, byte[]> result =
@@ -51,7 +51,7 @@ public class KafkaClientFactory {
   }
 
   public Consumer<String, byte[]> createConsumer(String consumerGroupId) {
-    Map<String, Object> consumerProps = new HashMap<>(kafkaProps);
+    Map<String, Object> consumerProps = Maps.newHashMap(kafkaProps);
     consumerProps.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
     consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
@@ -62,7 +62,7 @@ public class KafkaClientFactory {
   }
 
   public Admin createAdmin() {
-    Map<String, Object> adminProps = new HashMap<>(kafkaProps);
+    Map<String, Object> adminProps = Maps.newHashMap(kafkaProps);
     return Admin.create(adminProps);
   }
 }

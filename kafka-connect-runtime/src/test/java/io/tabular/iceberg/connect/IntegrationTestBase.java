@@ -22,7 +22,6 @@ import static io.tabular.iceberg.connect.TestConstants.MAPPER;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -36,6 +35,7 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -61,7 +61,7 @@ public abstract class IntegrationTestBase {
   protected static final int TEST_TOPIC_PARTITIONS = 2;
 
   @BeforeEach
-  public void baseSetup() {
+  public void baseBefore() {
     s3 = TestContextUtil.initLocalS3Client(context.localMinioPort());
     catalog = intCatalog();
     producer = TestContextUtil.initLocalProducer(context.kafkaBootstrapServers());
@@ -72,7 +72,7 @@ public abstract class IntegrationTestBase {
   }
 
   @AfterEach
-  public void baseTeardown() {
+  public void baseAfter() {
     try {
       if (catalog instanceof AutoCloseable) {
         ((AutoCloseable) catalog).close();
@@ -102,7 +102,7 @@ public abstract class IntegrationTestBase {
     } else if (catalogType() == TestConstants.CatalogType.NESSIE) {
       return TestContextUtil.connectorNessieCatalogProperties();
     }
-    return Collections.emptyMap();
+    return ImmutableMap.of();
   }
 
   protected void assertSnapshotProps(TableIdentifier tableIdentifier, String branch) {
