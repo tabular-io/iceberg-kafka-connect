@@ -61,7 +61,7 @@ public class ChannelTestBase {
 
   @BeforeEach
   @SuppressWarnings("deprecation")
-  public void setup() {
+  public void before() {
     Snapshot snapshot = mock(Snapshot.class);
     when(snapshot.snapshotId()).thenReturn(1L);
 

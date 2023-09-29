@@ -58,7 +58,7 @@ public class BaseWriterTest {
       PartitionSpec.builderFor(SCHEMA).identity("data").build();
 
   @BeforeEach
-  public void setup() {
+  public void before() {
     fileIO = new InMemoryFileIO();
 
     table = mock(Table.class);

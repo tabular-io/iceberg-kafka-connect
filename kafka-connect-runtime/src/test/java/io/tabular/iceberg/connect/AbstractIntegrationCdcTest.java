@@ -20,7 +20,6 @@ package io.tabular.iceberg.connect;
 
 import static io.tabular.iceberg.connect.TestEvent.TEST_SCHEMA;
 import static io.tabular.iceberg.connect.TestEvent.TEST_SPEC;
-import static java.lang.String.format;
 import static org.apache.iceberg.TableProperties.FORMAT_VERSION;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,13 +47,13 @@ public abstract class AbstractIntegrationCdcTest extends IntegrationTestBase {
   private static final TableIdentifier TABLE_IDENTIFIER = TableIdentifier.of(TEST_DB, TEST_TABLE);
 
   @BeforeEach
-  public void setup() {
+  public void before() {
     createTopic(testTopic, TEST_TOPIC_PARTITIONS);
     ((SupportsNamespaces) catalog).createNamespace(Namespace.of(TEST_DB));
   }
 
   @AfterEach
-  public void teardown() {
+  public void after() {
     context.stopKafkaConnector(connectorName);
     deleteTopic(testTopic);
     catalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE));
@@ -63,7 +62,7 @@ public abstract class AbstractIntegrationCdcTest extends IntegrationTestBase {
 
   @ParameterizedTest
   @NullSource
-  @ValueSource(strings = {"test_branch"})
+  @ValueSource(strings = "test_branch")
   public void testIcebergSinkPartitionedTable(String branch) {
     catalog.createTable(
         TABLE_IDENTIFIER, TEST_SCHEMA, TEST_SPEC, ImmutableMap.of(FORMAT_VERSION, "2"));
@@ -85,7 +84,7 @@ public abstract class AbstractIntegrationCdcTest extends IntegrationTestBase {
 
   @ParameterizedTest
   @NullSource
-  @ValueSource(strings = {"test_branch"})
+  @ValueSource(strings = "test_branch")
   public void testIcebergSinkUnpartitionedTable(String branch) {
     catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA, null, ImmutableMap.of(FORMAT_VERSION, "2"));
 
@@ -116,7 +115,7 @@ public abstract class AbstractIntegrationCdcTest extends IntegrationTestBase {
             .config("key.converter.schemas.enable", false)
             .config("value.converter", "org.apache.kafka.connect.json.JsonConverter")
             .config("value.converter.schemas.enable", false)
-            .config("iceberg.tables", format("%s.%s", TEST_DB, TEST_TABLE))
+            .config("iceberg.tables", String.format("%s.%s", TEST_DB, TEST_TABLE))
             .config("iceberg.tables.cdcField", "op")
             .config("iceberg.control.commitIntervalMs", 1000)
             .config("iceberg.control.commitTimeoutMs", Integer.MAX_VALUE)

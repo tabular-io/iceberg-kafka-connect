@@ -18,9 +18,6 @@
  */
 package io.tabular.iceberg.connect.events;
 
-import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
-
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,6 +26,7 @@ import org.apache.avro.SchemaBuilder;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.avro.AvroSchemaUtil;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.types.Types.StructType;
 
 public class CommitResponsePayload implements Payload {
@@ -56,12 +54,12 @@ public class CommitResponsePayload implements Payload {
 
     StructType dataFileStruct = DataFile.getType(partitionType);
 
-    Map<StructType, String> dataFileNames = new HashMap<>();
+    Map<StructType, String> dataFileNames = Maps.newHashMap();
     dataFileNames.put(dataFileStruct, "org.apache.iceberg.GenericDataFile");
     dataFileNames.put(partitionType, "org.apache.iceberg.PartitionData");
     Schema dataFileSchema = AvroSchemaUtil.convert(dataFileStruct, dataFileNames);
 
-    Map<StructType, String> deleteFileNames = new HashMap<>();
+    Map<StructType, String> deleteFileNames = Maps.newHashMap();
     deleteFileNames.put(dataFileStruct, "org.apache.iceberg.GenericDeleteFile");
     deleteFileNames.put(partitionType, "org.apache.iceberg.PartitionData");
     Schema deleteFileSchema = AvroSchemaUtil.convert(dataFileStruct, deleteFileNames);

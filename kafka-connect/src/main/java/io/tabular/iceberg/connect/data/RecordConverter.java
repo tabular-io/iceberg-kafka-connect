@@ -18,7 +18,6 @@
  */
 package io.tabular.iceberg.connect.data;
 
-import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,7 +39,6 @@ import java.time.format.DateTimeParseException;
 import java.time.temporal.Temporal;
 import java.util.Base64;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -73,7 +71,7 @@ public class RecordConverter {
 
   private static final DateTimeFormatter OFFSET_TS_FMT =
       new DateTimeFormatterBuilder()
-          .append(ISO_LOCAL_DATE_TIME)
+          .append(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
           .appendOffset("+HHmm", "Z")
           .toFormatter();
 
@@ -252,7 +250,7 @@ public class RecordConverter {
       Object value, MapType type, Consumer<AddColumn> missingColConsumer) {
     Preconditions.checkArgument(value instanceof Map);
     Map<?, ?> map = (Map<?, ?>) value;
-    Map<Object, Object> result = new HashMap<>();
+    Map<Object, Object> result = Maps.newHashMap();
     map.forEach(
         (k, v) -> {
           int keyFieldId = type.fields().get(0).fieldId();
@@ -301,24 +299,24 @@ public class RecordConverter {
   }
 
   protected BigDecimal convertDecimal(Object value, DecimalType type) {
-    BigDecimal bd;
+    BigDecimal bigDecimal;
     if (value instanceof BigDecimal) {
-      bd = (BigDecimal) value;
+      bigDecimal = (BigDecimal) value;
     } else if (value instanceof Number) {
       Number num = (Number) value;
-      Double d = num.doubleValue();
-      if (d.equals(Math.floor(d))) {
-        bd = BigDecimal.valueOf(num.longValue());
+      Double dbl = num.doubleValue();
+      if (dbl.equals(Math.floor(dbl))) {
+        bigDecimal = BigDecimal.valueOf(num.longValue());
       } else {
-        bd = BigDecimal.valueOf(d);
+        bigDecimal = BigDecimal.valueOf(dbl);
       }
     } else if (value instanceof String) {
-      bd = new BigDecimal((String) value);
+      bigDecimal = new BigDecimal((String) value);
     } else {
       throw new IllegalArgumentException(
           "Cannot convert to BigDecimal: " + value.getClass().getName());
     }
-    return bd.setScale(type.scale(), RoundingMode.HALF_UP);
+    return bigDecimal.setScale(type.scale(), RoundingMode.HALF_UP);
   }
 
   protected boolean convertBoolean(Object value) {
@@ -371,30 +369,30 @@ public class RecordConverter {
 
   protected LocalDate convertDateValue(Object value) {
     if (value instanceof Number) {
-      int i = ((Number) value).intValue();
-      return DateTimeUtil.dateFromDays(i);
+      int days = ((Number) value).intValue();
+      return DateTimeUtil.dateFromDays(days);
     } else if (value instanceof String) {
       return LocalDate.parse((String) value);
     } else if (value instanceof LocalDate) {
       return (LocalDate) value;
     } else if (value instanceof Date) {
-      int i = (int) (((Date) value).getTime() / 1000 / 60 / 60 / 24);
-      return DateTimeUtil.dateFromDays(i);
+      int days = (int) (((Date) value).getTime() / 1000 / 60 / 60 / 24);
+      return DateTimeUtil.dateFromDays(days);
     }
     throw new RuntimeException("Cannot convert date: " + value);
   }
 
   protected LocalTime convertTimeValue(Object value) {
     if (value instanceof Number) {
-      long l = ((Number) value).longValue();
-      return DateTimeUtil.timeFromMicros(l * 1000);
+      long millis = ((Number) value).longValue();
+      return DateTimeUtil.timeFromMicros(millis * 1000);
     } else if (value instanceof String) {
       return LocalTime.parse((String) value);
     } else if (value instanceof LocalTime) {
       return (LocalTime) value;
     } else if (value instanceof Date) {
-      long l = ((Date) value).getTime();
-      return DateTimeUtil.timeFromMicros(l * 1000);
+      long millis = ((Date) value).getTime();
+      return DateTimeUtil.timeFromMicros(millis * 1000);
     }
     throw new RuntimeException("Cannot convert time: " + value);
   }
@@ -408,8 +406,8 @@ public class RecordConverter {
 
   private OffsetDateTime convertOffsetDateTime(Object value) {
     if (value instanceof Number) {
-      long l = ((Number) value).longValue();
-      return DateTimeUtil.timestamptzFromMicros(l * 1000);
+      long millis = ((Number) value).longValue();
+      return DateTimeUtil.timestamptzFromMicros(millis * 1000);
     } else if (value instanceof String) {
       return parseOffsetDateTime((String) value);
     } else if (value instanceof OffsetDateTime) {
@@ -428,14 +426,15 @@ public class RecordConverter {
     try {
       return OFFSET_TS_FMT.parse(tsStr, OffsetDateTime::from);
     } catch (DateTimeParseException e) {
-      return LocalDateTime.parse(tsStr, ISO_LOCAL_DATE_TIME).atOffset(ZoneOffset.UTC);
+      return LocalDateTime.parse(tsStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+          .atOffset(ZoneOffset.UTC);
     }
   }
 
   private LocalDateTime convertLocalDateTime(Object value) {
     if (value instanceof Number) {
-      long l = ((Number) value).longValue();
-      return DateTimeUtil.timestampFromMicros(l * 1000);
+      long millis = ((Number) value).longValue();
+      return DateTimeUtil.timestampFromMicros(millis * 1000);
     } else if (value instanceof String) {
       return parseLocalDateTime((String) value);
     } else if (value instanceof LocalDateTime) {
@@ -452,7 +451,7 @@ public class RecordConverter {
   private LocalDateTime parseLocalDateTime(String str) {
     String tsStr = ensureTimestampFormat(str);
     try {
-      return LocalDateTime.parse(tsStr, ISO_LOCAL_DATE_TIME);
+      return LocalDateTime.parse(tsStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
     } catch (DateTimeParseException e) {
       return OFFSET_TS_FMT.parse(tsStr, OffsetDateTime::from).toLocalDateTime();
     }

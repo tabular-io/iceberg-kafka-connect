@@ -18,8 +18,6 @@
  */
 package io.tabular.iceberg.connect.events;
 
-import static java.util.Collections.emptyMap;
-
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
@@ -54,7 +52,13 @@ public class EventTestUtil {
 
     PartitionData partitionData =
         new PartitionData(StructType.of(NestedField.required(999, "type", StringType.get())));
-    Metrics metrics = new Metrics(1L, emptyMap(), emptyMap(), emptyMap(), emptyMap());
+    Metrics metrics =
+        new Metrics(
+            1L,
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap());
 
     return ctor.newInstance(
         1,
@@ -88,7 +92,13 @@ public class EventTestUtil {
 
     PartitionData partitionData =
         new PartitionData(StructType.of(NestedField.required(999, "type", StringType.get())));
-    Metrics metrics = new Metrics(1L, emptyMap(), emptyMap(), emptyMap(), emptyMap());
+    Metrics metrics =
+        new Metrics(
+            1L,
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap());
 
     return ctor.newInstance(
         1,
@@ -103,4 +113,6 @@ public class EventTestUtil {
         Collections.singletonList(1L),
         ByteBuffer.wrap(new byte[] {0}));
   }
+
+  private EventTestUtil() {}
 }

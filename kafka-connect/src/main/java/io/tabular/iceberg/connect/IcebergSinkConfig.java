@@ -18,18 +18,18 @@
  */
 package io.tabular.iceberg.connect;
 
+import static java.util.stream.Collectors.toList;
+
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import org.apache.iceberg.IcebergBuild;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
@@ -90,7 +90,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String DEFAULT_CONTROL_TOPIC = "control-iceberg";
   public static final String DEFAULT_CONTROL_GROUP_PREFIX = "cg-control-";
 
-  public static ConfigDef CONFIG_DEF = newConfigDef();
+  public static final ConfigDef CONFIG_DEF = newConfigDef();
 
   public static String getVersion() {
     String kcVersion = IcebergSinkConfig.class.getPackage().getImplementationVersion();
@@ -204,7 +204,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private final Map<String, String> catalogProps;
   private final Map<String, String> hadoopProps;
   private final Map<String, String> kafkaProps;
-  private final Map<String, TableSinkConfig> tableConfigMap = new HashMap<>();
+  private final Map<String, TableSinkConfig> tableConfigMap = Maps.newHashMap();
   private final JsonConverter jsonConverter;
 
   public IcebergSinkConfig(Map<String, String> originalProps) {
@@ -214,7 +214,7 @@ public class IcebergSinkConfig extends AbstractConfig {
     this.catalogProps = PropertyUtil.propertiesWithPrefix(originalProps, CATALOG_PROP_PREFIX);
     this.hadoopProps = PropertyUtil.propertiesWithPrefix(originalProps, HADOOP_PROP_PREFIX);
 
-    this.kafkaProps = new HashMap<>(loadWorkerProps());
+    this.kafkaProps = Maps.newHashMap(loadWorkerProps());
     kafkaProps.putAll(PropertyUtil.propertiesWithPrefix(originalProps, KAFKA_PROP_PREFIX));
 
     this.jsonConverter = new JsonConverter();
@@ -304,9 +304,7 @@ public class IcebergSinkConfig extends AbstractConfig {
           List<String> idColumns =
               idColumnsStr == null || idColumnsStr.isEmpty()
                   ? ImmutableList.of()
-                  : Arrays.stream(idColumnsStr.split(","))
-                      .map(String::trim)
-                      .collect(Collectors.toList());
+                  : Arrays.stream(idColumnsStr.split(",")).map(String::trim).collect(toList());
 
           String commitBranch = tableProps.get(COMMIT_BRANCH);
           if (commitBranch == null) {
@@ -331,7 +329,7 @@ public class IcebergSinkConfig extends AbstractConfig {
       return result;
     }
     String connectorName = getConnectorName();
-    Preconditions.checkNotNull(connectorName);
+    Preconditions.checkNotNull(connectorName, "Connector name cannot be null");
     return DEFAULT_CONTROL_GROUP_PREFIX + connectorName;
   }
 

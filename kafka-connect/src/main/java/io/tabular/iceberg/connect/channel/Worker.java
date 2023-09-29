@@ -18,7 +18,6 @@
  */
 package io.tabular.iceberg.connect.channel;
 
-import static io.tabular.iceberg.connect.IcebergSinkConfig.DEFAULT_CONTROL_GROUP_PREFIX;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
@@ -37,7 +36,6 @@ import io.tabular.iceberg.connect.events.TableName;
 import io.tabular.iceberg.connect.events.TopicPartitionOffset;
 import java.time.Duration;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -45,6 +43,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -69,15 +68,19 @@ public class Worker extends Channel {
       IcebergWriterFactory writerFactory,
       SinkTaskContext context) {
     // pass transient consumer group ID to which we never commit offsets
-    super("worker", DEFAULT_CONTROL_GROUP_PREFIX + UUID.randomUUID(), config, clientFactory);
+    super(
+        "worker",
+        IcebergSinkConfig.DEFAULT_CONTROL_GROUP_PREFIX + UUID.randomUUID(),
+        config,
+        clientFactory);
 
     this.catalog = catalog;
     this.config = config;
     this.writerFactory = writerFactory;
     this.context = context;
     this.controlGroupId = config.getControlGroupId();
-    this.writers = new HashMap<>();
-    this.sourceOffsets = new HashMap<>();
+    this.writers = Maps.newHashMap();
+    this.sourceOffsets = Maps.newHashMap();
   }
 
   public void syncCommitOffsets() {
@@ -111,7 +114,7 @@ public class Worker extends Channel {
 
     List<WriterResult> writeResults =
         writers.values().stream().flatMap(writer -> writer.complete().stream()).collect(toList());
-    Map<TopicPartition, Offset> offsets = new HashMap<>(sourceOffsets);
+    Map<TopicPartition, Offset> offsets = Maps.newHashMap(sourceOffsets);
 
     writers.clear();
     sourceOffsets.clear();
@@ -220,7 +223,7 @@ public class Worker extends Channel {
 
   private void routeRecordDynamically(SinkRecord record) {
     String routeField = config.getTablesRouteField();
-    Preconditions.checkNotNull(routeField);
+    Preconditions.checkNotNull(routeField, "Route field cannot be null with dynamic routing");
 
     String routeValue = extractRouteValue(record.value(), routeField);
     if (routeValue != null) {

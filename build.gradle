@@ -4,6 +4,7 @@ buildscript {
   }
   dependencies {
     classpath(libs.spotless.gradle)
+    classpath(libs.palantir.gradle)
   }
 }
 
@@ -14,6 +15,7 @@ plugins {
 subprojects {
   apply plugin: "java"
   apply plugin: "com.diffplug.spotless"
+  apply plugin: "com.palantir.baseline-checkstyle"
   apply plugin: "maven-publish"
 
   group "io.tabular.connect"
@@ -53,6 +55,10 @@ subprojects {
       removeUnusedImports()
       licenseHeaderFile "$rootDir/header.txt"
     }
+  }
+
+  checkstyle {
+    toolVersion '9.3'
   }
 
   publishing {

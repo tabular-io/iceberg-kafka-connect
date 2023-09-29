@@ -19,7 +19,6 @@
 package io.tabular.iceberg.connect.events;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.iceberg.avro.AvroSchemaUtil.FIELD_ID_PROP;
 
 import java.util.Arrays;
 import java.util.List;

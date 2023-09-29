@@ -20,7 +20,6 @@ package io.tabular.iceberg.connect;
 
 import static io.tabular.iceberg.connect.TestEvent.TEST_SCHEMA;
 import static io.tabular.iceberg.connect.TestEvent.TEST_SPEC;
-import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -47,13 +46,13 @@ public abstract class AbstractIntegrationMultiTableTest extends IntegrationTestB
   private static final TableIdentifier TABLE_IDENTIFIER2 = TableIdentifier.of(TEST_DB, TEST_TABLE2);
 
   @BeforeEach
-  public void setup() {
+  public void before() {
     createTopic(testTopic, TEST_TOPIC_PARTITIONS);
     ((SupportsNamespaces) catalog).createNamespace(Namespace.of(TEST_DB));
   }
 
   @AfterEach
-  public void teardown() {
+  public void after() {
     context.stopKafkaConnector(connectorName);
     deleteTopic(testTopic);
     catalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE1));
@@ -63,7 +62,7 @@ public abstract class AbstractIntegrationMultiTableTest extends IntegrationTestB
 
   @ParameterizedTest
   @NullSource
-  @ValueSource(strings = {"test_branch"})
+  @ValueSource(strings = "test_branch")
   public void testIcebergSink(String branch) {
     // partitioned table
     catalog.createTable(TABLE_IDENTIFIER1, TEST_SCHEMA, TEST_SPEC);
@@ -97,10 +96,10 @@ public abstract class AbstractIntegrationMultiTableTest extends IntegrationTestB
             .config("value.converter.schemas.enable", false)
             .config(
                 "iceberg.tables",
-                format("%s.%s, %s.%s", TEST_DB, TEST_TABLE1, TEST_DB, TEST_TABLE2))
+                String.format("%s.%s, %s.%s", TEST_DB, TEST_TABLE1, TEST_DB, TEST_TABLE2))
             .config("iceberg.tables.routeField", "type")
-            .config(format("iceberg.table.%s.%s.routeRegex", TEST_DB, TEST_TABLE1), "type1")
-            .config(format("iceberg.table.%s.%s.routeRegex", TEST_DB, TEST_TABLE2), "type2")
+            .config(String.format("iceberg.table.%s.%s.routeRegex", TEST_DB, TEST_TABLE1), "type1")
+            .config(String.format("iceberg.table.%s.%s.routeRegex", TEST_DB, TEST_TABLE2), "type2")
             .config("iceberg.control.commitIntervalMs", 1000)
             .config("iceberg.control.commitTimeoutMs", Integer.MAX_VALUE)
             .config("iceberg.kafka.auto.offset.reset", "earliest");

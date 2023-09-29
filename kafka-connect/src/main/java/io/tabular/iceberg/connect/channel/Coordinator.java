@@ -18,7 +18,6 @@
  */
 package io.tabular.iceberg.connect.channel;
 
-import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -78,7 +77,8 @@ public class Coordinator extends Channel {
     this.config = config;
     this.totalPartitionCount = getTotalPartitionCount();
     this.snapshotOffsetsProp =
-        format(OFFSETS_SNAPSHOT_PROP_FMT, config.getControlTopic(), config.getControlGroupId());
+        String.format(
+            OFFSETS_SNAPSHOT_PROP_FMT, config.getControlTopic(), config.getControlGroupId());
     this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.getCommitThreads());
     this.commitState = new CommitState(config);
   }

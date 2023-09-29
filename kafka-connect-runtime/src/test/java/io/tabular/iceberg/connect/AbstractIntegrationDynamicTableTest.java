@@ -46,13 +46,13 @@ public abstract class AbstractIntegrationDynamicTableTest extends IntegrationTes
   private static final TableIdentifier TABLE_IDENTIFIER2 = TableIdentifier.of(TEST_DB, TEST_TABLE2);
 
   @BeforeEach
-  public void setup() {
+  public void before() {
     createTopic(testTopic, TEST_TOPIC_PARTITIONS);
     ((SupportsNamespaces) catalog).createNamespace(Namespace.of(TEST_DB));
   }
 
   @AfterEach
-  public void teardown() {
+  public void after() {
     context.stopKafkaConnector(connectorName);
     deleteTopic(testTopic);
     catalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE1));
@@ -62,7 +62,7 @@ public abstract class AbstractIntegrationDynamicTableTest extends IntegrationTes
 
   @ParameterizedTest
   @NullSource
-  @ValueSource(strings = {"test_branch"})
+  @ValueSource(strings = "test_branch")
   public void testIcebergSink(String branch) {
     // partitioned table
     catalog.createTable(TABLE_IDENTIFIER1, TEST_SCHEMA, TEST_SPEC);

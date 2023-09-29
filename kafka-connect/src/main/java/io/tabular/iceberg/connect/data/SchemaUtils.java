@@ -18,6 +18,8 @@
  */
 package io.tabular.iceberg.connect.data;
 
+import static java.util.stream.Collectors.toList;
+
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -27,7 +29,6 @@ import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.UpdateSchema;
 import org.apache.iceberg.types.Type;
@@ -77,9 +78,7 @@ public class SchemaUtils {
 
     // filter out columns that have already been added
     List<AddColumn> filteredUpdates =
-        updates.stream()
-            .filter(update -> !columnExists(table.schema(), update))
-            .collect(Collectors.toList());
+        updates.stream().filter(update -> !columnExists(table.schema(), update)).collect(toList());
 
     if (filteredUpdates.isEmpty()) {
       // no updates to apply
@@ -160,7 +159,7 @@ public class SchemaUtils {
                       field ->
                           NestedField.optional(
                               nextId(), field.name(), toIcebergType(field.schema())))
-                  .collect(Collectors.toList());
+                  .collect(toList());
           return StructType.of(structFields);
         case STRING:
         default:
@@ -168,6 +167,7 @@ public class SchemaUtils {
       }
     }
 
+    @SuppressWarnings("checkstyle:CyclomaticComplexity")
     Type inferIcebergType(Object value) {
       if (value == null) {
         return StringType.get();
@@ -176,12 +176,12 @@ public class SchemaUtils {
       } else if (value instanceof Boolean) {
         return BooleanType.get();
       } else if (value instanceof BigDecimal) {
-        BigDecimal bd = (BigDecimal) value;
-        return DecimalType.of(bd.precision(), bd.scale());
+        BigDecimal bigDecimal = (BigDecimal) value;
+        return DecimalType.of(bigDecimal.precision(), bigDecimal.scale());
       } else if (value instanceof Number) {
         Number num = (Number) value;
-        Double d = num.doubleValue();
-        if (d.equals(Math.floor(d))) {
+        Double dbl = num.doubleValue();
+        if (dbl.equals(Math.floor(dbl))) {
           return LongType.get();
         } else {
           return DoubleType.get();
@@ -212,7 +212,7 @@ public class SchemaUtils {
                             nextId(),
                             entry.getKey().toString(),
                             inferIcebergType(entry.getValue())))
-                .collect(Collectors.toList());
+                .collect(toList());
         return StructType.of(structFields);
       } else {
         return StringType.get();
@@ -223,4 +223,6 @@ public class SchemaUtils {
       return fieldId++;
     }
   }
+
+  private SchemaUtils() {}
 }

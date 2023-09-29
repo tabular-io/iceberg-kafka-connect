@@ -53,6 +53,7 @@ testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "
 testcontainers-kafka = { module = "org.testcontainers:kafka", version.ref = "testcontainers-ver" }
 
 spotless-gradle = "com.diffplug.spotless:spotless-plugin-gradle:6.13.0"
+palantir-gradle = "com.palantir.baseline:gradle-baseline-java:4.42.0"
 
 
 [bundles]

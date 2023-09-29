@@ -18,14 +18,13 @@
  */
 package io.tabular.iceberg.connect;
 
-import static io.tabular.iceberg.connect.IcebergSinkConfig.INTERNAL_TRANSACTIONAL_SUFFIX_PROP;
 import static java.util.stream.Collectors.toList;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.IntStream;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -40,8 +39,8 @@ public class IcebergSinkConnector extends SinkConnector {
   }
 
   @Override
-  public void start(Map<String, String> props) {
-    this.props = props;
+  public void start(Map<String, String> connectorProps) {
+    this.props = connectorProps;
   }
 
   @Override
@@ -55,8 +54,8 @@ public class IcebergSinkConnector extends SinkConnector {
     return IntStream.range(0, maxTasks)
         .mapToObj(
             i -> {
-              Map<String, String> map = new HashMap<>(props);
-              map.put(INTERNAL_TRANSACTIONAL_SUFFIX_PROP, txnSuffix + i);
+              Map<String, String> map = Maps.newHashMap(props);
+              map.put(IcebergSinkConfig.INTERNAL_TRANSACTIONAL_SUFFIX_PROP, txnSuffix + i);
               return map;
             })
         .collect(toList());
