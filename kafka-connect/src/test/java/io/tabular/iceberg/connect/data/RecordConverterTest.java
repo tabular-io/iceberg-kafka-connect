@@ -368,7 +368,9 @@ public class RecordConverterTest {
     when(table.schema()).thenReturn(ID_SCHEMA);
     RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
-    Map<String, Object> data = createMapData();
+    Map<String, Object> data = Maps.newHashMap(createMapData());
+    data.put("null", null);
+
     List<AddColumn> addCols = Lists.newArrayList();
     converter.convert(data, addCols::add);
 
@@ -392,6 +394,9 @@ public class RecordConverterTest {
     assertThat(newColMap.get("b").type()).isInstanceOf(StringType.class);
     assertThat(newColMap.get("li").type()).isInstanceOf(ListType.class);
     assertThat(newColMap.get("ma").type()).isInstanceOf(StructType.class);
+
+    // null values should be ignored
+    assertThat(newColMap).doesNotContainKey("null");
   }
 
   @Test

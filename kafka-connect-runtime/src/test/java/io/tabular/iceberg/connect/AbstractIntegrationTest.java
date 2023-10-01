@@ -137,6 +137,9 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
     assertThat(tableSchema.findField("type").type()).isInstanceOf(StringType.class);
     assertThat(tableSchema.findField("ts").type()).isInstanceOf(LongType.class);
     assertThat(tableSchema.findField("payload").type()).isInstanceOf(StringType.class);
+
+    // null values should be ignored when not using a value schema
+    assertThat(tableSchema.findField("op")).isNull();
   }
 
   private void runTest(String branch) {
