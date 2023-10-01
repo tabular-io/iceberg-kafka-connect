@@ -37,7 +37,7 @@ public class Event implements Element {
   private Payload payload;
   private Schema avroSchema;
 
-  private static final ThreadLocal<Map<?, ?>> DECODER_CACHES = getDecoderCaches();
+  private static final ThreadLocal<Map<?, ?>> DECODER_CACHES = decoderCaches();
 
   public static byte[] encode(Event event) {
     try {
@@ -99,23 +99,23 @@ public class Event implements Element {
             .endRecord();
   }
 
-  public UUID getId() {
+  public UUID id() {
     return id;
   }
 
-  public EventType getType() {
+  public EventType type() {
     return type;
   }
 
-  public Long getTimestamp() {
+  public Long timestamp() {
     return timestamp;
   }
 
-  public Payload getPayload() {
+  public Payload payload() {
     return payload;
   }
 
-  public String getGroupId() {
+  public String groupId() {
     return groupId;
   }
 
@@ -153,7 +153,7 @@ public class Event implements Element {
       case 0:
         return id;
       case 1:
-        return type == null ? null : type.getId();
+        return type == null ? null : type.id();
       case 2:
         return timestamp;
       case 3:
@@ -166,7 +166,7 @@ public class Event implements Element {
   }
 
   @SuppressWarnings("unchecked")
-  private static ThreadLocal<Map<?, ?>> getDecoderCaches() {
+  private static ThreadLocal<Map<?, ?>> decoderCaches() {
     return (ThreadLocal<Map<?, ?>>)
         DynFields.builder().hiddenImpl(DecoderResolver.class, "DECODER_CACHES").buildStatic().get();
   }

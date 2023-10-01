@@ -73,7 +73,7 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
 
     runTest(branch);
 
-    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
+    List<DataFile> files = dataFiles(TABLE_IDENTIFIER, branch);
     // partition may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(1, 2);
     assertThat(files.get(0).recordCount()).isEqualTo(1);
@@ -89,7 +89,7 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
 
     runTest(branch);
 
-    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
+    List<DataFile> files = dataFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(1, 2);
     assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(2);
@@ -106,7 +106,7 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
 
     runTest(branch, ImmutableMap.of("iceberg.tables.evolveSchemaEnabled", "true"));
 
-    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
+    List<DataFile> files = dataFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(1, 2);
     assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(2);
@@ -121,7 +121,7 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
   public void testIcebergSinkAutoCreate(String branch) {
     runTest(branch, ImmutableMap.of("iceberg.tables.autoCreateEnabled", "true"));
 
-    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
+    List<DataFile> files = dataFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(1, 2);
     assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(2);

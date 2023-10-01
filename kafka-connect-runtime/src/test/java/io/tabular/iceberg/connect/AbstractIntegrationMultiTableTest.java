@@ -70,12 +70,12 @@ public abstract class AbstractIntegrationMultiTableTest extends IntegrationTestB
 
     runTest(branch);
 
-    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER1, branch);
+    List<DataFile> files = dataFiles(TABLE_IDENTIFIER1, branch);
     assertThat(files).hasSize(1);
     assertThat(files.get(0).recordCount()).isEqualTo(1);
     assertSnapshotProps(TABLE_IDENTIFIER1, branch);
 
-    files = getDataFiles(TABLE_IDENTIFIER2, branch);
+    files = dataFiles(TABLE_IDENTIFIER2, branch);
     assertThat(files).hasSize(1);
     assertThat(files.get(0).recordCount()).isEqualTo(1);
     assertSnapshotProps(TABLE_IDENTIFIER2, branch);

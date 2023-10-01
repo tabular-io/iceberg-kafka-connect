@@ -54,11 +54,11 @@ public class CommitCompletePayload implements Payload {
     this.avroSchema = AVRO_SCHEMA;
   }
 
-  public UUID getCommitId() {
+  public UUID commitId() {
     return commitId;
   }
 
-  public Long getVtts() {
+  public Long vtts() {
     return vtts;
   }
 

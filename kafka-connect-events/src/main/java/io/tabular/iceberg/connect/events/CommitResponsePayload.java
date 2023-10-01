@@ -93,19 +93,19 @@ public class CommitResponsePayload implements Payload {
             .endRecord();
   }
 
-  public UUID getCommitId() {
+  public UUID commitId() {
     return commitId;
   }
 
-  public TableName getTableName() {
+  public TableName tableName() {
     return tableName;
   }
 
-  public List<DataFile> getDataFiles() {
+  public List<DataFile> dataFiles() {
     return dataFiles;
   }
 
-  public List<DeleteFile> getDeleteFiles() {
+  public List<DeleteFile> deleteFiles() {
     return deleteFiles;
   }
 

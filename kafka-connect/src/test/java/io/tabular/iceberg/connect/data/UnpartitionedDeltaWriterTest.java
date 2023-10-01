@@ -36,8 +36,8 @@ public class UnpartitionedDeltaWriterTest extends BaseWriterTest {
   @Test
   public void testUnpartitionedDeltaWriter() {
     IcebergSinkConfig config = mock(IcebergSinkConfig.class);
-    when(config.isUpsertMode()).thenReturn(true);
-    when(config.getTableConfig(any())).thenReturn(mock(TableSinkConfig.class));
+    when(config.upsertModeEnabled()).thenReturn(true);
+    when(config.tableConfig(any())).thenReturn(mock(TableSinkConfig.class));
 
     Record row = GenericRecord.create(SCHEMA);
     row.setField("id", 123L);

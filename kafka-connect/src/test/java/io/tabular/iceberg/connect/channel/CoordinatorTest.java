@@ -120,26 +120,25 @@ public class CoordinatorTest extends ChannelTestBase {
   private void assertCommitTable(int idx, UUID commitId, long ts) {
     byte[] bytes = producer.history().get(idx).value();
     Event commitTable = Event.decode(bytes);
-    assertThat(commitTable.getType()).isEqualTo(EventType.COMMIT_TABLE);
-    CommitTablePayload commitTablePayload = (CommitTablePayload) commitTable.getPayload();
-    assertThat(commitTablePayload.getCommitId()).isEqualTo(commitId);
-    assertThat(commitTablePayload.getTableName().toIdentifier().toString()).isEqualTo("db.tbl");
-    assertThat(commitTablePayload.getVtts()).isEqualTo(ts);
+    assertThat(commitTable.type()).isEqualTo(EventType.COMMIT_TABLE);
+    CommitTablePayload commitTablePayload = (CommitTablePayload) commitTable.payload();
+    assertThat(commitTablePayload.commitId()).isEqualTo(commitId);
+    assertThat(commitTablePayload.tableName().toIdentifier().toString()).isEqualTo("db.tbl");
+    assertThat(commitTablePayload.vtts()).isEqualTo(ts);
   }
 
   private void assertCommitComplete(int idx, UUID commitId, long ts) {
     byte[] bytes = producer.history().get(idx).value();
     Event commitComplete = Event.decode(bytes);
-    assertThat(commitComplete.getType()).isEqualTo(EventType.COMMIT_COMPLETE);
-    CommitCompletePayload commitCompletePayload =
-        (CommitCompletePayload) commitComplete.getPayload();
-    assertThat(commitCompletePayload.getCommitId()).isEqualTo(commitId);
-    assertThat(commitCompletePayload.getVtts()).isEqualTo(ts);
+    assertThat(commitComplete.type()).isEqualTo(EventType.COMMIT_COMPLETE);
+    CommitCompletePayload commitCompletePayload = (CommitCompletePayload) commitComplete.payload();
+    assertThat(commitCompletePayload.commitId()).isEqualTo(commitId);
+    assertThat(commitCompletePayload.vtts()).isEqualTo(ts);
   }
 
   private UUID coordinatorTest(List<DataFile> dataFiles, List<DeleteFile> deleteFiles, long ts) {
-    when(config.getCommitIntervalMs()).thenReturn(0);
-    when(config.getCommitTimeoutMs()).thenReturn(Integer.MAX_VALUE);
+    when(config.commitIntervalMs()).thenReturn(0);
+    when(config.commitTimeoutMs()).thenReturn(Integer.MAX_VALUE);
 
     Coordinator coordinator = new Coordinator(catalog, config, clientFactory);
     coordinator.start();
@@ -156,13 +155,13 @@ public class CoordinatorTest extends ChannelTestBase {
 
     byte[] bytes = producer.history().get(0).value();
     Event commitRequest = Event.decode(bytes);
-    assertThat(commitRequest.getType()).isEqualTo(EventType.COMMIT_REQUEST);
+    assertThat(commitRequest.type()).isEqualTo(EventType.COMMIT_REQUEST);
 
-    UUID commitId = ((CommitRequestPayload) commitRequest.getPayload()).getCommitId();
+    UUID commitId = ((CommitRequestPayload) commitRequest.payload()).commitId();
 
     Event commitResponse =
         new Event(
-            config.getControlGroupId(),
+            config.controlGroupId(),
             EventType.COMMIT_RESPONSE,
             new CommitResponsePayload(
                 StructType.of(),
@@ -175,14 +174,14 @@ public class CoordinatorTest extends ChannelTestBase {
 
     Event commitReady =
         new Event(
-            config.getControlGroupId(),
+            config.controlGroupId(),
             EventType.COMMIT_READY,
             new CommitReadyPayload(
                 commitId, ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))));
     bytes = Event.encode(commitReady);
     consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, 2, "key", bytes));
 
-    when(config.getCommitIntervalMs()).thenReturn(0);
+    when(config.commitIntervalMs()).thenReturn(0);
 
     coordinator.process();
 

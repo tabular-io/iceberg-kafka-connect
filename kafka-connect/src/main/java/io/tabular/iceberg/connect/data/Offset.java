@@ -32,11 +32,11 @@ public class Offset implements Comparable<Offset> {
     this.timestamp = timestamp;
   }
 
-  public Long getOffset() {
+  public Long offset() {
     return offset;
   }
 
-  public Long getTimestamp() {
+  public Long timestamp() {
     return timestamp;
   }
 

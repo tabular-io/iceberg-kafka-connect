@@ -36,7 +36,7 @@ public class PartitionedAppendWriterTest extends BaseWriterTest {
   @Test
   public void testPartitionedAppendWriter() {
     IcebergSinkConfig config = mock(IcebergSinkConfig.class);
-    when(config.getTableConfig(any())).thenReturn(mock(TableSinkConfig.class));
+    when(config.tableConfig(any())).thenReturn(mock(TableSinkConfig.class));
 
     when(table.spec()).thenReturn(SPEC);
 

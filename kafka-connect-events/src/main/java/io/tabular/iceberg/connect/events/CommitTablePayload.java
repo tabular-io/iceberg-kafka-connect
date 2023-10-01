@@ -68,19 +68,19 @@ public class CommitTablePayload implements Payload {
     this.avroSchema = AVRO_SCHEMA;
   }
 
-  public UUID getCommitId() {
+  public UUID commitId() {
     return commitId;
   }
 
-  public TableName getTableName() {
+  public TableName tableName() {
     return tableName;
   }
 
-  public Long getSnapshotId() {
+  public Long snapshotId() {
     return snapshotId;
   }
 
-  public Long getVtts() {
+  public Long vtts() {
     return vtts;
   }
 

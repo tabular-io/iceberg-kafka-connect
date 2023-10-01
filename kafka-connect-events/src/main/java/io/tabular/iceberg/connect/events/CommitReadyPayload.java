@@ -56,11 +56,11 @@ public class CommitReadyPayload implements Payload {
     this.avroSchema = AVRO_SCHEMA;
   }
 
-  public UUID getCommitId() {
+  public UUID commitId() {
     return commitId;
   }
 
-  public List<TopicPartitionOffset> getAssignments() {
+  public List<TopicPartitionOffset> assignments() {
     return assignments;
   }
 

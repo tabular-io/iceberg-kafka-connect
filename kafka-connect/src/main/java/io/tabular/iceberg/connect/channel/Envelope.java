@@ -31,15 +31,15 @@ public class Envelope {
     this.offset = offset;
   }
 
-  public Event getEvent() {
+  public Event event() {
     return event;
   }
 
-  public int getPartition() {
+  public int partition() {
     return partition;
   }
 
-  public long getOffset() {
+  public long offset() {
     return offset;
   }
 }

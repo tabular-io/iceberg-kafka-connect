@@ -92,7 +92,7 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public static final ConfigDef CONFIG_DEF = newConfigDef();
 
-  public static String getVersion() {
+  public static String version() {
     String kcVersion = IcebergSinkConfig.class.getPackage().getImplementationVersion();
     if (kcVersion == null) {
       kcVersion = "unknown";
@@ -229,12 +229,12 @@ public class IcebergSinkConfig extends AbstractConfig {
   }
 
   private void validate() {
-    checkState(!getCatalogProps().isEmpty(), "Must specify Iceberg catalog properties");
-    if (getTables() != null) {
-      checkState(!getDynamicTablesEnabled(), "Cannot specify both static and dynamic table names");
-    } else if (getDynamicTablesEnabled()) {
+    checkState(!catalogProps().isEmpty(), "Must specify Iceberg catalog properties");
+    if (tables() != null) {
+      checkState(!dynamicTablesEnabled(), "Cannot specify both static and dynamic table names");
+    } else if (dynamicTablesEnabled()) {
       checkState(
-          getTablesRouteField() != null, "Must specify a route field if using dynamic table names");
+          tablesRouteField() != null, "Must specify a route field if using dynamic table names");
     } else {
       throw new ConfigException("Must specify table name(s)");
     }
@@ -246,52 +246,52 @@ public class IcebergSinkConfig extends AbstractConfig {
     }
   }
 
-  public String getConnectorName() {
+  public String connectorName() {
     return originalProps.get(NAME_PROP);
   }
 
-  public String getTransactionalSuffix() {
+  public String transactionalSuffix() {
     // this is for internal use and is not part of the config definition...
     return originalProps.get(INTERNAL_TRANSACTIONAL_SUFFIX_PROP);
   }
 
-  public SortedSet<String> getTopics() {
+  public SortedSet<String> topics() {
     return new TreeSet<>(getList(SinkConnector.TOPICS_CONFIG));
   }
 
-  public Map<String, String> getCatalogProps() {
+  public Map<String, String> catalogProps() {
     return catalogProps;
   }
 
-  public Map<String, String> getHadoopProps() {
+  public Map<String, String> hadoopProps() {
     return hadoopProps;
   }
 
-  public Map<String, String> getKafkaProps() {
+  public Map<String, String> kafkaProps() {
     return kafkaProps;
   }
 
-  public String getCatalogName() {
+  public String catalogName() {
     return getString(CATALOG_NAME_PROP);
   }
 
-  public List<String> getTables() {
+  public List<String> tables() {
     return getList(TABLES_PROP);
   }
 
-  public boolean getDynamicTablesEnabled() {
+  public boolean dynamicTablesEnabled() {
     return getBoolean(TABLES_DYNAMIC_PROP);
   }
 
-  public String getTablesRouteField() {
+  public String tablesRouteField() {
     return getString(TABLES_ROUTE_FIELD_PROP);
   }
 
-  public String getTablesDefaultCommitBranch() {
+  public String tablesDefaultCommitBranch() {
     return getString(TABLES_DEFAULT_COMMIT_BRANCH);
   }
 
-  public TableSinkConfig getTableConfig(String tableName) {
+  public TableSinkConfig tableConfig(String tableName) {
     return tableConfigMap.computeIfAbsent(
         tableName,
         notUsed -> {
@@ -308,60 +308,60 @@ public class IcebergSinkConfig extends AbstractConfig {
 
           String commitBranch = tableProps.get(COMMIT_BRANCH);
           if (commitBranch == null) {
-            commitBranch = getTablesDefaultCommitBranch();
+            commitBranch = tablesDefaultCommitBranch();
           }
 
           return new TableSinkConfig(routeRegex, idColumns, commitBranch);
         });
   }
 
-  public String getTablesCdcField() {
+  public String tablesCdcField() {
     return getString(TABLES_CDC_FIELD_PROP);
   }
 
-  public String getControlTopic() {
+  public String controlTopic() {
     return getString(CONTROL_TOPIC_PROP);
   }
 
-  public String getControlGroupId() {
+  public String controlGroupId() {
     String result = getString(CONTROL_GROUP_ID_PROP);
     if (result != null) {
       return result;
     }
-    String connectorName = getConnectorName();
+    String connectorName = connectorName();
     Preconditions.checkNotNull(connectorName, "Connector name cannot be null");
     return DEFAULT_CONTROL_GROUP_PREFIX + connectorName;
   }
 
-  public int getCommitIntervalMs() {
+  public int commitIntervalMs() {
     return getInt(COMMIT_INTERVAL_MS_PROP);
   }
 
-  public int getCommitTimeoutMs() {
+  public int commitTimeoutMs() {
     return getInt(COMMIT_TIMEOUT_MS_PROP);
   }
 
-  public int getCommitThreads() {
+  public int commitThreads() {
     return getInt(COMMIT_THREADS_PROP);
   }
 
-  public String getHadoopConfDir() {
+  public String hadoopConfDir() {
     return getString(HADDOP_CONF_DIR_PROP);
   }
 
-  public boolean isUpsertMode() {
+  public boolean upsertModeEnabled() {
     return getBoolean(TABLES_UPSERT_MODE_ENABLED_PROP);
   }
 
-  public boolean isAutoCreate() {
+  public boolean autoCreateEnabled() {
     return getBoolean(TABLES_AUTO_CREATE_ENABLED_PROP);
   }
 
-  public boolean isEvolveSchema() {
+  public boolean evolveSchemaEnabled() {
     return getBoolean(TABLES_EVOLVE_SCHEMA_ENABLED_PROP);
   }
 
-  public JsonConverter getJsonConverter() {
+  public JsonConverter jsonConverter() {
     return jsonConverter;
   }
 

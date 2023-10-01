@@ -37,7 +37,7 @@ public class UnpartitionedWriterTest extends BaseWriterTest {
   @Test
   public void testUnpartitionedWriter() {
     IcebergSinkConfig config = mock(IcebergSinkConfig.class);
-    when(config.getTableConfig(any())).thenReturn(mock(TableSinkConfig.class));
+    when(config.tableConfig(any())).thenReturn(mock(TableSinkConfig.class));
 
     Record row1 = GenericRecord.create(SCHEMA);
     row1.setField("id", 123L);

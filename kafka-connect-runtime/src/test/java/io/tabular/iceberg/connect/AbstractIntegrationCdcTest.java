@@ -68,12 +68,12 @@ public abstract class AbstractIntegrationCdcTest extends IntegrationTestBase {
 
     runTest(branch);
 
-    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
+    List<DataFile> files = dataFiles(TABLE_IDENTIFIER, branch);
     // partition may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(2, 3);
     assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(4);
 
-    List<DeleteFile> deleteFiles = getDeleteFiles(TABLE_IDENTIFIER, branch);
+    List<DeleteFile> deleteFiles = deleteFiles(TABLE_IDENTIFIER, branch);
     // partition may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(2, 3);
     assertThat(deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum()).isEqualTo(2);
@@ -89,12 +89,12 @@ public abstract class AbstractIntegrationCdcTest extends IntegrationTestBase {
 
     runTest(branch);
 
-    List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
+    List<DataFile> files = dataFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(1, 2);
     assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(4);
 
-    List<DeleteFile> deleteFiles = getDeleteFiles(TABLE_IDENTIFIER, branch);
+    List<DeleteFile> deleteFiles = deleteFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(1, 2);
     assertThat(deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum()).isEqualTo(2);

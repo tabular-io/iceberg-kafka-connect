@@ -42,19 +42,19 @@ public class WriterResult {
     this.partitionStruct = partitionStruct;
   }
 
-  public TableIdentifier getTableIdentifier() {
+  public TableIdentifier tableIdentifier() {
     return tableIdentifier;
   }
 
-  public List<DataFile> getDataFiles() {
+  public List<DataFile> dataFiles() {
     return dataFiles;
   }
 
-  public List<DeleteFile> getDeleteFiles() {
+  public List<DeleteFile> deleteFiles() {
     return deleteFiles;
   }
 
-  public StructType getPartitionStruct() {
+  public StructType partitionStruct() {
     return partitionStruct;
   }
 }

@@ -119,12 +119,12 @@ public abstract class IntegrationTestBase {
     assertThat(props).containsKey("kafka.connect.commitId");
   }
 
-  protected List<DataFile> getDataFiles(TableIdentifier tableIdentifier, String branch) {
+  protected List<DataFile> dataFiles(TableIdentifier tableIdentifier, String branch) {
     Table table = catalog.loadTable(tableIdentifier);
     return Lists.newArrayList(latestSnapshot(table, branch).addedDataFiles(table.io()));
   }
 
-  protected List<DeleteFile> getDeleteFiles(TableIdentifier tableIdentifier, String branch) {
+  protected List<DeleteFile> deleteFiles(TableIdentifier tableIdentifier, String branch) {
     Table table = catalog.loadTable(tableIdentifier);
     return Lists.newArrayList(latestSnapshot(table, branch).addedDeleteFiles(table.io()));
   }

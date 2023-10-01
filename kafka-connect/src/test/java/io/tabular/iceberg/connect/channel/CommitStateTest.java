@@ -40,16 +40,16 @@ public class CommitStateTest {
     commitState.startNewCommit();
 
     CommitReadyPayload payload1 = mock(CommitReadyPayload.class);
-    when(payload1.getCommitId()).thenReturn(commitState.getCurrentCommitId());
-    when(payload1.getAssignments()).thenReturn(ImmutableList.of(tp, tp));
+    when(payload1.commitId()).thenReturn(commitState.currentCommitId());
+    when(payload1.assignments()).thenReturn(ImmutableList.of(tp, tp));
 
     CommitReadyPayload payload2 = mock(CommitReadyPayload.class);
-    when(payload2.getCommitId()).thenReturn(commitState.getCurrentCommitId());
-    when(payload2.getAssignments()).thenReturn(ImmutableList.of(tp));
+    when(payload2.commitId()).thenReturn(commitState.currentCommitId());
+    when(payload2.assignments()).thenReturn(ImmutableList.of(tp));
 
     CommitReadyPayload payload3 = mock(CommitReadyPayload.class);
-    when(payload3.getCommitId()).thenReturn(UUID.randomUUID());
-    when(payload3.getAssignments()).thenReturn(ImmutableList.of(tp));
+    when(payload3.commitId()).thenReturn(UUID.randomUUID());
+    when(payload3.assignments()).thenReturn(ImmutableList.of(tp));
 
     commitState.addReady(wrapInEnvelope(payload1));
     commitState.addReady(wrapInEnvelope(payload2));
@@ -63,15 +63,15 @@ public class CommitStateTest {
   public void testGetVtts() {
     CommitReadyPayload payload1 = mock(CommitReadyPayload.class);
     TopicPartitionOffset tp1 = mock(TopicPartitionOffset.class);
-    when(tp1.getTimestamp()).thenReturn(3L);
+    when(tp1.timestamp()).thenReturn(3L);
     TopicPartitionOffset tp2 = mock(TopicPartitionOffset.class);
-    when(tp2.getTimestamp()).thenReturn(2L);
-    when(payload1.getAssignments()).thenReturn(ImmutableList.of(tp1, tp2));
+    when(tp2.timestamp()).thenReturn(2L);
+    when(payload1.assignments()).thenReturn(ImmutableList.of(tp1, tp2));
 
     CommitReadyPayload payload2 = mock(CommitReadyPayload.class);
     TopicPartitionOffset tp3 = mock(TopicPartitionOffset.class);
-    when(tp3.getTimestamp()).thenReturn(1L);
-    when(payload2.getAssignments()).thenReturn(ImmutableList.of(tp3));
+    when(tp3.timestamp()).thenReturn(1L);
+    when(payload2.assignments()).thenReturn(ImmutableList.of(tp3));
 
     CommitState commitState = new CommitState(mock(IcebergSinkConfig.class));
     commitState.startNewCommit();
@@ -79,24 +79,24 @@ public class CommitStateTest {
     commitState.addReady(wrapInEnvelope(payload1));
     commitState.addReady(wrapInEnvelope(payload2));
 
-    assertThat(commitState.getVtts(false)).isEqualTo(1L);
-    assertThat(commitState.getVtts(true)).isNull();
+    assertThat(commitState.vtts(false)).isEqualTo(1L);
+    assertThat(commitState.vtts(true)).isNull();
 
     // null timestamp for one, so should not set a vtts
     CommitReadyPayload payload3 = mock(CommitReadyPayload.class);
     TopicPartitionOffset tp4 = mock(TopicPartitionOffset.class);
-    when(tp4.getTimestamp()).thenReturn(null);
-    when(payload3.getAssignments()).thenReturn(ImmutableList.of(tp4));
+    when(tp4.timestamp()).thenReturn(null);
+    when(payload3.assignments()).thenReturn(ImmutableList.of(tp4));
 
     commitState.addReady(wrapInEnvelope(payload3));
 
-    assertThat(commitState.getVtts(false)).isNull();
-    assertThat(commitState.getVtts(true)).isNull();
+    assertThat(commitState.vtts(false)).isNull();
+    assertThat(commitState.vtts(true)).isNull();
   }
 
   private Envelope wrapInEnvelope(Payload payload) {
     Event event = mock(Event.class);
-    when(event.getPayload()).thenReturn(payload);
+    when(event.payload()).thenReturn(payload);
     return new Envelope(event, 0, 0);
   }
 }

@@ -69,19 +69,19 @@ public class TopicPartitionOffset implements Element {
     this.avroSchema = AVRO_SCHEMA;
   }
 
-  public String getTopic() {
+  public String topic() {
     return topic;
   }
 
-  public Integer getPartition() {
+  public Integer partition() {
     return partition;
   }
 
-  public Long getOffset() {
+  public Long offset() {
     return offset;
   }
 
-  public Long getTimestamp() {
+  public Long timestamp() {
     return timestamp;
   }
 
