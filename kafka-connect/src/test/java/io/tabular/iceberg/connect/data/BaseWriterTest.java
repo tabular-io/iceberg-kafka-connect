@@ -18,7 +18,7 @@
  */
 package io.tabular.iceberg.connect.data;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -74,7 +74,7 @@ public class BaseWriterTest {
   protected WriteResult writeTest(
       List<Record> rows, IcebergSinkConfig config, Class<?> expectedWriterClass) {
     try (TaskWriter<Record> writer = Utilities.createTableWriter(table, "name", config)) {
-      assertEquals(expectedWriterClass, writer.getClass());
+      assertThat(writer.getClass()).isEqualTo(expectedWriterClass);
 
       rows.forEach(
           row -> {

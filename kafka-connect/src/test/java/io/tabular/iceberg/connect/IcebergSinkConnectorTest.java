@@ -20,7 +20,6 @@ package io.tabular.iceberg.connect;
 
 import static io.tabular.iceberg.connect.IcebergSinkConfig.INTERNAL_TRANSACTIONAL_SUFFIX_PROP;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
 import java.util.Map;
@@ -35,7 +34,7 @@ public class IcebergSinkConnectorTest {
     SinkConnector connector = new IcebergSinkConnector();
     connector.start(ImmutableMap.of());
     List<Map<String, String>> configs = connector.taskConfigs(3);
-    assertEquals(3, configs.size());
+    assertThat(configs).hasSize(3);
     configs.forEach(map -> assertThat(map).containsKey(INTERNAL_TRANSACTIONAL_SUFFIX_PROP));
   }
 }

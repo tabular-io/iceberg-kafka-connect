@@ -18,9 +18,8 @@
  */
 package io.tabular.iceberg.connect;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.util.Map;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
@@ -32,7 +31,7 @@ public class IcebergSinkConfigTest {
   @Test
   public void testGetVersion() {
     String version = IcebergSinkConfig.getVersion();
-    assertNotNull(version);
+    assertThat(version).isNotNull();
   }
 
   @Test
@@ -60,6 +59,6 @@ public class IcebergSinkConfigTest {
             "topics", "source-topic",
             "iceberg.tables", "db.landing");
     IcebergSinkConfig config = new IcebergSinkConfig(props);
-    assertEquals(300_000, config.getCommitIntervalMs());
+    assertThat(config.getCommitIntervalMs()).isEqualTo(300_000);
   }
 }

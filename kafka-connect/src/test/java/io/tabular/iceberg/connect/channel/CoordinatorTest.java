@@ -19,8 +19,6 @@
 package io.tabular.iceberg.connect.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
@@ -55,7 +53,7 @@ public class CoordinatorTest extends ChannelTestBase {
     UUID commitId =
         coordinatorTest(ImmutableList.of(EventTestUtil.createDataFile()), ImmutableList.of(), ts);
 
-    assertEquals(3, producer.history().size());
+    assertThat(producer.history()).hasSize(3);
     assertCommitTable(1, commitId, ts);
     assertCommitComplete(2, commitId, ts);
 
@@ -65,8 +63,8 @@ public class CoordinatorTest extends ChannelTestBase {
     ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
     verify(appendOp, times(3)).set(captor.capture(), notNull());
     assertThat(captor.getAllValues().get(0)).startsWith("kafka.connect.offsets.");
-    assertEquals("kafka.connect.commitId", captor.getAllValues().get(1));
-    assertEquals("kafka.connect.vtts", captor.getAllValues().get(2));
+    assertThat(captor.getAllValues().get(1)).isEqualTo("kafka.connect.commitId");
+    assertThat(captor.getAllValues().get(2)).isEqualTo("kafka.connect.vtts");
 
     verify(deltaOp, times(0)).commit();
   }
@@ -80,7 +78,7 @@ public class CoordinatorTest extends ChannelTestBase {
             ImmutableList.of(EventTestUtil.createDeleteFile()),
             ts);
 
-    assertEquals(3, producer.history().size());
+    assertThat(producer.history()).hasSize(3);
     assertCommitTable(1, commitId, ts);
     assertCommitComplete(2, commitId, ts);
 
@@ -93,8 +91,8 @@ public class CoordinatorTest extends ChannelTestBase {
     ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
     verify(deltaOp, times(3)).set(captor.capture(), notNull());
     assertThat(captor.getAllValues().get(0)).startsWith("kafka.connect.offsets.");
-    assertEquals("kafka.connect.commitId", captor.getAllValues().get(1));
-    assertEquals("kafka.connect.vtts", captor.getAllValues().get(2));
+    assertThat(captor.getAllValues().get(1)).isEqualTo("kafka.connect.commitId");
+    assertThat(captor.getAllValues().get(2)).isEqualTo("kafka.connect.vtts");
   }
 
   @Test
@@ -102,7 +100,7 @@ public class CoordinatorTest extends ChannelTestBase {
     long ts = System.currentTimeMillis();
     UUID commitId = coordinatorTest(ImmutableList.of(), ImmutableList.of(), ts);
 
-    assertEquals(2, producer.history().size());
+    assertThat(producer.history()).hasSize(2);
     assertCommitComplete(1, commitId, ts);
 
     verify(appendOp, times(0)).commit();
@@ -116,27 +114,27 @@ public class CoordinatorTest extends ChannelTestBase {
     coordinatorTest(ImmutableList.of(EventTestUtil.createDataFile()), ImmutableList.of(), 0L);
 
     // no commit messages sent
-    assertEquals(1, producer.history().size());
+    assertThat(producer.history()).hasSize(1);
   }
 
   private void assertCommitTable(int idx, UUID commitId, long ts) {
     byte[] bytes = producer.history().get(idx).value();
     Event commitTable = Event.decode(bytes);
-    assertEquals(EventType.COMMIT_TABLE, commitTable.getType());
+    assertThat(commitTable.getType()).isEqualTo(EventType.COMMIT_TABLE);
     CommitTablePayload commitTablePayload = (CommitTablePayload) commitTable.getPayload();
-    assertEquals(commitId, commitTablePayload.getCommitId());
-    assertEquals("db.tbl", commitTablePayload.getTableName().toIdentifier().toString());
-    assertEquals(ts, commitTablePayload.getVtts());
+    assertThat(commitTablePayload.getCommitId()).isEqualTo(commitId);
+    assertThat(commitTablePayload.getTableName().toIdentifier().toString()).isEqualTo("db.tbl");
+    assertThat(commitTablePayload.getVtts()).isEqualTo(ts);
   }
 
   private void assertCommitComplete(int idx, UUID commitId, long ts) {
     byte[] bytes = producer.history().get(idx).value();
     Event commitComplete = Event.decode(bytes);
-    assertEquals(EventType.COMMIT_COMPLETE, commitComplete.getType());
+    assertThat(commitComplete.getType()).isEqualTo(EventType.COMMIT_COMPLETE);
     CommitCompletePayload commitCompletePayload =
         (CommitCompletePayload) commitComplete.getPayload();
-    assertEquals(commitId, commitCompletePayload.getCommitId());
-    assertEquals(ts, commitCompletePayload.getVtts());
+    assertThat(commitCompletePayload.getCommitId()).isEqualTo(commitId);
+    assertThat(commitCompletePayload.getVtts()).isEqualTo(ts);
   }
 
   private UUID coordinatorTest(List<DataFile> dataFiles, List<DeleteFile> deleteFiles, long ts) {
@@ -151,14 +149,14 @@ public class CoordinatorTest extends ChannelTestBase {
 
     coordinator.process();
 
-    assertTrue(producer.transactionCommitted());
-    assertEquals(1, producer.history().size());
+    assertThat(producer.transactionCommitted()).isTrue();
+    assertThat(producer.history()).hasSize(1);
     verify(appendOp, times(0)).commit();
     verify(deltaOp, times(0)).commit();
 
     byte[] bytes = producer.history().get(0).value();
     Event commitRequest = Event.decode(bytes);
-    assertEquals(EventType.COMMIT_REQUEST, commitRequest.getType());
+    assertThat(commitRequest.getType()).isEqualTo(EventType.COMMIT_REQUEST);
 
     UUID commitId = ((CommitRequestPayload) commitRequest.getPayload()).getCommitId();
 

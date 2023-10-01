@@ -19,7 +19,6 @@
 package io.tabular.iceberg.connect.events;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -39,9 +38,9 @@ public class EventSerializationTest {
     byte[] data = Event.encode(event);
     Event result = Event.decode(data);
 
-    assertEquals(event.getType(), result.getType());
+    assertThat(result.getType()).isEqualTo(event.getType());
     CommitRequestPayload payload = (CommitRequestPayload) result.getPayload();
-    assertEquals(commitId, payload.getCommitId());
+    assertThat(payload.getCommitId()).isEqualTo(commitId);
   }
 
   @Test
@@ -61,10 +60,10 @@ public class EventSerializationTest {
     byte[] data = Event.encode(event);
     Event result = Event.decode(data);
 
-    assertEquals(event.getType(), result.getType());
+    assertThat(result.getType()).isEqualTo(event.getType());
     CommitResponsePayload payload = (CommitResponsePayload) result.getPayload();
-    assertEquals(commitId, payload.getCommitId());
-    assertEquals(TableIdentifier.parse("db.tbl"), payload.getTableName().toIdentifier());
+    assertThat(payload.getCommitId()).isEqualTo(commitId);
+    assertThat(payload.getTableName().toIdentifier()).isEqualTo(TableIdentifier.parse("db.tbl"));
     assertThat(payload.getDataFiles()).hasSize(2);
     assertThat(payload.getDataFiles()).allMatch(f -> f.specId() == 1);
     assertThat(payload.getDeleteFiles()).hasSize(2);
@@ -87,9 +86,9 @@ public class EventSerializationTest {
     byte[] data = Event.encode(event);
     Event result = Event.decode(data);
 
-    assertEquals(event.getType(), result.getType());
+    assertThat(result.getType()).isEqualTo(event.getType());
     CommitReadyPayload payload = (CommitReadyPayload) result.getPayload();
-    assertEquals(commitId, payload.getCommitId());
+    assertThat(payload.getCommitId()).isEqualTo(commitId);
     assertThat(payload.getAssignments()).hasSize(2);
     assertThat(payload.getAssignments()).allMatch(tp -> tp.getTopic().equals("topic"));
   }
@@ -107,12 +106,12 @@ public class EventSerializationTest {
     byte[] data = Event.encode(event);
     Event result = Event.decode(data);
 
-    assertEquals(event.getType(), result.getType());
+    assertThat(result.getType()).isEqualTo(event.getType());
     CommitTablePayload payload = (CommitTablePayload) result.getPayload();
-    assertEquals(commitId, payload.getCommitId());
-    assertEquals(TableIdentifier.parse("db.tbl"), payload.getTableName().toIdentifier());
-    assertEquals(1L, payload.getSnapshotId());
-    assertEquals(2L, payload.getVtts());
+    assertThat(payload.getCommitId()).isEqualTo(commitId);
+    assertThat(payload.getTableName().toIdentifier()).isEqualTo(TableIdentifier.parse("db.tbl"));
+    assertThat(payload.getSnapshotId()).isEqualTo(1L);
+    assertThat(payload.getVtts()).isEqualTo(2L);
   }
 
   @Test
@@ -125,9 +124,9 @@ public class EventSerializationTest {
     byte[] data = Event.encode(event);
     Event result = Event.decode(data);
 
-    assertEquals(event.getType(), result.getType());
+    assertThat(result.getType()).isEqualTo(event.getType());
     CommitCompletePayload payload = (CommitCompletePayload) result.getPayload();
-    assertEquals(commitId, payload.getCommitId());
-    assertEquals(2L, payload.getVtts());
+    assertThat(payload.getCommitId()).isEqualTo(commitId);
+    assertThat(payload.getVtts()).isEqualTo(2L);
   }
 }

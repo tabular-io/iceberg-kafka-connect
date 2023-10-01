@@ -18,10 +18,7 @@
  */
 package io.tabular.iceberg.connect.channel;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -58,8 +55,8 @@ public class CommitStateTest {
     commitState.addReady(wrapInEnvelope(payload2));
     commitState.addReady(wrapInEnvelope(payload3));
 
-    assertTrue(commitState.isCommitReady(3));
-    assertFalse(commitState.isCommitReady(4));
+    assertThat(commitState.isCommitReady(3)).isTrue();
+    assertThat(commitState.isCommitReady(4)).isFalse();
   }
 
   @Test
@@ -82,8 +79,8 @@ public class CommitStateTest {
     commitState.addReady(wrapInEnvelope(payload1));
     commitState.addReady(wrapInEnvelope(payload2));
 
-    assertEquals(1L, commitState.getVtts(false));
-    assertNull(commitState.getVtts(true));
+    assertThat(commitState.getVtts(false)).isEqualTo(1L);
+    assertThat(commitState.getVtts(true)).isNull();
 
     // null timestamp for one, so should not set a vtts
     CommitReadyPayload payload3 = mock(CommitReadyPayload.class);
@@ -93,8 +90,8 @@ public class CommitStateTest {
 
     commitState.addReady(wrapInEnvelope(payload3));
 
-    assertNull(commitState.getVtts(false));
-    assertNull(commitState.getVtts(true));
+    assertThat(commitState.getVtts(false)).isNull();
+    assertThat(commitState.getVtts(true)).isNull();
   }
 
   private Envelope wrapInEnvelope(Payload payload) {

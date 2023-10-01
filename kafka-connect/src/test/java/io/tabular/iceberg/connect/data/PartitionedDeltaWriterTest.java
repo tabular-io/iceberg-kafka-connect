@@ -18,7 +18,7 @@
  */
 package io.tabular.iceberg.connect.data;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -56,7 +56,7 @@ public class PartitionedDeltaWriterTest extends BaseWriterTest {
 
     // in upsert mode, each write is a delete + append, so we'll have 1 data file
     // and 1 delete file for each partition (2 total)
-    assertEquals(2, result.dataFiles().length);
-    assertEquals(2, result.deleteFiles().length);
+    assertThat(result.dataFiles()).hasSize(2);
+    assertThat(result.deleteFiles()).hasSize(2);
   }
 }

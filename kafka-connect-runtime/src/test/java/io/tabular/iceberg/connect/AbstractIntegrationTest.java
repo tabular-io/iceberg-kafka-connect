@@ -21,8 +21,7 @@ package io.tabular.iceberg.connect;
 import static io.tabular.iceberg.connect.TestEvent.TEST_SCHEMA;
 import static io.tabular.iceberg.connect.TestEvent.TEST_SPEC;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.assertj.core.api.Assertions.fail;
 
 import java.time.Duration;
 import java.util.List;
@@ -77,8 +76,8 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
     List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
     // partition may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(1, 2);
-    assertEquals(1, files.get(0).recordCount());
-    assertEquals(1, files.get(1).recordCount());
+    assertThat(files.get(0).recordCount()).isEqualTo(1);
+    assertThat(files.get(1).recordCount()).isEqualTo(1);
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
   }
 
@@ -93,7 +92,7 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
     List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(1, 2);
-    assertEquals(2, files.stream().mapToLong(DataFile::recordCount).sum());
+    assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(2);
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
   }
 
@@ -110,7 +109,7 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
     List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(1, 2);
-    assertEquals(2, files.stream().mapToLong(DataFile::recordCount).sum());
+    assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(2);
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
 
     assertGeneratedSchema();
@@ -125,7 +124,7 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
     List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(1, 2);
-    assertEquals(2, files.stream().mapToLong(DataFile::recordCount).sum());
+    assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(2);
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
 
     assertGeneratedSchema();
@@ -192,7 +191,7 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
       Table table = catalog.loadTable(TABLE_IDENTIFIER);
       assertThat(table.snapshots()).hasSize(1);
     } catch (NoSuchTableException e) {
-      fail();
+      fail("Table should exist");
     }
   }
 }

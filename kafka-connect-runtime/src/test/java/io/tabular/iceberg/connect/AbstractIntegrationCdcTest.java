@@ -22,7 +22,6 @@ import static io.tabular.iceberg.connect.TestEvent.TEST_SCHEMA;
 import static io.tabular.iceberg.connect.TestEvent.TEST_SPEC;
 import static org.apache.iceberg.TableProperties.FORMAT_VERSION;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.time.Duration;
 import java.util.List;
@@ -72,12 +71,12 @@ public abstract class AbstractIntegrationCdcTest extends IntegrationTestBase {
     List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
     // partition may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(2, 3);
-    assertEquals(4, files.stream().mapToLong(DataFile::recordCount).sum());
+    assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(4);
 
     List<DeleteFile> deleteFiles = getDeleteFiles(TABLE_IDENTIFIER, branch);
     // partition may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(2, 3);
-    assertEquals(2, deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum());
+    assertThat(deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum()).isEqualTo(2);
 
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
   }
@@ -93,12 +92,12 @@ public abstract class AbstractIntegrationCdcTest extends IntegrationTestBase {
     List<DataFile> files = getDataFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(1, 2);
-    assertEquals(4, files.stream().mapToLong(DataFile::recordCount).sum());
+    assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(4);
 
     List<DeleteFile> deleteFiles = getDeleteFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
     assertThat(files).hasSizeBetween(1, 2);
-    assertEquals(2, deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum());
+    assertThat(deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum()).isEqualTo(2);
 
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
   }

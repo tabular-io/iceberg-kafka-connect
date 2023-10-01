@@ -18,7 +18,7 @@
  */
 package io.tabular.iceberg.connect.channel;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
@@ -104,19 +104,19 @@ public class WorkerTest extends ChannelTestBase {
 
     worker.process();
 
-    assertEquals(2, producer.history().size());
+    assertThat(producer.history()).hasSize(2);
 
     Event event = Event.decode(producer.history().get(0).value());
-    assertEquals(EventType.COMMIT_RESPONSE, event.getType());
+    assertThat(event.getType()).isEqualTo(EventType.COMMIT_RESPONSE);
     CommitResponsePayload responsePayload = (CommitResponsePayload) event.getPayload();
-    assertEquals(commitId, responsePayload.getCommitId());
+    assertThat(responsePayload.getCommitId()).isEqualTo(commitId);
 
     event = Event.decode(producer.history().get(1).value());
-    assertEquals(EventType.COMMIT_READY, event.getType());
+    assertThat(event.getType()).isEqualTo(EventType.COMMIT_READY);
     CommitReadyPayload readyPayload = (CommitReadyPayload) event.getPayload();
-    assertEquals(commitId, readyPayload.getCommitId());
-    assertEquals(1, readyPayload.getAssignments().size());
+    assertThat(readyPayload.getCommitId()).isEqualTo(commitId);
+    assertThat(readyPayload.getAssignments()).hasSize(1);
     // offset should be one more than the record offset
-    assertEquals(1L, readyPayload.getAssignments().get(0).getOffset());
+    assertThat(readyPayload.getAssignments().get(0).getOffset()).isEqualTo(1L);
   }
 }

@@ -18,8 +18,7 @@
  */
 package io.tabular.iceberg.connect;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
@@ -40,10 +39,10 @@ public class IcebergSinkTaskTest {
 
     List<TopicPartition> assignments =
         ImmutableList.of(new TopicPartition("topic2", 1), new TopicPartition("topic1", 0));
-    assertTrue(task.isLeader(assignments));
+    assertThat(task.isLeader(assignments)).isTrue();
 
     assignments =
         ImmutableList.of(new TopicPartition("topic2", 0), new TopicPartition("topic1", 1));
-    assertFalse(task.isLeader(assignments));
+    assertThat(task.isLeader(assignments)).isFalse();
   }
 }
