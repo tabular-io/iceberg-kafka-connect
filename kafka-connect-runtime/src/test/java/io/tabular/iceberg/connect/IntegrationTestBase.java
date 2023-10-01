@@ -116,7 +116,7 @@ public abstract class IntegrationTestBase {
                 return str.startsWith("kafka.connect.offsets.");
               }
             });
-    assertThat(props).containsKey("kafka.connect.commitId");
+    assertThat(props).containsKey("kafka.connect.commit-id");
   }
 
   protected List<DataFile> dataFiles(TableIdentifier tableIdentifier, String branch) {

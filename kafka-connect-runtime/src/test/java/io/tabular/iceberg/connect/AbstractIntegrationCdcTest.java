@@ -115,14 +115,14 @@ public abstract class AbstractIntegrationCdcTest extends IntegrationTestBase {
             .config("value.converter", "org.apache.kafka.connect.json.JsonConverter")
             .config("value.converter.schemas.enable", false)
             .config("iceberg.tables", String.format("%s.%s", TEST_DB, TEST_TABLE))
-            .config("iceberg.tables.cdcField", "op")
-            .config("iceberg.control.commitIntervalMs", 1000)
-            .config("iceberg.control.commitTimeoutMs", Integer.MAX_VALUE)
+            .config("iceberg.tables.cdc-field", "op")
+            .config("iceberg.control.commit.interval-ms", 1000)
+            .config("iceberg.control.commit.timeout-ms", Integer.MAX_VALUE)
             .config("iceberg.kafka.auto.offset.reset", "earliest");
     connectorCatalogProperties().forEach(connectorConfig::config);
 
     if (branch != null) {
-      connectorConfig.config("iceberg.tables.defaultCommitBranch", branch);
+      connectorConfig.config("iceberg.tables.default-commit-branch", branch);
     }
 
     context.startKafkaConnector(connectorConfig);

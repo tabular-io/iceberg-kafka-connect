@@ -63,7 +63,7 @@ public class CoordinatorTest extends ChannelTestBase {
     ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
     verify(appendOp, times(3)).set(captor.capture(), notNull());
     assertThat(captor.getAllValues().get(0)).startsWith("kafka.connect.offsets.");
-    assertThat(captor.getAllValues().get(1)).isEqualTo("kafka.connect.commitId");
+    assertThat(captor.getAllValues().get(1)).isEqualTo("kafka.connect.commit-id");
     assertThat(captor.getAllValues().get(2)).isEqualTo("kafka.connect.vtts");
 
     verify(deltaOp, times(0)).commit();
@@ -91,7 +91,7 @@ public class CoordinatorTest extends ChannelTestBase {
     ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
     verify(deltaOp, times(3)).set(captor.capture(), notNull());
     assertThat(captor.getAllValues().get(0)).startsWith("kafka.connect.offsets.");
-    assertThat(captor.getAllValues().get(1)).isEqualTo("kafka.connect.commitId");
+    assertThat(captor.getAllValues().get(1)).isEqualTo("kafka.connect.commit-id");
     assertThat(captor.getAllValues().get(2)).isEqualTo("kafka.connect.vtts");
   }
 

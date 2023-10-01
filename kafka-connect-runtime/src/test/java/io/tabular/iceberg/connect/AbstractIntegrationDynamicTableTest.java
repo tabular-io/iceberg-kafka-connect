@@ -93,15 +93,15 @@ public abstract class AbstractIntegrationDynamicTableTest extends IntegrationTes
             .config("key.converter.schemas.enable", false)
             .config("value.converter", "org.apache.kafka.connect.json.JsonConverter")
             .config("value.converter.schemas.enable", false)
-            .config("iceberg.tables.dynamic.enabled", true)
-            .config("iceberg.tables.routeField", "payload")
-            .config("iceberg.control.commitIntervalMs", 1000)
-            .config("iceberg.control.commitTimeoutMs", Integer.MAX_VALUE)
+            .config("iceberg.tables.dynamic-enabled", true)
+            .config("iceberg.tables.route-field", "payload")
+            .config("iceberg.control.commit.interval-ms", 1000)
+            .config("iceberg.control.commit.timeout-ms", Integer.MAX_VALUE)
             .config("iceberg.kafka.auto.offset.reset", "earliest");
     connectorCatalogProperties().forEach(connectorConfig::config);
 
     if (branch != null) {
-      connectorConfig.config("iceberg.tables.defaultCommitBranch", branch);
+      connectorConfig.config("iceberg.tables.default-commit-branch", branch);
     }
 
     context.startKafkaConnector(connectorConfig);

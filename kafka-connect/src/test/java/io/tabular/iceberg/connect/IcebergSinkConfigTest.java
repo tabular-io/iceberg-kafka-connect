@@ -49,7 +49,7 @@ public class IcebergSinkConfigTest {
             "topics", "source-topic",
             "iceberg.catalog.type", "rest",
             "iceberg.tables", "db.landing",
-            "iceberg.tables.dynamic.enabled", "true");
+            "iceberg.tables.dynamic-enabled", "true");
     assertThatThrownBy(() -> new IcebergSinkConfig(props))
         .isInstanceOf(ConfigException.class)
         .hasMessage("Cannot specify both static and dynamic table names");

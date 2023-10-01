@@ -96,16 +96,16 @@ public abstract class AbstractIntegrationMultiTableTest extends IntegrationTestB
             .config(
                 "iceberg.tables",
                 String.format("%s.%s, %s.%s", TEST_DB, TEST_TABLE1, TEST_DB, TEST_TABLE2))
-            .config("iceberg.tables.routeField", "type")
-            .config(String.format("iceberg.table.%s.%s.routeRegex", TEST_DB, TEST_TABLE1), "type1")
-            .config(String.format("iceberg.table.%s.%s.routeRegex", TEST_DB, TEST_TABLE2), "type2")
-            .config("iceberg.control.commitIntervalMs", 1000)
-            .config("iceberg.control.commitTimeoutMs", Integer.MAX_VALUE)
+            .config("iceberg.tables.route-field", "type")
+            .config(String.format("iceberg.table.%s.%s.route-regex", TEST_DB, TEST_TABLE1), "type1")
+            .config(String.format("iceberg.table.%s.%s.route-regex", TEST_DB, TEST_TABLE2), "type2")
+            .config("iceberg.control.commit.interval-ms", 1000)
+            .config("iceberg.control.commit.timeout-ms", Integer.MAX_VALUE)
             .config("iceberg.kafka.auto.offset.reset", "earliest");
     connectorCatalogProperties().forEach(connectorConfig::config);
 
     if (branch != null) {
-      connectorConfig.config("iceberg.tables.defaultCommitBranch", branch);
+      connectorConfig.config("iceberg.tables.default-commit-branch", branch);
     }
 
     context.startKafkaConnector(connectorConfig);

@@ -55,9 +55,9 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public static final String INTERNAL_TRANSACTIONAL_SUFFIX_PROP =
       "iceberg.coordinator.transactional.suffix";
-  private static final String ROUTE_REGEX = "routeRegex";
-  private static final String ID_COLUMNS = "idColumns";
-  private static final String COMMIT_BRANCH = "commitBranch";
+  private static final String ROUTE_REGEX = "route-regex";
+  private static final String ID_COLUMNS = "id-columns";
+  private static final String COMMIT_BRANCH = "commit-branch";
 
   private static final String CATALOG_PROP_PREFIX = "iceberg.catalog.";
   private static final String HADOOP_PROP_PREFIX = "iceberg.hadoop.";
@@ -66,21 +66,23 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   private static final String CATALOG_NAME_PROP = "iceberg.catalog";
   private static final String TABLES_PROP = "iceberg.tables";
-  private static final String TABLES_DYNAMIC_PROP = "iceberg.tables.dynamic.enabled";
-  private static final String TABLES_ROUTE_FIELD_PROP = "iceberg.tables.routeField";
-  private static final String TABLES_DEFAULT_COMMIT_BRANCH = "iceberg.tables.defaultCommitBranch";
-  private static final String TABLES_CDC_FIELD_PROP = "iceberg.tables.cdcField";
-  private static final String TABLES_UPSERT_MODE_ENABLED_PROP = "iceberg.tables.upsertModeEnabled";
-  private static final String TABLES_AUTO_CREATE_ENABLED_PROP = "iceberg.tables.autoCreateEnabled";
+  private static final String TABLES_DYNAMIC_PROP = "iceberg.tables.dynamic-enabled";
+  private static final String TABLES_ROUTE_FIELD_PROP = "iceberg.tables.route-field";
+  private static final String TABLES_DEFAULT_COMMIT_BRANCH = "iceberg.tables.default-commit-branch";
+  private static final String TABLES_CDC_FIELD_PROP = "iceberg.tables.cdc-field";
+  private static final String TABLES_UPSERT_MODE_ENABLED_PROP =
+      "iceberg.tables.upsert-mode-enabled";
+  private static final String TABLES_AUTO_CREATE_ENABLED_PROP =
+      "iceberg.tables.auto-create-enabled";
   private static final String TABLES_EVOLVE_SCHEMA_ENABLED_PROP =
-      "iceberg.tables.evolveSchemaEnabled";
+      "iceberg.tables.evolve-schema-enabled";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
-  private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group.id";
-  private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.control.commitIntervalMs";
+  private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group-id";
+  private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.control.commit.interval-ms";
   private static final int COMMIT_INTERVAL_MS_DEFAULT = 300_000;
-  private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.control.commitTimeoutMs";
+  private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.control.commit.timeout-ms";
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
-  private static final String COMMIT_THREADS_PROP = "iceberg.control.commitThreads";
+  private static final String COMMIT_THREADS_PROP = "iceberg.control.commit.threads";
   private static final String HADDOP_CONF_DIR_PROP = "iceberg.hadoop-conf-dir";
 
   private static final String NAME_PROP = "name";

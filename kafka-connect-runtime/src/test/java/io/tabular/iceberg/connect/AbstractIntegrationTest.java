@@ -104,7 +104,7 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
         new Schema(ImmutableList.of(Types.NestedField.required(1, "id", Types.LongType.get())));
     catalog.createTable(TABLE_IDENTIFIER, initialSchema);
 
-    runTest(branch, ImmutableMap.of("iceberg.tables.evolveSchemaEnabled", "true"));
+    runTest(branch, ImmutableMap.of("iceberg.tables.evolve-schema-enabled", "true"));
 
     List<DataFile> files = dataFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
@@ -119,7 +119,7 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
   @NullSource
   @ValueSource(strings = "test_branch")
   public void testIcebergSinkAutoCreate(String branch) {
-    runTest(branch, ImmutableMap.of("iceberg.tables.autoCreateEnabled", "true"));
+    runTest(branch, ImmutableMap.of("iceberg.tables.auto-create-enabled", "true"));
 
     List<DataFile> files = dataFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
@@ -158,13 +158,13 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
             .config("value.converter", "org.apache.kafka.connect.json.JsonConverter")
             .config("value.converter.schemas.enable", false)
             .config("iceberg.tables", String.format("%s.%s", TEST_DB, TEST_TABLE))
-            .config("iceberg.control.commitIntervalMs", 1000)
-            .config("iceberg.control.commitTimeoutMs", Integer.MAX_VALUE)
+            .config("iceberg.control.commit.interval-ms", 1000)
+            .config("iceberg.control.commit.timeout-ms", Integer.MAX_VALUE)
             .config("iceberg.kafka.auto.offset.reset", "earliest");
     connectorCatalogProperties().forEach(connectorConfig::config);
 
     if (branch != null) {
-      connectorConfig.config("iceberg.tables.defaultCommitBranch", branch);
+      connectorConfig.config("iceberg.tables.default-commit-branch", branch);
     }
 
     extraConfig.forEach(connectorConfig::config);
