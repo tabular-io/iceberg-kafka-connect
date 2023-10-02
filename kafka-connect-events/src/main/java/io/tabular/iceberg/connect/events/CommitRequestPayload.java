@@ -25,7 +25,7 @@ import org.apache.avro.SchemaBuilder;
 public class CommitRequestPayload implements Payload {
 
   private UUID commitId;
-  private Schema avroSchema;
+  private final Schema avroSchema;
 
   public static final Schema AVRO_SCHEMA =
       SchemaBuilder.builder()
@@ -37,6 +37,7 @@ public class CommitRequestPayload implements Payload {
           .noDefault()
           .endRecord();
 
+  // Used by Avro reflection to instantiate this class when reading events
   public CommitRequestPayload(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }

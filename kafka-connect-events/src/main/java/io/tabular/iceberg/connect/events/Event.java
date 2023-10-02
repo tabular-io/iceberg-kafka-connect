@@ -35,7 +35,7 @@ public class Event implements Element {
   private Long timestamp;
   private String groupId;
   private Payload payload;
-  private Schema avroSchema;
+  private final Schema avroSchema;
 
   private static final ThreadLocal<Map<?, ?>> DECODER_CACHES = decoderCaches();
 
@@ -58,6 +58,7 @@ public class Event implements Element {
     }
   }
 
+  // Used by Avro reflection to instantiate this class when reading events
   public Event(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }

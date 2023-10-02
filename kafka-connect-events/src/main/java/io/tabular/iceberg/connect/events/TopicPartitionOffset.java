@@ -27,7 +27,7 @@ public class TopicPartitionOffset implements Element {
   private Integer partition;
   private Long offset;
   private Long timestamp;
-  private Schema avroSchema;
+  private final Schema avroSchema;
 
   public static final Schema AVRO_SCHEMA =
       SchemaBuilder.builder()
@@ -57,6 +57,7 @@ public class TopicPartitionOffset implements Element {
           .noDefault()
           .endRecord();
 
+  // Used by Avro reflection to instantiate this class when reading events
   public TopicPartitionOffset(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }

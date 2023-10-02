@@ -35,8 +35,9 @@ public class CommitResponsePayload implements Payload {
   private TableName tableName;
   private List<DataFile> dataFiles;
   private List<DeleteFile> deleteFiles;
-  private Schema avroSchema;
+  private final Schema avroSchema;
 
+  // Used by Avro reflection to instantiate this class when reading events
   public CommitResponsePayload(Schema avroSchema) {
     this.avroSchema = avroSchema;
   }
