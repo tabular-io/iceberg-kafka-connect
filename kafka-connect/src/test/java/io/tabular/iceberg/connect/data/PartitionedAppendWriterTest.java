@@ -18,7 +18,7 @@
  */
 package io.tabular.iceberg.connect.data;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -36,7 +36,7 @@ public class PartitionedAppendWriterTest extends BaseWriterTest {
   @Test
   public void testPartitionedAppendWriter() {
     IcebergSinkConfig config = mock(IcebergSinkConfig.class);
-    when(config.getTableConfig(any())).thenReturn(mock(TableSinkConfig.class));
+    when(config.tableConfig(any())).thenReturn(mock(TableSinkConfig.class));
 
     when(table.spec()).thenReturn(SPEC);
 
@@ -54,7 +54,7 @@ public class PartitionedAppendWriterTest extends BaseWriterTest {
         writeTest(ImmutableList.of(row1, row2), config, PartitionedAppendWriter.class);
 
     // 1 data file for each partition (2 total)
-    assertEquals(2, result.dataFiles().length);
-    assertEquals(0, result.deleteFiles().length);
+    assertThat(result.dataFiles()).hasSize(2);
+    assertThat(result.deleteFiles()).hasSize(0);
   }
 }

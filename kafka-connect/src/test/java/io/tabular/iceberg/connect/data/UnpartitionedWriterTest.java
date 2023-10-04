@@ -18,7 +18,7 @@
  */
 package io.tabular.iceberg.connect.data;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -37,7 +37,7 @@ public class UnpartitionedWriterTest extends BaseWriterTest {
   @Test
   public void testUnpartitionedWriter() {
     IcebergSinkConfig config = mock(IcebergSinkConfig.class);
-    when(config.getTableConfig(any())).thenReturn(mock(TableSinkConfig.class));
+    when(config.tableConfig(any())).thenReturn(mock(TableSinkConfig.class));
 
     Record row1 = GenericRecord.create(SCHEMA);
     row1.setField("id", 123L);
@@ -51,7 +51,7 @@ public class UnpartitionedWriterTest extends BaseWriterTest {
 
     WriteResult result = writeTest(ImmutableList.of(row1, row2), config, UnpartitionedWriter.class);
 
-    assertEquals(1, result.dataFiles().length);
-    assertEquals(0, result.deleteFiles().length);
+    assertThat(result.dataFiles()).hasSize(1);
+    assertThat(result.deleteFiles()).hasSize(0);
   }
 }

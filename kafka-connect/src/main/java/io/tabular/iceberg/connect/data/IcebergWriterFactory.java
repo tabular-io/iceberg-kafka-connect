@@ -46,7 +46,7 @@ public class IcebergWriterFactory {
     } catch (NoSuchTableException e) {
       if (ignoreMissingTable) {
         return new RecordWriter() {};
-      } else if (!config.isAutoCreate()) {
+      } else if (!config.autoCreateEnabled()) {
         throw e;
       }
 

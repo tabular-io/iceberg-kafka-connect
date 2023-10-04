@@ -18,7 +18,7 @@
  */
 package io.tabular.iceberg.connect.data;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
@@ -26,19 +26,19 @@ public class OffsetTest {
 
   @Test
   public void testOffsetEquals() {
-    assertEquals(0, new Offset(null, null).compareTo(new Offset(null, null)));
-    assertEquals(0, new Offset(1L, null).compareTo(new Offset(1L, null)));
+    assertThat(new Offset(null, null).compareTo(new Offset(null, null))).isEqualTo(0);
+    assertThat(new Offset(1L, null).compareTo(new Offset(1L, null))).isEqualTo(0);
   }
 
   @Test
   public void testOffsetLessThan() {
-    assertEquals(-1, new Offset(null, null).compareTo(new Offset(1L, null)));
-    assertEquals(-1, new Offset(1L, null).compareTo(new Offset(2L, null)));
+    assertThat(new Offset(null, null).compareTo(new Offset(1L, null))).isEqualTo(-1);
+    assertThat(new Offset(1L, null).compareTo(new Offset(2L, null))).isEqualTo(-1);
   }
 
   @Test
   public void testOffsetGreaterThan() {
-    assertEquals(1, new Offset(1L, null).compareTo(new Offset(null, null)));
-    assertEquals(1, new Offset(2L, null).compareTo(new Offset(1L, null)));
+    assertThat(new Offset(1L, null).compareTo(new Offset(null, null))).isEqualTo(1);
+    assertThat(new Offset(2L, null).compareTo(new Offset(1L, null))).isEqualTo(1);
   }
 }

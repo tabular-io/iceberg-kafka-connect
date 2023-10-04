@@ -48,7 +48,7 @@ public class IcebergSinkTask extends SinkTask {
 
   @Override
   public String version() {
-    return IcebergSinkConfig.getVersion();
+    return IcebergSinkConfig.version();
   }
 
   @Override
@@ -59,7 +59,7 @@ public class IcebergSinkTask extends SinkTask {
   @Override
   public void open(Collection<TopicPartition> partitions) {
     catalog = Utilities.loadCatalog(config);
-    KafkaClientFactory clientFactory = new KafkaClientFactory(config.getKafkaProps());
+    KafkaClientFactory clientFactory = new KafkaClientFactory(config.kafkaProps());
 
     if (isLeader(partitions)) {
       LOG.info("Task elected leader, starting commit coordinator");
@@ -79,7 +79,7 @@ public class IcebergSinkTask extends SinkTask {
   boolean isLeader(Collection<TopicPartition> partitions) {
     // there should only be one worker assigned partition 0 of the first
     // topic, so elect that one the leader
-    String firstTopic = config.getTopics().first();
+    String firstTopic = config.topics().first();
     return partitions.stream()
         .filter(tp -> tp.topic().equals(firstTopic))
         .anyMatch(tp -> tp.partition() == 0);
@@ -141,7 +141,7 @@ public class IcebergSinkTask extends SinkTask {
     if (worker == null) {
       return ImmutableMap.of();
     }
-    return worker.getCommitOffsets();
+    return worker.commitOffsets();
   }
 
   @Override

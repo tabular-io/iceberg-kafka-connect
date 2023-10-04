@@ -18,9 +18,8 @@
  */
 package io.tabular.iceberg.connect;
 
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Map;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
@@ -31,14 +30,16 @@ public class IcebergSinkConfigTest {
 
   @Test
   public void testGetVersion() {
-    String version = IcebergSinkConfig.getVersion();
-    assertNotNull(version);
+    String version = IcebergSinkConfig.version();
+    assertThat(version).isNotNull();
   }
 
   @Test
   public void testMissingRequired() {
     Map<String, String> props = ImmutableMap.of();
-    assertThatExceptionOfType(ConfigException.class).isThrownBy(() -> new IcebergSinkConfig(props));
+    assertThatThrownBy(() -> new IcebergSinkConfig(props))
+        .isInstanceOf(ConfigException.class)
+        .hasMessageStartingWith("Missing required configuration");
   }
 
   @Test
@@ -48,8 +49,10 @@ public class IcebergSinkConfigTest {
             "topics", "source-topic",
             "iceberg.catalog.type", "rest",
             "iceberg.tables", "db.landing",
-            "iceberg.tables.dynamic.enabled", "true");
-    assertThatExceptionOfType(ConfigException.class).isThrownBy(() -> new IcebergSinkConfig(props));
+            "iceberg.tables.dynamic-enabled", "true");
+    assertThatThrownBy(() -> new IcebergSinkConfig(props))
+        .isInstanceOf(ConfigException.class)
+        .hasMessage("Cannot specify both static and dynamic table names");
   }
 
   @Test
@@ -60,6 +63,6 @@ public class IcebergSinkConfigTest {
             "topics", "source-topic",
             "iceberg.tables", "db.landing");
     IcebergSinkConfig config = new IcebergSinkConfig(props);
-    assertEquals(300_000, config.getCommitIntervalMs());
+    assertThat(config.commitIntervalMs()).isEqualTo(300_000);
   }
 }

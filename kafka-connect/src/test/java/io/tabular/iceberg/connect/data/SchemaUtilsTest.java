@@ -19,6 +19,7 @@
 package io.tabular.iceberg.connect.data;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -139,12 +140,15 @@ public class SchemaUtilsTest {
 
   @Test
   public void testInferIcebergType() {
+    assertThatThrownBy(() -> SchemaUtils.inferIcebergType(null))
+        .isInstanceOf(UnsupportedOperationException.class)
+        .hasMessage("Cannot infer type from null value");
+
     assertThat(SchemaUtils.inferIcebergType(1)).isInstanceOf(LongType.class);
     assertThat(SchemaUtils.inferIcebergType(1L)).isInstanceOf(LongType.class);
     assertThat(SchemaUtils.inferIcebergType(1.1f)).isInstanceOf(DoubleType.class);
     assertThat(SchemaUtils.inferIcebergType(1.1d)).isInstanceOf(DoubleType.class);
     assertThat(SchemaUtils.inferIcebergType("foobar")).isInstanceOf(StringType.class);
-    assertThat(SchemaUtils.inferIcebergType(null)).isInstanceOf(StringType.class);
     assertThat(SchemaUtils.inferIcebergType(true)).isInstanceOf(BooleanType.class);
     assertThat(SchemaUtils.inferIcebergType(LocalDate.now())).isInstanceOf(DateType.class);
     assertThat(SchemaUtils.inferIcebergType(LocalTime.now())).isInstanceOf(TimeType.class);

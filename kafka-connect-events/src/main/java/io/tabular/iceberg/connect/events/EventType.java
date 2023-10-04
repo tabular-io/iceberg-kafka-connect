@@ -31,7 +31,7 @@ public enum EventType {
     this.id = id;
   }
 
-  public int getId() {
+  public int id() {
     return id;
   }
 }

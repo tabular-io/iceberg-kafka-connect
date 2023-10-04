@@ -54,13 +54,13 @@ public class CommitState {
   }
 
   public void addReady(Envelope envelope) {
-    readyBuffer.add((CommitReadyPayload) envelope.getEvent().getPayload());
+    readyBuffer.add((CommitReadyPayload) envelope.event().payload());
     if (!isCommitInProgress()) {
       LOG.warn("Received commit ready when no commit in progress, this can happen during recovery");
     }
   }
 
-  public UUID getCurrentCommitId() {
+  public UUID currentCommitId() {
     return currentCommitId;
   }
 
@@ -74,7 +74,7 @@ public class CommitState {
     }
 
     return (!isCommitInProgress()
-        && System.currentTimeMillis() - startTime >= config.getCommitIntervalMs());
+        && System.currentTimeMillis() - startTime >= config.commitIntervalMs());
   }
 
   public void startNewCommit() {
@@ -96,7 +96,7 @@ public class CommitState {
       return false;
     }
 
-    if (System.currentTimeMillis() - startTime > config.getCommitTimeoutMs()) {
+    if (System.currentTimeMillis() - startTime > config.commitTimeoutMs()) {
       LOG.info("Commit timeout reached");
       return true;
     }
@@ -110,8 +110,8 @@ public class CommitState {
 
     int receivedPartitionCount =
         readyBuffer.stream()
-            .filter(payload -> payload.getCommitId().equals(currentCommitId))
-            .mapToInt(payload -> payload.getAssignments().size())
+            .filter(payload -> payload.commitId().equals(currentCommitId))
+            .mapToInt(payload -> payload.assignments().size())
             .sum();
 
     if (receivedPartitionCount >= expectedPartitionCount) {
@@ -131,29 +131,29 @@ public class CommitState {
     return false;
   }
 
-  public Map<TableIdentifier, List<Envelope>> getTableCommitMap() {
+  public Map<TableIdentifier, List<Envelope>> tableCommitMap() {
     return commitBuffer.stream()
         .collect(
             groupingBy(
                 envelope ->
-                    ((CommitResponsePayload) envelope.getEvent().getPayload())
-                        .getTableName()
+                    ((CommitResponsePayload) envelope.event().payload())
+                        .tableName()
                         .toIdentifier()));
   }
 
-  public Long getVtts(boolean partialCommit) {
+  public Long vtts(boolean partialCommit) {
     boolean validVtts =
         !partialCommit
             && readyBuffer.stream()
-                .flatMap(event -> event.getAssignments().stream())
-                .allMatch(offset -> offset.getTimestamp() != null);
+                .flatMap(event -> event.assignments().stream())
+                .allMatch(offset -> offset.timestamp() != null);
 
     Long result;
     if (validVtts) {
       result =
           readyBuffer.stream()
-              .flatMap(event -> event.getAssignments().stream())
-              .mapToLong(TopicPartitionOffset::getTimestamp)
+              .flatMap(event -> event.assignments().stream())
+              .mapToLong(TopicPartitionOffset::timestamp)
               .min()
               .getAsLong();
     } else {

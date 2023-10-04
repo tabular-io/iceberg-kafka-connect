@@ -24,6 +24,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
 import org.apache.iceberg.types.Types;
 
+// JavaBean-style for serialization
 public class TestEvent {
 
   public static final Schema TEST_SCHEMA =
