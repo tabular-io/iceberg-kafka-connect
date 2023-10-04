@@ -47,17 +47,17 @@ public class DmsTransform<R extends ConnectRecord<R>> implements Transformation<
 
   @SuppressWarnings("unchecked")
   private R applySchemaless(R record) {
-    final Map<String, Object> value = Requirements.requireMap(record.value(), "DMS transform");
+    Map<String, Object> value = Requirements.requireMap(record.value(), "DMS transform");
 
     // promote fields under "data"
     Object dataObj = value.get("data");
     Object metadataObj = value.get("metadata");
     if (!(dataObj instanceof Map) || !(metadataObj instanceof Map)) {
-      LOG.warn("Unable to transform DMS record, leaving as-is...");
-      return record;
+      LOG.warn("Unable to transform DMS record, skipping...");
+      return null;
     }
 
-    final Map<String, Object> result = Maps.newHashMap((Map<String, Object>) dataObj);
+    Map<String, Object> result = Maps.newHashMap((Map<String, Object>) dataObj);
 
     Map<String, Object> metadata = (Map<String, Object>) metadataObj;
 
