@@ -53,29 +53,16 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
   private R applyWithSchema(R record) {
     Struct value = Requirements.requireStruct(record.value(), "Debezium transform");
 
-    String op;
+    String op = mapOperation(value.get("op").toString());
+
     Struct payload;
     Schema payloadSchema;
-
-    switch (value.getString("op")) {
-      case "c":
-        op = "I";
-        payload = value.getStruct("after");
-        payloadSchema = value.schema().field("after").schema();
-        break;
-      case "u":
-        op = "U";
-        payload = value.getStruct("after");
-        payloadSchema = value.schema().field("after").schema();
-        break;
-      case "d":
-        op = "D";
-        payload = value.getStruct("before");
-        payloadSchema = value.schema().field("before").schema();
-        break;
-      default:
-        // unsupported operation, like "r", so skip this record
-        return null;
+    if (op.equals(CdcConstants.OP_DELETE)) {
+      payload = value.getStruct("before");
+      payloadSchema = value.schema().field("before").schema();
+    } else {
+      payload = value.getStruct("after");
+      payloadSchema = value.schema().field("after").schema();
     }
 
     Schema newValueSchema = makeUpdatedSchema(payloadSchema);
@@ -84,7 +71,9 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
     for (Field field : payloadSchema.fields()) {
       newValue.put(field.name(), payload.get(field));
     }
-    newValue.put("_cdc_op", op);
+    newValue.put(CdcConstants.COL_CDC_OP, op);
+    newValue.put(CdcConstants.COL_CDC_TS, value.getInt64("ts_ms"));
+    newValue.put(CdcConstants.COL_CDC_TABLE, tableNameFromSourceStruct(value.getStruct("source")));
 
     return record.newRecord(
         record.topic(),
@@ -100,34 +89,24 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
   private R applySchemaless(R record) {
     Map<String, Object> value = Requirements.requireMap(record.value(), "Debezium transform");
 
-    String op;
-    Object payload;
+    String op = mapOperation(value.get("op").toString());
 
-    switch (value.get("op").toString()) {
-      case "c":
-        op = "I";
-        payload = value.get("after");
-        break;
-      case "u":
-        op = "U";
-        payload = value.get("after");
-        break;
-      case "d":
-        op = "D";
-        payload = value.get("before");
-        break;
-      default:
-        // unsupported operation, like "r", so skip this record
-        return null;
+    Object payload;
+    if (op.equals(CdcConstants.OP_DELETE)) {
+      payload = value.get("before");
+    } else {
+      payload = value.get("after");
     }
 
     if (!(payload instanceof Map)) {
-      LOG.warn("Unable to transform Debezium record, skipping");
+      LOG.debug("Unable to transform Debezium record, payload is not a map, skipping");
       return null;
     }
 
     Map<String, Object> newValue = Maps.newHashMap((Map<String, Object>) payload);
-    newValue.put("_cdc_op", op);
+    newValue.put(CdcConstants.COL_CDC_OP, op);
+    newValue.put(CdcConstants.COL_CDC_TS, value.get("ts_ms"));
+    newValue.put(CdcConstants.COL_CDC_TABLE, tableNameFromSourceMap(value.get("source")));
 
     return record.newRecord(
         record.topic(),
@@ -139,13 +118,53 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
         record.timestamp());
   }
 
+  private String mapOperation(String originalOp) {
+    switch (originalOp) {
+      case "u":
+        return CdcConstants.OP_UPDATE;
+      case "d":
+        return CdcConstants.OP_DELETE;
+      default:
+        // Debezium ops "c", "r", and any others
+        return CdcConstants.OP_INSERT;
+    }
+  }
+
+  private String tableNameFromSourceStruct(Struct source) {
+    String db;
+    if (source.schema().field("schema") != null) {
+      // prefer schema if present, e.g. for Postgres
+      db = source.getString("schema");
+    } else {
+      db = source.getString("db");
+    }
+    String table = source.getString("table");
+    return db + "." + table;
+  }
+
+  private String tableNameFromSourceMap(Object source) {
+    Map<String, Object> map = Requirements.requireMap(source, "Debezium transform");
+
+    String db;
+    if (map.containsKey("schema")) {
+      // prefer schema if present, e.g. for Postgres
+      db = map.get("schema").toString();
+    } else {
+      db = map.get("db").toString();
+    }
+    String table = map.get("table").toString();
+    return db + "." + table;
+  }
+
   private Schema makeUpdatedSchema(Schema schema) {
     SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
 
     for (Field field : schema.fields()) {
       builder.field(field.name(), field.schema());
     }
-    builder.field("op", Schema.STRING_SCHEMA);
+    builder.field(CdcConstants.COL_CDC_OP, Schema.STRING_SCHEMA);
+    builder.field(CdcConstants.COL_CDC_TS, Schema.INT64_SCHEMA);
+    builder.field(CdcConstants.COL_CDC_TABLE, Schema.STRING_SCHEMA);
 
     return builder.build();
   }
