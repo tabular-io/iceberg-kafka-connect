@@ -25,10 +25,6 @@ subprojects {
     maven {
       url = "https://tabular-repository-public.s3.amazonaws.com/releases"
     }
-    // FIXME!! remove when Iceberg 1.4 is released...
-    maven {
-      url = "https://repository.apache.org/content/repositories/orgapacheiceberg-1146"
-    }
   }
 
   sourceCompatibility = "1.8"
