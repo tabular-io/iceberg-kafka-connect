@@ -21,6 +21,7 @@ package io.tabular.iceberg.connect.data;
 import static java.util.stream.Collectors.toList;
 
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
+import io.tabular.iceberg.connect.data.SchemaUpdate.TypeUpdate;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -32,6 +33,8 @@ import java.util.Map;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.UpdateSchema;
 import org.apache.iceberg.types.Type;
+import org.apache.iceberg.types.Type.PrimitiveType;
+import org.apache.iceberg.types.Type.TypeID;
 import org.apache.iceberg.types.Types.BinaryType;
 import org.apache.iceberg.types.Types.BooleanType;
 import org.apache.iceberg.types.Types.DateType;
@@ -61,7 +64,7 @@ public class SchemaUtils {
   private static final Logger LOG = LoggerFactory.getLogger(SchemaUtils.class);
   private static final int COMMIT_RETRY_ATTEMPTS = 2; // 3 total attempts
 
-  public static void applySchemaUpdates(Table table, List<AddColumn> updates) {
+  public static void applySchemaUpdates(Table table, List<SchemaUpdate> updates) {
     if (updates == null || updates.isEmpty()) {
       // no updates to apply
       return;
@@ -72,15 +75,37 @@ public class SchemaUtils {
         .run(notUsed -> commitSchemaUpdates(table, updates));
   }
 
-  private static void commitSchemaUpdates(Table table, List<AddColumn> updates) {
+  public static PrimitiveType evolveDataType(Type currentIcebergType, Schema valueSchema) {
+    if (currentIcebergType.typeId() == TypeID.FLOAT && valueSchema.type() == Schema.Type.FLOAT64) {
+      return DoubleType.get();
+    }
+    if (currentIcebergType.typeId() == TypeID.INTEGER && valueSchema.type() == Schema.Type.INT64) {
+      return LongType.get();
+    }
+    return null;
+  }
+
+  private static void commitSchemaUpdates(Table table, List<SchemaUpdate> updates) {
     // get the latest schema in case another process updated it
     table.refresh();
 
     // filter out columns that have already been added
-    List<AddColumn> filteredUpdates =
-        updates.stream().filter(update -> !columnExists(table.schema(), update)).collect(toList());
+    List<AddColumn> addColumns =
+        updates.stream()
+            .filter(update -> update instanceof AddColumn)
+            .map(update -> (AddColumn) update)
+            .filter(update -> !columnExists(table.schema(), update))
+            .collect(toList());
 
-    if (filteredUpdates.isEmpty()) {
+    // filter out columns that have already been added
+    List<TypeUpdate> typeUpdates =
+        updates.stream()
+            .filter(update -> update instanceof TypeUpdate)
+            .map(update -> (TypeUpdate) update)
+            .filter(update -> !typeMatches(table.schema(), update))
+            .collect(toList());
+
+    if (addColumns.isEmpty() && typeUpdates.isEmpty()) {
       // no updates to apply
       LOG.info("Schema for table {} already up-to-date", table.name());
       return;
@@ -88,8 +113,9 @@ public class SchemaUtils {
 
     // apply the updates
     UpdateSchema updateSchema = table.updateSchema();
-    filteredUpdates.forEach(
+    addColumns.forEach(
         update -> updateSchema.addColumn(update.parentName(), update.name(), update.type()));
+    typeUpdates.forEach(update -> updateSchema.updateColumn(update.name(), update.type()));
     updateSchema.commit();
     LOG.info("Schema for table {} updated with new columns", table.name());
   }
@@ -100,6 +126,10 @@ public class SchemaUtils {
             ? schema.asStruct()
             : schema.findType(update.parentName()).asStructType();
     return struct.field(update.name()) != null;
+  }
+
+  private static boolean typeMatches(org.apache.iceberg.Schema schema, TypeUpdate update) {
+    return schema.findType(update.name()).typeId() == update.type().typeId();
   }
 
   public static Type toIcebergType(Schema valueSchema) {

@@ -22,6 +22,7 @@ import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
+import io.tabular.iceberg.connect.data.SchemaUpdate.TypeUpdate;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
@@ -54,6 +55,7 @@ import org.apache.iceberg.mapping.NameMappingParser;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.types.Type;
+import org.apache.iceberg.types.Type.PrimitiveType;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.types.Types.DecimalType;
 import org.apache.iceberg.types.Types.ListType;
@@ -90,9 +92,9 @@ public class RecordConverter {
     return convert(data, null);
   }
 
-  public Record convert(Object data, Consumer<AddColumn> missingColConsumer) {
+  public Record convert(Object data, Consumer<SchemaUpdate> schemaUpdateConsumer) {
     if (data instanceof Struct || data instanceof Map) {
-      return convertStructValue(data, tableSchema.asStruct(), -1, missingColConsumer);
+      return convertStructValue(data, tableSchema.asStruct(), -1, schemaUpdateConsumer);
     }
     throw new UnsupportedOperationException("Cannot convert type: " + data.getClass().getName());
   }
@@ -103,17 +105,17 @@ public class RecordConverter {
   }
 
   private Object convertValue(
-      Object value, Type type, int fieldId, Consumer<AddColumn> missingColConsumer) {
+      Object value, Type type, int fieldId, Consumer<SchemaUpdate> schemaUpdateConsumer) {
     if (value == null) {
       return null;
     }
     switch (type.typeId()) {
       case STRUCT:
-        return convertStructValue(value, type.asStructType(), fieldId, missingColConsumer);
+        return convertStructValue(value, type.asStructType(), fieldId, schemaUpdateConsumer);
       case LIST:
-        return convertListValue(value, type.asListType(), missingColConsumer);
+        return convertListValue(value, type.asListType(), schemaUpdateConsumer);
       case MAP:
-        return convertMapValue(value, type.asMapType(), missingColConsumer);
+        return convertMapValue(value, type.asMapType(), schemaUpdateConsumer);
       case INTEGER:
         return convertInt(value);
       case LONG:
@@ -144,41 +146,53 @@ public class RecordConverter {
   }
 
   protected GenericRecord convertStructValue(
-      Object value, StructType schema, int parentFieldId, Consumer<AddColumn> missingColConsumer) {
+      Object value,
+      StructType schema,
+      int parentFieldId,
+      Consumer<SchemaUpdate> schemaUpdateConsumer) {
     if (value instanceof Map) {
-      return convertToStruct((Map<?, ?>) value, schema, parentFieldId, missingColConsumer);
+      return convertToStruct((Map<?, ?>) value, schema, parentFieldId, schemaUpdateConsumer);
     } else if (value instanceof Struct) {
-      return convertToStruct((Struct) value, schema, parentFieldId, missingColConsumer);
+      return convertToStruct((Struct) value, schema, parentFieldId, schemaUpdateConsumer);
     }
     throw new IllegalArgumentException("Cannot convert to struct: " + value.getClass().getName());
   }
 
   private GenericRecord convertToStruct(
-      Map<?, ?> map, StructType schema, int structFieldId, Consumer<AddColumn> missingColConsumer) {
+      Map<?, ?> map,
+      StructType schema,
+      int structFieldId,
+      Consumer<SchemaUpdate> schemaUpdateConsumer) {
     GenericRecord result = GenericRecord.create(schema);
     map.forEach(
         (recordFieldNameObj, recordFieldValue) -> {
           String recordFieldName = recordFieldNameObj.toString();
           NestedField tableField = lookupStructField(recordFieldName, schema, structFieldId);
           if (tableField == null) {
-            if (missingColConsumer != null && recordFieldValue != null) {
+            if (schemaUpdateConsumer != null && recordFieldValue != null) {
               String parentFieldName =
                   structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
               Type type = SchemaUtils.inferIcebergType(recordFieldValue);
-              missingColConsumer.accept(new AddColumn(parentFieldName, recordFieldName, type));
+              schemaUpdateConsumer.accept(new AddColumn(parentFieldName, recordFieldName, type));
             }
           } else {
             result.setField(
                 tableField.name(),
                 convertValue(
-                    recordFieldValue, tableField.type(), tableField.fieldId(), missingColConsumer));
+                    recordFieldValue,
+                    tableField.type(),
+                    tableField.fieldId(),
+                    schemaUpdateConsumer));
           }
         });
     return result;
   }
 
   private GenericRecord convertToStruct(
-      Struct struct, StructType schema, int structFieldId, Consumer<AddColumn> missingColConsumer) {
+      Struct struct,
+      StructType schema,
+      int structFieldId,
+      Consumer<SchemaUpdate> schemaUpdateConsumer) {
     GenericRecord result = GenericRecord.create(schema);
     struct
         .schema()
@@ -187,21 +201,28 @@ public class RecordConverter {
             recordField -> {
               NestedField tableField = lookupStructField(recordField.name(), schema, structFieldId);
               if (tableField == null) {
-                if (missingColConsumer != null) {
+                if (schemaUpdateConsumer != null) {
                   String parentFieldName =
                       structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
                   Type type = SchemaUtils.toIcebergType(recordField.schema());
-                  missingColConsumer.accept(
+                  schemaUpdateConsumer.accept(
                       new AddColumn(parentFieldName, recordField.name(), type));
                 }
               } else {
-                result.setField(
-                    tableField.name(),
-                    convertValue(
-                        struct.get(recordField),
-                        tableField.type(),
-                        tableField.fieldId(),
-                        missingColConsumer));
+                PrimitiveType evolveDataType =
+                    SchemaUtils.evolveDataType(tableField.type(), recordField.schema());
+                if (evolveDataType != null && schemaUpdateConsumer != null) {
+                  String fieldName = tableSchema.findColumnName(tableField.fieldId());
+                  schemaUpdateConsumer.accept(new TypeUpdate(fieldName, evolveDataType));
+                } else {
+                  result.setField(
+                      tableField.name(),
+                      convertValue(
+                          struct.get(recordField),
+                          tableField.type(),
+                          tableField.fieldId(),
+                          schemaUpdateConsumer));
+                }
               }
             });
     return result;
@@ -234,20 +255,20 @@ public class RecordConverter {
   }
 
   protected List<Object> convertListValue(
-      Object value, ListType type, Consumer<AddColumn> missingColConsumer) {
+      Object value, ListType type, Consumer<SchemaUpdate> schemaUpdateConsumer) {
     Preconditions.checkArgument(value instanceof List);
     List<?> list = (List<?>) value;
     return list.stream()
         .map(
             element -> {
               int fieldId = type.fields().get(0).fieldId();
-              return convertValue(element, type.elementType(), fieldId, missingColConsumer);
+              return convertValue(element, type.elementType(), fieldId, schemaUpdateConsumer);
             })
         .collect(toList());
   }
 
   protected Map<Object, Object> convertMapValue(
-      Object value, MapType type, Consumer<AddColumn> missingColConsumer) {
+      Object value, MapType type, Consumer<SchemaUpdate> schemaUpdateConsumer) {
     Preconditions.checkArgument(value instanceof Map);
     Map<?, ?> map = (Map<?, ?>) value;
     Map<Object, Object> result = Maps.newHashMap();
@@ -256,8 +277,8 @@ public class RecordConverter {
           int keyFieldId = type.fields().get(0).fieldId();
           int valueFieldId = type.fields().get(0).fieldId();
           result.put(
-              convertValue(k, type.keyType(), keyFieldId, missingColConsumer),
-              convertValue(v, type.valueType(), valueFieldId, missingColConsumer));
+              convertValue(k, type.keyType(), keyFieldId, schemaUpdateConsumer),
+              convertValue(v, type.valueType(), valueFieldId, schemaUpdateConsumer));
         });
     return result;
   }

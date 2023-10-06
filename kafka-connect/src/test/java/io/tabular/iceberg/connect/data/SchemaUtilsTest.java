@@ -27,6 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
+import io.tabular.iceberg.connect.data.SchemaUpdate.TypeUpdate;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -38,6 +39,7 @@ import org.apache.iceberg.UpdateSchema;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Type;
+import org.apache.iceberg.types.Type.PrimitiveType;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.types.Types.BinaryType;
 import org.apache.iceberg.types.Types.BooleanType;
@@ -64,7 +66,9 @@ import org.junit.jupiter.api.Test;
 public class SchemaUtilsTest {
 
   private static final org.apache.iceberg.Schema SIMPLE_SCHEMA =
-      new org.apache.iceberg.Schema(Types.NestedField.required(1, "i", Types.IntegerType.get()));
+      new org.apache.iceberg.Schema(
+          Types.NestedField.required(1, "i", Types.IntegerType.get()),
+          Types.NestedField.required(2, "f", Types.FloatType.get()));
 
   @Test
   public void testApplySchemaUpdates() {
@@ -73,15 +77,17 @@ public class SchemaUtilsTest {
     when(table.schema()).thenReturn(SIMPLE_SCHEMA);
     when(table.updateSchema()).thenReturn(updateSchema);
 
-    List<AddColumn> updates =
+    List<SchemaUpdate> updates =
         ImmutableList.of(
             new AddColumn(null, "i", Types.IntegerType.get()),
+            new TypeUpdate("f", Types.DoubleType.get()),
             new AddColumn(null, "s", Types.StringType.get()));
 
     SchemaUtils.applySchemaUpdates(table, updates);
     verify(table).refresh();
     verify(table).updateSchema();
     verify(updateSchema).addColumn(any(), any(String.class), any(Type.class));
+    verify(updateSchema).updateColumn(any(String.class), any(PrimitiveType.class));
     verify(updateSchema).commit();
   }
 
