@@ -27,6 +27,7 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.Requirements;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
@@ -72,7 +73,7 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
       newValue.put(field.name(), payload.get(field));
     }
     newValue.put(CdcConstants.COL_CDC_OP, op);
-    newValue.put(CdcConstants.COL_CDC_TS, value.getInt64("ts_ms"));
+    newValue.put(CdcConstants.COL_CDC_TS, new java.util.Date(value.getInt64("ts_ms")));
     newValue.put(CdcConstants.COL_CDC_TABLE, tableNameFromSourceStruct(value.getStruct("source")));
 
     return record.newRecord(
@@ -163,7 +164,7 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
       builder.field(field.name(), field.schema());
     }
     builder.field(CdcConstants.COL_CDC_OP, Schema.STRING_SCHEMA);
-    builder.field(CdcConstants.COL_CDC_TS, Schema.INT64_SCHEMA);
+    builder.field(CdcConstants.COL_CDC_TS, Timestamp.SCHEMA);
     builder.field(CdcConstants.COL_CDC_TABLE, Schema.STRING_SCHEMA);
 
     return builder.build();
