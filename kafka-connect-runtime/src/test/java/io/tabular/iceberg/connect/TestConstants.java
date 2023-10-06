@@ -28,9 +28,4 @@ public interface TestConstants {
   String AWS_REGION = "us-east-1";
 
   ObjectMapper MAPPER = new ObjectMapper();
-
-  enum CatalogType {
-    REST,
-    NESSIE,
-  }
 }
