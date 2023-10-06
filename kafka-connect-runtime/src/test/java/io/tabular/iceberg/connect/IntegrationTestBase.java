@@ -35,7 +35,6 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -46,7 +45,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import software.amazon.awssdk.services.s3.S3Client;
 
-public abstract class IntegrationTestBase {
+public class IntegrationTestBase {
 
   protected final TestContext context = TestContext.INSTANCE;
   protected S3Client s3;
@@ -62,10 +61,10 @@ public abstract class IntegrationTestBase {
 
   @BeforeEach
   public void baseBefore() {
-    s3 = TestContextUtil.initLocalS3Client(context.localMinioPort());
-    catalog = intCatalog();
-    producer = TestContextUtil.initLocalProducer(context.kafkaBootstrapServers());
-    admin = TestContextUtil.initLocalAdmin(context.kafkaBootstrapServers());
+    s3 = context.initLocalS3Client();
+    catalog = context.initLocalCatalog();
+    producer = context.initLocalProducer();
+    admin = context.initLocalAdmin();
 
     this.connectorName = "test_connector-" + UUID.randomUUID();
     this.testTopic = "test-topic-" + UUID.randomUUID();
@@ -83,26 +82,6 @@ public abstract class IntegrationTestBase {
     producer.close();
     admin.close();
     s3.close();
-  }
-
-  protected abstract TestConstants.CatalogType catalogType();
-
-  private Catalog intCatalog() {
-    if (catalogType() == TestConstants.CatalogType.REST) {
-      return context.initRestCatalog();
-    } else if (catalogType() == TestConstants.CatalogType.NESSIE) {
-      return context.initNessieCatalog();
-    }
-    return null;
-  }
-
-  protected Map<String, Object> connectorCatalogProperties() {
-    if (catalogType() == TestConstants.CatalogType.REST) {
-      return TestContextUtil.connectorRestCatalogProperties();
-    } else if (catalogType() == TestConstants.CatalogType.NESSIE) {
-      return TestContextUtil.connectorNessieCatalogProperties();
-    }
-    return ImmutableMap.of();
   }
 
   protected void assertSnapshotProps(TableIdentifier tableIdentifier, String branch) {

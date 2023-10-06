@@ -22,24 +22,34 @@ import static io.tabular.iceberg.connect.TestConstants.AWS_ACCESS_KEY;
 import static io.tabular.iceberg.connect.TestConstants.AWS_REGION;
 import static io.tabular.iceberg.connect.TestConstants.AWS_SECRET_KEY;
 import static io.tabular.iceberg.connect.TestConstants.BUCKET;
-import static io.tabular.iceberg.connect.TestContextUtil.MINIO_PORT;
-import static io.tabular.iceberg.connect.TestContextUtil.NESSIE_CATALOG_PORT;
-import static io.tabular.iceberg.connect.TestContextUtil.REST_CATALOG_PORT;
-import static io.tabular.iceberg.connect.TestContextUtil.initLocalS3Client;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Stream;
 import org.apache.iceberg.CatalogProperties;
+import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.aws.AwsClientProperties;
 import org.apache.iceberg.aws.s3.S3FileIO;
 import org.apache.iceberg.aws.s3.S3FileIOProperties;
 import org.apache.iceberg.catalog.Catalog;
-import org.apache.iceberg.nessie.NessieCatalog;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.rest.RESTCatalog;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.Network;
+import org.testcontainers.containers.wait.strategy.HttpWaitStrategy;
 import org.testcontainers.lifecycle.Startables;
+import org.testcontainers.utility.DockerImageName;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 
 @SuppressWarnings("rawtypes")
@@ -50,27 +60,59 @@ public class TestContext {
   private final Network network;
   private final KafkaContainer kafka;
   private final KafkaConnectContainer kafkaConnect;
-  private final GenericContainer restCatalog;
-  private final GenericContainer nessieCatalog;
+  private final GenericContainer catalog;
   private final GenericContainer minio;
+
+  private static final String LOCAL_INSTALL_DIR = "build/install";
+  private static final String KC_PLUGIN_DIR = "/test/kafka-connect";
+
+  private static final String MINIO_IMAGE = "minio/minio";
+  private static final String KAFKA_IMAGE = "confluentinc/cp-kafka:7.5.1";
+  private static final String CONNECT_IMAGE = "confluentinc/cp-kafka-connect:7.5.1";
+  private static final String REST_CATALOG_IMAGE = "tabulario/iceberg-rest:0.7.0";
+
+  private static final int MINIO_PORT = 9000;
+  private static final int CATALOG_PORT = 8181;
 
   private TestContext() {
     network = Network.newNetwork();
 
-    minio = TestContextUtil.minioContainer(network);
+    minio =
+        new GenericContainer<>(DockerImageName.parse(MINIO_IMAGE))
+            .withNetwork(network)
+            .withNetworkAliases("minio")
+            .withExposedPorts(MINIO_PORT)
+            .withCommand("server /data")
+            .waitingFor(new HttpWaitStrategy().forPort(MINIO_PORT).forPath("/minio/health/ready"));
 
-    restCatalog = TestContextUtil.restCatalogContainer(network, minio);
+    catalog =
+        new GenericContainer<>(DockerImageName.parse(REST_CATALOG_IMAGE))
+            .withNetwork(network)
+            .withNetworkAliases("iceberg")
+            .dependsOn(minio)
+            .withExposedPorts(CATALOG_PORT)
+            .withEnv("CATALOG_WAREHOUSE", "s3://" + BUCKET + "/warehouse")
+            .withEnv("CATALOG_IO__IMPL", S3FileIO.class.getName())
+            .withEnv("CATALOG_S3_ENDPOINT", "http://minio:9000")
+            .withEnv("CATALOG_S3_ACCESS__KEY__ID", AWS_ACCESS_KEY)
+            .withEnv("CATALOG_S3_SECRET__ACCESS__KEY", AWS_SECRET_KEY)
+            .withEnv("CATALOG_S3_PATH__STYLE__ACCESS", "true")
+            .withEnv("AWS_REGION", AWS_REGION);
 
-    nessieCatalog = TestContextUtil.nessieCatalogContainer(network, minio);
-
-    kafka = TestContextUtil.kafkaContainer(network);
+    kafka = new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE)).withNetwork(network);
 
     kafkaConnect =
-        TestContextUtil.kafkaConnectContainer(network, restCatalog, nessieCatalog, kafka);
+        new KafkaConnectContainer(DockerImageName.parse(CONNECT_IMAGE))
+            .withNetwork(network)
+            .dependsOn(catalog, kafka)
+            .withFileSystemBind(LOCAL_INSTALL_DIR, KC_PLUGIN_DIR)
+            .withEnv("CONNECT_PLUGIN_PATH", KC_PLUGIN_DIR)
+            .withEnv("CONNECT_BOOTSTRAP_SERVERS", kafka.getNetworkAliases().get(0) + ":9092")
+            .withEnv("CONNECT_OFFSET_FLUSH_INTERVAL_MS", "500");
 
-    Startables.deepStart(Stream.of(minio, restCatalog, nessieCatalog, kafka, kafkaConnect)).join();
+    Startables.deepStart(Stream.of(minio, catalog, kafka, kafkaConnect)).join();
 
-    try (S3Client s3 = initLocalS3Client(localMinioPort())) {
+    try (S3Client s3 = initLocalS3Client()) {
       s3.createBucket(req -> req.bucket(BUCKET));
     }
 
@@ -80,38 +122,56 @@ public class TestContext {
   private void shutdown() {
     kafkaConnect.close();
     kafka.close();
-    restCatalog.close();
-    nessieCatalog.close();
+    catalog.close();
     minio.close();
     network.close();
   }
 
-  protected int localMinioPort() {
+  private int getLocalMinioPort() {
     return minio.getMappedPort(MINIO_PORT);
   }
 
-  protected String kafkaBootstrapServers() {
+  private int getLocalCatalogPort() {
+    return catalog.getMappedPort(CATALOG_PORT);
+  }
+
+  private String getLocalBootstrapServers() {
     return kafka.getBootstrapServers();
   }
 
-  protected void startKafkaConnector(KafkaConnectContainer.Config config) {
+  public void startConnector(KafkaConnectContainer.Config config) {
     kafkaConnect.startConnector(config);
     kafkaConnect.ensureConnectorRunning(config.getName());
   }
 
-  protected void stopKafkaConnector(String name) {
+  public void stopConnector(String name) {
     kafkaConnect.stopConnector(name);
   }
 
-  protected Catalog initRestCatalog() {
-    String localCatalogUri = "http://localhost:" + restCatalog.getMappedPort(REST_CATALOG_PORT);
+  public S3Client initLocalS3Client() {
+    try {
+      return S3Client.builder()
+          .endpointOverride(new URI("http://localhost:" + getLocalMinioPort()))
+          .region(Region.of(AWS_REGION))
+          .forcePathStyle(true)
+          .credentialsProvider(
+              StaticCredentialsProvider.create(
+                  AwsBasicCredentials.create(AWS_ACCESS_KEY, AWS_SECRET_KEY)))
+          .build();
+    } catch (URISyntaxException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public Catalog initLocalCatalog() {
+    String localCatalogUri = "http://localhost:" + getLocalCatalogPort();
     RESTCatalog result = new RESTCatalog();
     result.initialize(
         "local",
         ImmutableMap.<String, String>builder()
             .put(CatalogProperties.URI, localCatalogUri)
             .put(CatalogProperties.FILE_IO_IMPL, S3FileIO.class.getName())
-            .put(S3FileIOProperties.ENDPOINT, "http://localhost:" + localMinioPort())
+            .put(S3FileIOProperties.ENDPOINT, "http://localhost:" + getLocalMinioPort())
             .put(S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
             .put(S3FileIOProperties.SECRET_ACCESS_KEY, AWS_SECRET_KEY)
             .put(S3FileIOProperties.PATH_STYLE_ACCESS, "true")
@@ -120,22 +180,33 @@ public class TestContext {
     return result;
   }
 
-  protected Catalog initNessieCatalog() {
-    String localCatalogUri =
-        "http://localhost:" + nessieCatalog.getMappedPort(NESSIE_CATALOG_PORT) + "/api/v1";
-    NessieCatalog result = new NessieCatalog();
-    result.initialize(
-        "local",
-        ImmutableMap.<String, String>builder()
-            .put(CatalogProperties.URI, localCatalogUri)
-            .put(CatalogProperties.WAREHOUSE_LOCATION, "s3://" + BUCKET + "/warehouse")
-            .put(CatalogProperties.FILE_IO_IMPL, S3FileIO.class.getName())
-            .put(S3FileIOProperties.ENDPOINT, "http://localhost:" + localMinioPort())
-            .put(S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
-            .put(S3FileIOProperties.SECRET_ACCESS_KEY, AWS_SECRET_KEY)
-            .put(S3FileIOProperties.PATH_STYLE_ACCESS, "true")
-            .put(AwsClientProperties.CLIENT_REGION, AWS_REGION)
-            .build());
-    return result;
+  public Map<String, Object> connectorCatalogProperties() {
+    return ImmutableMap.<String, Object>builder()
+        .put(
+            "iceberg.catalog." + CatalogUtil.ICEBERG_CATALOG_TYPE,
+            CatalogUtil.ICEBERG_CATALOG_TYPE_REST)
+        .put("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:" + CATALOG_PORT)
+        .put("iceberg.catalog." + S3FileIOProperties.ENDPOINT, "http://minio:" + MINIO_PORT)
+        .put("iceberg.catalog." + S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
+        .put("iceberg.catalog." + S3FileIOProperties.SECRET_ACCESS_KEY, AWS_SECRET_KEY)
+        .put("iceberg.catalog." + S3FileIOProperties.PATH_STYLE_ACCESS, true)
+        .put("iceberg.catalog." + AwsClientProperties.CLIENT_REGION, AWS_REGION)
+        .build();
+  }
+
+  public KafkaProducer<String, String> initLocalProducer() {
+    return new KafkaProducer<>(
+        ImmutableMap.of(
+            ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
+            getLocalBootstrapServers(),
+            ProducerConfig.CLIENT_ID_CONFIG,
+            UUID.randomUUID().toString()),
+        new StringSerializer(),
+        new StringSerializer());
+  }
+
+  public Admin initLocalAdmin() {
+    return Admin.create(
+        ImmutableMap.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, getLocalBootstrapServers()));
   }
 }

@@ -20,15 +20,18 @@ package io.tabular.iceberg.connect;
 
 import static io.tabular.iceberg.connect.TestEvent.TEST_SCHEMA;
 import static io.tabular.iceberg.connect.TestEvent.TEST_SPEC;
+import static org.apache.iceberg.TableProperties.FORMAT_VERSION;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
 import java.util.List;
 import org.apache.iceberg.DataFile;
+import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.SupportsNamespaces;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,13 +39,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-public abstract class AbstractIntegrationMultiTableTest extends IntegrationTestBase {
+public class IntegrationCdcTest extends IntegrationTestBase {
 
   private static final String TEST_DB = "test";
-  private static final String TEST_TABLE1 = "foobar1";
-  private static final String TEST_TABLE2 = "foobar2";
-  private static final TableIdentifier TABLE_IDENTIFIER1 = TableIdentifier.of(TEST_DB, TEST_TABLE1);
-  private static final TableIdentifier TABLE_IDENTIFIER2 = TableIdentifier.of(TEST_DB, TEST_TABLE2);
+  private static final String TEST_TABLE = "foobar";
+  private static final TableIdentifier TABLE_IDENTIFIER = TableIdentifier.of(TEST_DB, TEST_TABLE);
 
   @BeforeEach
   public void before() {
@@ -52,33 +53,53 @@ public abstract class AbstractIntegrationMultiTableTest extends IntegrationTestB
 
   @AfterEach
   public void after() {
-    context.stopKafkaConnector(connectorName);
+    context.stopConnector(connectorName);
     deleteTopic(testTopic);
-    catalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE1));
-    catalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE2));
+    catalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE));
     ((SupportsNamespaces) catalog).dropNamespace(Namespace.of(TEST_DB));
   }
 
   @ParameterizedTest
   @NullSource
   @ValueSource(strings = "test_branch")
-  public void testIcebergSink(String branch) {
-    // partitioned table
-    catalog.createTable(TABLE_IDENTIFIER1, TEST_SCHEMA, TEST_SPEC);
-    // unpartitioned table
-    catalog.createTable(TABLE_IDENTIFIER2, TEST_SCHEMA);
+  public void testIcebergSinkPartitionedTable(String branch) {
+    catalog.createTable(
+        TABLE_IDENTIFIER, TEST_SCHEMA, TEST_SPEC, ImmutableMap.of(FORMAT_VERSION, "2"));
 
     runTest(branch);
 
-    List<DataFile> files = dataFiles(TABLE_IDENTIFIER1, branch);
-    assertThat(files).hasSize(1);
-    assertThat(files.get(0).recordCount()).isEqualTo(1);
-    assertSnapshotProps(TABLE_IDENTIFIER1, branch);
+    List<DataFile> files = dataFiles(TABLE_IDENTIFIER, branch);
+    // partition may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(2, 3);
+    assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(4);
 
-    files = dataFiles(TABLE_IDENTIFIER2, branch);
-    assertThat(files).hasSize(1);
-    assertThat(files.get(0).recordCount()).isEqualTo(1);
-    assertSnapshotProps(TABLE_IDENTIFIER2, branch);
+    List<DeleteFile> deleteFiles = deleteFiles(TABLE_IDENTIFIER, branch);
+    // partition may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(2, 3);
+    assertThat(deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum()).isEqualTo(2);
+
+    assertSnapshotProps(TABLE_IDENTIFIER, branch);
+  }
+
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(strings = "test_branch")
+  public void testIcebergSinkUnpartitionedTable(String branch) {
+    catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA, null, ImmutableMap.of(FORMAT_VERSION, "2"));
+
+    runTest(branch);
+
+    List<DataFile> files = dataFiles(TABLE_IDENTIFIER, branch);
+    // may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(1, 2);
+    assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(4);
+
+    List<DeleteFile> deleteFiles = deleteFiles(TABLE_IDENTIFIER, branch);
+    // may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(1, 2);
+    assertThat(deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum()).isEqualTo(2);
+
+    assertSnapshotProps(TABLE_IDENTIFIER, branch);
   }
 
   private void runTest(String branch) {
@@ -93,30 +114,36 @@ public abstract class AbstractIntegrationMultiTableTest extends IntegrationTestB
             .config("key.converter.schemas.enable", false)
             .config("value.converter", "org.apache.kafka.connect.json.JsonConverter")
             .config("value.converter.schemas.enable", false)
-            .config(
-                "iceberg.tables",
-                String.format("%s.%s, %s.%s", TEST_DB, TEST_TABLE1, TEST_DB, TEST_TABLE2))
-            .config("iceberg.tables.route-field", "type")
-            .config(String.format("iceberg.table.%s.%s.route-regex", TEST_DB, TEST_TABLE1), "type1")
-            .config(String.format("iceberg.table.%s.%s.route-regex", TEST_DB, TEST_TABLE2), "type2")
+            .config("iceberg.tables", String.format("%s.%s", TEST_DB, TEST_TABLE))
+            .config("iceberg.tables.cdc-field", "op")
             .config("iceberg.control.commit.interval-ms", 1000)
             .config("iceberg.control.commit.timeout-ms", Integer.MAX_VALUE)
             .config("iceberg.kafka.auto.offset.reset", "earliest");
-    connectorCatalogProperties().forEach(connectorConfig::config);
+    context.connectorCatalogProperties().forEach(connectorConfig::config);
 
     if (branch != null) {
       connectorConfig.config("iceberg.tables.default-commit-branch", branch);
     }
 
-    context.startKafkaConnector(connectorConfig);
+    context.startConnector(connectorConfig);
 
-    TestEvent event1 = new TestEvent(1, "type1", System.currentTimeMillis(), "hello world!");
-    TestEvent event2 = new TestEvent(2, "type2", System.currentTimeMillis(), "having fun?");
-    TestEvent event3 = new TestEvent(3, "type3", System.currentTimeMillis(), "ignore me");
+    // start with 3 records, update 1, delete 1. Should be a total of 4 adds and 2 deletes
+    // (the update will be 1 add and 1 delete)
+
+    TestEvent event1 = new TestEvent(1, "type1", System.currentTimeMillis(), "hello world!", "I");
+    TestEvent event2 = new TestEvent(2, "type2", System.currentTimeMillis(), "having fun?", "I");
+
+    long threeDaysAgo = System.currentTimeMillis() - Duration.ofDays(3).toMillis();
+    TestEvent event3 = new TestEvent(3, "type3", threeDaysAgo, "hello from the past!", "I");
+
+    TestEvent event4 = new TestEvent(1, "type1", System.currentTimeMillis(), "hello world!", "D");
+    TestEvent event5 = new TestEvent(3, "type3", threeDaysAgo, "updated!", "U");
 
     send(testTopic, event1);
     send(testTopic, event2);
     send(testTopic, event3);
+    send(testTopic, event4);
+    send(testTopic, event5);
     flush();
 
     Awaitility.await()
@@ -126,9 +153,7 @@ public abstract class AbstractIntegrationMultiTableTest extends IntegrationTestB
   }
 
   private void assertSnapshotAdded() {
-    Table table = catalog.loadTable(TABLE_IDENTIFIER1);
-    assertThat(table.snapshots()).hasSize(1);
-    table = catalog.loadTable(TABLE_IDENTIFIER2);
+    Table table = catalog.loadTable(TABLE_IDENTIFIER);
     assertThat(table.snapshots()).hasSize(1);
   }
 }
