@@ -45,7 +45,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-public abstract class AbstractIntegrationTest extends IntegrationTestBase {
+public class IntegrationTest extends IntegrationTestBase {
 
   private static final String TEST_DB = "test";
   private static final String TEST_TABLE = "foobar";
@@ -59,7 +59,7 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
 
   @AfterEach
   public void after() {
-    context.stopKafkaConnector(connectorName);
+    context.stopConnector(connectorName);
     deleteTopic(testTopic);
     catalog.dropTable(TableIdentifier.of(TEST_DB, TEST_TABLE));
     ((SupportsNamespaces) catalog).dropNamespace(Namespace.of(TEST_DB));
@@ -161,7 +161,7 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
             .config("iceberg.control.commit.interval-ms", 1000)
             .config("iceberg.control.commit.timeout-ms", Integer.MAX_VALUE)
             .config("iceberg.kafka.auto.offset.reset", "earliest");
-    connectorCatalogProperties().forEach(connectorConfig::config);
+    context.connectorCatalogProperties().forEach(connectorConfig::config);
 
     if (branch != null) {
       connectorConfig.config("iceberg.tables.default-commit-branch", branch);
@@ -169,7 +169,7 @@ public abstract class AbstractIntegrationTest extends IntegrationTestBase {
 
     extraConfig.forEach(connectorConfig::config);
 
-    context.startKafkaConnector(connectorConfig);
+    context.startConnector(connectorConfig);
 
     TestEvent event1 = new TestEvent(1, "type1", System.currentTimeMillis(), "hello world!");
 
