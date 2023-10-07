@@ -18,13 +18,25 @@
  */
 package io.tabular.iceberg.connect;
 
+import static io.tabular.iceberg.connect.TestConstants.MAPPER;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import java.util.Date;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
+import org.apache.iceberg.common.DynMethods;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
 import org.apache.iceberg.types.Types;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.storage.ConverterConfig;
+import org.apache.kafka.connect.storage.ConverterType;
 
-// JavaBean-style for serialization
 public class TestEvent {
 
   public static final Schema TEST_SCHEMA =
@@ -36,20 +48,35 @@ public class TestEvent {
               Types.NestedField.required(4, "payload", Types.StringType.get())),
           ImmutableSet.of(1));
 
+  public static final org.apache.kafka.connect.data.Schema TEST_CONNECT_SCHEMA =
+      SchemaBuilder.struct()
+          .field("id", org.apache.kafka.connect.data.Schema.INT64_SCHEMA)
+          .field("type", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
+          .field("ts", Timestamp.SCHEMA)
+          .field("payload", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
+          .field("op", org.apache.kafka.connect.data.Schema.OPTIONAL_STRING_SCHEMA);
+
   public static final PartitionSpec TEST_SPEC =
       PartitionSpec.builderFor(TEST_SCHEMA).day("ts").build();
 
+  private static final JsonConverter JSON_CONVERTER = new JsonConverter();
+
+  static {
+    JSON_CONVERTER.configure(
+        ImmutableMap.of(ConverterConfig.TYPE_CONFIG, ConverterType.VALUE.getName()));
+  }
+
   private final long id;
   private final String type;
-  private final long ts;
+  private final Date ts;
   private final String payload;
   private final String op;
 
-  public TestEvent(long id, String type, long ts, String payload) {
+  public TestEvent(long id, String type, Date ts, String payload) {
     this(id, type, ts, payload, null);
   }
 
-  public TestEvent(long id, String type, long ts, String payload, String op) {
+  public TestEvent(long id, String type, Date ts, String payload, String op) {
     this.id = id;
     this.type = type;
     this.ts = ts;
@@ -57,23 +84,47 @@ public class TestEvent {
     this.op = op;
   }
 
-  public long getId() {
+  public long id() {
     return id;
   }
 
-  public String getType() {
+  public String type() {
     return type;
   }
 
-  public long getTs() {
+  public Date ts() {
     return ts;
   }
 
-  public String getPayload() {
+  public String payload() {
     return payload;
   }
 
-  public String getOp() {
+  public String op() {
     return op;
+  }
+
+  protected String serialize(boolean useSchema) {
+    try {
+      Struct value =
+          new Struct(TEST_CONNECT_SCHEMA)
+              .put("id", id)
+              .put("type", type)
+              .put("ts", ts)
+              .put("payload", payload)
+              .put("op", op);
+
+      String convertMethod =
+          useSchema ? "convertToJsonWithEnvelope" : "convertToJsonWithoutEnvelope";
+      JsonNode json =
+          DynMethods.builder(convertMethod)
+              .hiddenImpl(
+                  JsonConverter.class, org.apache.kafka.connect.data.Schema.class, Object.class)
+              .build(JSON_CONVERTER)
+              .invoke(TestEvent.TEST_CONNECT_SCHEMA, value);
+      return MAPPER.writeValueAsString(json);
+    } catch (JsonProcessingException e) {
+      throw new RuntimeException(e);
+    }
   }
 }

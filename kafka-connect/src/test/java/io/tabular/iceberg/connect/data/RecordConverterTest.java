@@ -18,12 +18,14 @@
  */
 package io.tabular.iceberg.connect.data;
 
+import static java.util.stream.Collectors.toList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
+import io.tabular.iceberg.connect.data.SchemaUpdate.TypeUpdate;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -52,6 +54,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.types.Types.BinaryType;
+import org.apache.iceberg.types.Types.DateType;
 import org.apache.iceberg.types.Types.DecimalType;
 import org.apache.iceberg.types.Types.DoubleType;
 import org.apache.iceberg.types.Types.FloatType;
@@ -61,10 +64,14 @@ import org.apache.iceberg.types.Types.LongType;
 import org.apache.iceberg.types.Types.MapType;
 import org.apache.iceberg.types.Types.StringType;
 import org.apache.iceberg.types.Types.StructType;
+import org.apache.iceberg.types.Types.TimeType;
 import org.apache.iceberg.types.Types.TimestampType;
+import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Time;
+import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.storage.ConverterConfig;
@@ -118,13 +125,13 @@ public class RecordConverterTest {
       SchemaBuilder.struct()
           .field("i", Schema.INT32_SCHEMA)
           .field("l", Schema.INT64_SCHEMA)
-          .field("d", Schema.STRING_SCHEMA)
-          .field("t", Schema.STRING_SCHEMA)
-          .field("ts", Schema.STRING_SCHEMA)
-          .field("tsz", Schema.STRING_SCHEMA)
+          .field("d", org.apache.kafka.connect.data.Date.SCHEMA)
+          .field("t", Time.SCHEMA)
+          .field("ts", Timestamp.SCHEMA)
+          .field("tsz", Timestamp.SCHEMA)
           .field("fl", Schema.FLOAT32_SCHEMA)
           .field("do", Schema.FLOAT64_SCHEMA)
-          .field("dec", Schema.STRING_SCHEMA)
+          .field("dec", Decimal.schema(2))
           .field("s", Schema.STRING_SCHEMA)
           .field("u", Schema.STRING_SCHEMA)
           .field("f", Schema.BYTES_SCHEMA)
@@ -370,8 +377,9 @@ public class RecordConverterTest {
     Map<String, Object> data = Maps.newHashMap(createMapData());
     data.put("null", null);
 
-    List<AddColumn> addCols = Lists.newArrayList();
-    converter.convert(data, addCols::add);
+    List<SchemaUpdate> updates = Lists.newArrayList();
+    converter.convert(data, updates::add);
+    List<AddColumn> addCols = updates.stream().map(update -> (AddColumn) update).collect(toList());
 
     assertThat(addCols).hasSize(15);
 
@@ -405,14 +413,14 @@ public class RecordConverterTest {
     RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
     Map<String, Object> nestedData = createNestedMapData();
-    List<AddColumn> addCols = Lists.newArrayList();
+    List<SchemaUpdate> addCols = Lists.newArrayList();
     converter.convert(nestedData, addCols::add);
 
     assertThat(addCols).hasSize(1);
 
     assertThat(addCols).hasSize(1);
 
-    AddColumn addCol = addCols.get(0);
+    AddColumn addCol = (AddColumn) addCols.get(0);
     assertThat(addCol.name()).isEqualTo("st");
 
     StructType addedType = addCol.type().asStructType();
@@ -441,8 +449,9 @@ public class RecordConverterTest {
     RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
     Struct data = createStructData();
-    List<AddColumn> addCols = Lists.newArrayList();
-    converter.convert(data, addCols::add);
+    List<SchemaUpdate> updates = Lists.newArrayList();
+    converter.convert(data, updates::add);
+    List<AddColumn> addCols = updates.stream().map(update -> (AddColumn) update).collect(toList());
 
     assertThat(addCols).hasSize(15);
 
@@ -451,13 +460,13 @@ public class RecordConverterTest {
 
     assertThat(newColMap.get("i").type()).isInstanceOf(IntegerType.class);
     assertThat(newColMap.get("l").type()).isInstanceOf(LongType.class);
-    assertThat(newColMap.get("d").type()).isInstanceOf(StringType.class);
-    assertThat(newColMap.get("t").type()).isInstanceOf(StringType.class);
-    assertThat(newColMap.get("ts").type()).isInstanceOf(StringType.class);
-    assertThat(newColMap.get("tsz").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("d").type()).isInstanceOf(DateType.class);
+    assertThat(newColMap.get("t").type()).isInstanceOf(TimeType.class);
+    assertThat(newColMap.get("ts").type()).isInstanceOf(TimestampType.class);
+    assertThat(newColMap.get("tsz").type()).isInstanceOf(TimestampType.class);
     assertThat(newColMap.get("fl").type()).isInstanceOf(FloatType.class);
     assertThat(newColMap.get("do").type()).isInstanceOf(DoubleType.class);
-    assertThat(newColMap.get("dec").type()).isInstanceOf(StringType.class);
+    assertThat(newColMap.get("dec").type()).isInstanceOf(DecimalType.class);
     assertThat(newColMap.get("s").type()).isInstanceOf(StringType.class);
     assertThat(newColMap.get("u").type()).isInstanceOf(StringType.class);
     assertThat(newColMap.get("f").type()).isInstanceOf(BinaryType.class);
@@ -467,31 +476,97 @@ public class RecordConverterTest {
   }
 
   @Test
+  public void testEvolveTypeDetectionStruct() {
+    org.apache.iceberg.Schema tableSchema =
+        new org.apache.iceberg.Schema(
+            Types.NestedField.required(1, "ii", Types.IntegerType.get()),
+            Types.NestedField.required(2, "ff", Types.FloatType.get()));
+
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(tableSchema);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+
+    Schema valueSchema =
+        SchemaBuilder.struct().field("ii", Schema.INT64_SCHEMA).field("ff", Schema.FLOAT64_SCHEMA);
+    Struct data = new Struct(valueSchema).put("ii", 11L).put("ff", 22d);
+
+    List<SchemaUpdate> updates = Lists.newArrayList();
+    converter.convert(data, updates::add);
+    List<TypeUpdate> addCols =
+        updates.stream().map(update -> (TypeUpdate) update).collect(toList());
+
+    assertThat(addCols).hasSize(2);
+
+    Map<String, TypeUpdate> updateMap = Maps.newHashMap();
+    addCols.forEach(update -> updateMap.put(update.name(), update));
+
+    assertThat(updateMap.get("ii").type()).isInstanceOf(LongType.class);
+    assertThat(updateMap.get("ff").type()).isInstanceOf(DoubleType.class);
+  }
+
+  @Test
+  public void testEvolveTypeDetectionStructNested() {
+    org.apache.iceberg.Schema structColSchema =
+        new org.apache.iceberg.Schema(
+            Types.NestedField.required(1, "ii", Types.IntegerType.get()),
+            Types.NestedField.required(2, "ff", Types.FloatType.get()));
+
+    org.apache.iceberg.Schema tableSchema =
+        new org.apache.iceberg.Schema(
+            Types.NestedField.required(3, "i", Types.IntegerType.get()),
+            Types.NestedField.required(4, "st", structColSchema.asStruct()));
+
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(tableSchema);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+
+    Schema structSchema =
+        SchemaBuilder.struct().field("ii", Schema.INT64_SCHEMA).field("ff", Schema.FLOAT64_SCHEMA);
+    Schema schema =
+        SchemaBuilder.struct().field("i", Schema.INT32_SCHEMA).field("st", structSchema);
+    Struct structValue = new Struct(structSchema).put("ii", 11L).put("ff", 22d);
+    Struct data = new Struct(schema).put("i", 1).put("st", structValue);
+
+    List<SchemaUpdate> updates = Lists.newArrayList();
+    converter.convert(data, updates::add);
+    List<TypeUpdate> addCols =
+        updates.stream().map(update -> (TypeUpdate) update).collect(toList());
+
+    assertThat(addCols).hasSize(2);
+
+    Map<String, TypeUpdate> updateMap = Maps.newHashMap();
+    addCols.forEach(update -> updateMap.put(update.name(), update));
+
+    assertThat(updateMap.get("st.ii").type()).isInstanceOf(LongType.class);
+    assertThat(updateMap.get("st.ff").type()).isInstanceOf(DoubleType.class);
+  }
+
+  @Test
   public void testMissingColumnDetectionStructNested() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(ID_SCHEMA);
     RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
 
     Struct nestedData = createNestedStructData();
-    List<AddColumn> addCols = Lists.newArrayList();
+    List<SchemaUpdate> addCols = Lists.newArrayList();
     converter.convert(nestedData, addCols::add);
 
     assertThat(addCols).hasSize(1);
 
-    AddColumn addCol = addCols.get(0);
+    AddColumn addCol = (AddColumn) addCols.get(0);
     assertThat(addCol.name()).isEqualTo("st");
 
     StructType addedType = addCol.type().asStructType();
     assertThat(addedType.fields()).hasSize(15);
     assertThat(addedType.field("i").type()).isInstanceOf(IntegerType.class);
     assertThat(addedType.field("l").type()).isInstanceOf(LongType.class);
-    assertThat(addedType.field("d").type()).isInstanceOf(StringType.class);
-    assertThat(addedType.field("t").type()).isInstanceOf(StringType.class);
-    assertThat(addedType.field("ts").type()).isInstanceOf(StringType.class);
-    assertThat(addedType.field("tsz").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("d").type()).isInstanceOf(DateType.class);
+    assertThat(addedType.field("t").type()).isInstanceOf(TimeType.class);
+    assertThat(addedType.field("ts").type()).isInstanceOf(TimestampType.class);
+    assertThat(addedType.field("tsz").type()).isInstanceOf(TimestampType.class);
     assertThat(addedType.field("fl").type()).isInstanceOf(FloatType.class);
     assertThat(addedType.field("do").type()).isInstanceOf(DoubleType.class);
-    assertThat(addedType.field("dec").type()).isInstanceOf(StringType.class);
+    assertThat(addedType.field("dec").type()).isInstanceOf(DecimalType.class);
     assertThat(addedType.field("s").type()).isInstanceOf(StringType.class);
     assertThat(addedType.field("u").type()).isInstanceOf(StringType.class);
     assertThat(addedType.field("f").type()).isInstanceOf(BinaryType.class);
@@ -528,13 +603,13 @@ public class RecordConverterTest {
     return new Struct(CONNECT_SCHEMA)
         .put("i", 1)
         .put("l", 2L)
-        .put("d", DATE_VAL.toString())
-        .put("t", TIME_VAL.toString())
-        .put("ts", TS_VAL.toString())
-        .put("tsz", TSZ_VAL.toString())
+        .put("d", new Date(DATE_VAL.toEpochDay() * 24 * 60 * 60 * 1000L))
+        .put("t", new Date(TIME_VAL.toNanoOfDay() / 1_000_000))
+        .put("ts", Date.from(TS_VAL.atZone(ZoneOffset.UTC).toInstant()))
+        .put("tsz", Date.from(TSZ_VAL.toInstant()))
         .put("fl", 1.1f)
         .put("do", 2.2d)
-        .put("dec", DEC_VAL.toString())
+        .put("dec", DEC_VAL)
         .put("s", STR_VAL)
         .put("u", UUID_VAL.toString())
         .put("f", BYTES_VAL.array())

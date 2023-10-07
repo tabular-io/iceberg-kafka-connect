@@ -18,10 +18,8 @@
  */
 package io.tabular.iceberg.connect;
 
-import static io.tabular.iceberg.connect.TestConstants.MAPPER;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -131,13 +129,9 @@ public class IntegrationTestBase {
     }
   }
 
-  protected void send(String topicName, TestEvent event) {
-    try {
-      String eventStr = MAPPER.writeValueAsString(event);
-      producer.send(new ProducerRecord<>(topicName, Long.toString(event.getId()), eventStr));
-    } catch (JsonProcessingException e) {
-      throw new RuntimeException(e);
-    }
+  protected void send(String topicName, TestEvent event, boolean useSchema) {
+    String eventStr = event.serialize(useSchema);
+    producer.send(new ProducerRecord<>(topicName, Long.toString(event.id()), eventStr));
   }
 
   protected void flush() {
