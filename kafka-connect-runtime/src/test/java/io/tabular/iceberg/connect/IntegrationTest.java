@@ -37,6 +37,7 @@ import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.types.Types.LongType;
 import org.apache.iceberg.types.Types.StringType;
@@ -106,7 +107,10 @@ public class IntegrationTest extends IntegrationTestBase {
   @ValueSource(strings = "test_branch")
   public void testIcebergSinkSchemaEvolution(String branch) {
     Schema initialSchema =
-        new Schema(ImmutableList.of(Types.NestedField.required(1, "id", Types.LongType.get())));
+        new Schema(
+            ImmutableList.of(
+                Types.NestedField.required(1, "id", Types.IntegerType.get()),
+                Types.NestedField.required(2, "type", Types.StringType.get())));
     catalog.createTable(TABLE_IDENTIFIER, initialSchema);
 
     boolean useSchema = branch == null; // use a schema for one of the tests
@@ -118,7 +122,11 @@ public class IntegrationTest extends IntegrationTestBase {
     assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(2);
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
 
-    assertGeneratedSchema(useSchema);
+    // when not using a value schema, the ID data type will not be updated
+    Class<? extends Type> expectedIdType =
+        useSchema ? Types.LongType.class : Types.IntegerType.class;
+
+    assertGeneratedSchema(useSchema, expectedIdType);
   }
 
   @ParameterizedTest
@@ -134,12 +142,12 @@ public class IntegrationTest extends IntegrationTestBase {
     assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(2);
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
 
-    assertGeneratedSchema(useSchema);
+    assertGeneratedSchema(useSchema, LongType.class);
   }
 
-  private void assertGeneratedSchema(boolean useSchema) {
+  private void assertGeneratedSchema(boolean useSchema, Class<? extends Type> expectedIdType) {
     Schema tableSchema = catalog.loadTable(TABLE_IDENTIFIER).schema();
-    assertThat(tableSchema.findField("id").type()).isInstanceOf(LongType.class);
+    assertThat(tableSchema.findField("id").type()).isInstanceOf(expectedIdType);
     assertThat(tableSchema.findField("type").type()).isInstanceOf(StringType.class);
     assertThat(tableSchema.findField("payload").type()).isInstanceOf(StringType.class);
 
