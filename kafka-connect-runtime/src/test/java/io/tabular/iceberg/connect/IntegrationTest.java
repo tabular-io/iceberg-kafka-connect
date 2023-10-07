@@ -24,6 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import org.apache.iceberg.DataFile;
@@ -38,6 +40,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.types.Types.LongType;
 import org.apache.iceberg.types.Types.StringType;
+import org.apache.iceberg.types.Types.TimestampType;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,7 +74,8 @@ public class IntegrationTest extends IntegrationTestBase {
   public void testIcebergSinkPartitionedTable(String branch) {
     catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA, TEST_SPEC);
 
-    runTest(branch);
+    boolean useSchema = branch == null; // use a schema for one of the tests
+    runTest(branch, useSchema, ImmutableMap.of());
 
     List<DataFile> files = dataFiles(TABLE_IDENTIFIER, branch);
     // partition may involve 1 or 2 workers
@@ -87,7 +91,8 @@ public class IntegrationTest extends IntegrationTestBase {
   public void testIcebergSinkUnpartitionedTable(String branch) {
     catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA);
 
-    runTest(branch);
+    boolean useSchema = branch == null; // use a schema for one of the tests
+    runTest(branch, useSchema, ImmutableMap.of());
 
     List<DataFile> files = dataFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
@@ -104,7 +109,8 @@ public class IntegrationTest extends IntegrationTestBase {
         new Schema(ImmutableList.of(Types.NestedField.required(1, "id", Types.LongType.get())));
     catalog.createTable(TABLE_IDENTIFIER, initialSchema);
 
-    runTest(branch, ImmutableMap.of("iceberg.tables.evolve-schema-enabled", "true"));
+    boolean useSchema = branch == null; // use a schema for one of the tests
+    runTest(branch, useSchema, ImmutableMap.of("iceberg.tables.evolve-schema-enabled", "true"));
 
     List<DataFile> files = dataFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
@@ -112,14 +118,15 @@ public class IntegrationTest extends IntegrationTestBase {
     assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(2);
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
 
-    assertGeneratedSchema();
+    assertGeneratedSchema(useSchema);
   }
 
   @ParameterizedTest
   @NullSource
   @ValueSource(strings = "test_branch")
   public void testIcebergSinkAutoCreate(String branch) {
-    runTest(branch, ImmutableMap.of("iceberg.tables.auto-create-enabled", "true"));
+    boolean useSchema = branch == null; // use a schema for one of the tests
+    runTest(branch, useSchema, ImmutableMap.of("iceberg.tables.auto-create-enabled", "true"));
 
     List<DataFile> files = dataFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
@@ -127,25 +134,27 @@ public class IntegrationTest extends IntegrationTestBase {
     assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(2);
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
 
-    assertGeneratedSchema();
+    assertGeneratedSchema(useSchema);
   }
 
-  private void assertGeneratedSchema() {
+  private void assertGeneratedSchema(boolean useSchema) {
     Schema tableSchema = catalog.loadTable(TABLE_IDENTIFIER).schema();
     assertThat(tableSchema.findField("id").type()).isInstanceOf(LongType.class);
     assertThat(tableSchema.findField("type").type()).isInstanceOf(StringType.class);
-    assertThat(tableSchema.findField("ts").type()).isInstanceOf(LongType.class);
     assertThat(tableSchema.findField("payload").type()).isInstanceOf(StringType.class);
 
-    // null values should be ignored when not using a value schema
-    assertThat(tableSchema.findField("op")).isNull();
+    if (!useSchema) {
+      // without a schema we can only map the primitive type
+      assertThat(tableSchema.findField("ts").type()).isInstanceOf(LongType.class);
+      // null values should be ignored when not using a value schema
+      assertThat(tableSchema.findField("op")).isNull();
+    } else {
+      assertThat(tableSchema.findField("ts").type()).isInstanceOf(TimestampType.class);
+      assertThat(tableSchema.findField("op").type()).isInstanceOf(StringType.class);
+    }
   }
 
-  private void runTest(String branch) {
-    runTest(branch, ImmutableMap.of());
-  }
-
-  private void runTest(String branch, Map<String, String> extraConfig) {
+  private void runTest(String branch, boolean useSchema, Map<String, String> extraConfig) {
     // set offset reset to earliest so we don't miss any test messages
     KafkaConnectContainer.Config connectorConfig =
         new KafkaConnectContainer.Config(connectorName)
@@ -156,11 +165,12 @@ public class IntegrationTest extends IntegrationTestBase {
             .config("key.converter", "org.apache.kafka.connect.json.JsonConverter")
             .config("key.converter.schemas.enable", false)
             .config("value.converter", "org.apache.kafka.connect.json.JsonConverter")
-            .config("value.converter.schemas.enable", false)
+            .config("value.converter.schemas.enable", useSchema)
             .config("iceberg.tables", String.format("%s.%s", TEST_DB, TEST_TABLE))
             .config("iceberg.control.commit.interval-ms", 1000)
             .config("iceberg.control.commit.timeout-ms", Integer.MAX_VALUE)
             .config("iceberg.kafka.auto.offset.reset", "earliest");
+
     context.connectorCatalogProperties().forEach(connectorConfig::config);
 
     if (branch != null) {
@@ -171,13 +181,13 @@ public class IntegrationTest extends IntegrationTestBase {
 
     context.startConnector(connectorConfig);
 
-    TestEvent event1 = new TestEvent(1, "type1", System.currentTimeMillis(), "hello world!");
+    TestEvent event1 = new TestEvent(1, "type1", new Date(), "hello world!");
 
-    long threeDaysAgo = System.currentTimeMillis() - Duration.ofDays(3).toMillis();
+    Date threeDaysAgo = Date.from(Instant.now().minus(Duration.ofDays(3)));
     TestEvent event2 = new TestEvent(2, "type2", threeDaysAgo, "having fun?");
 
-    send(testTopic, event1);
-    send(testTopic, event2);
+    send(testTopic, event1, useSchema);
+    send(testTopic, event2, useSchema);
     flush();
 
     Awaitility.await()

@@ -23,6 +23,7 @@ import static io.tabular.iceberg.connect.TestEvent.TEST_SPEC;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
+import java.util.Date;
 import java.util.List;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.Table;
@@ -68,7 +69,8 @@ public class IntegrationMultiTableTest extends IntegrationTestBase {
     // unpartitioned table
     catalog.createTable(TABLE_IDENTIFIER2, TEST_SCHEMA);
 
-    runTest(branch);
+    boolean useSchema = branch == null; // use a schema for one of the tests
+    runTest(branch, useSchema);
 
     List<DataFile> files = dataFiles(TABLE_IDENTIFIER1, branch);
     assertThat(files).hasSize(1);
@@ -81,7 +83,7 @@ public class IntegrationMultiTableTest extends IntegrationTestBase {
     assertSnapshotProps(TABLE_IDENTIFIER2, branch);
   }
 
-  private void runTest(String branch) {
+  private void runTest(String branch, boolean useSchema) {
     // set offset reset to earliest so we don't miss any test messages
     KafkaConnectContainer.Config connectorConfig =
         new KafkaConnectContainer.Config(connectorName)
@@ -92,7 +94,7 @@ public class IntegrationMultiTableTest extends IntegrationTestBase {
             .config("key.converter", "org.apache.kafka.connect.json.JsonConverter")
             .config("key.converter.schemas.enable", false)
             .config("value.converter", "org.apache.kafka.connect.json.JsonConverter")
-            .config("value.converter.schemas.enable", false)
+            .config("value.converter.schemas.enable", useSchema)
             .config(
                 "iceberg.tables",
                 String.format("%s.%s, %s.%s", TEST_DB, TEST_TABLE1, TEST_DB, TEST_TABLE2))
@@ -102,21 +104,27 @@ public class IntegrationMultiTableTest extends IntegrationTestBase {
             .config("iceberg.control.commit.interval-ms", 1000)
             .config("iceberg.control.commit.timeout-ms", Integer.MAX_VALUE)
             .config("iceberg.kafka.auto.offset.reset", "earliest");
+
     context.connectorCatalogProperties().forEach(connectorConfig::config);
 
     if (branch != null) {
       connectorConfig.config("iceberg.tables.default-commit-branch", branch);
     }
 
+    // use a schema for one of the cases
+    if (!useSchema) {
+      connectorConfig.config("value.converter.schemas.enable", false);
+    }
+
     context.startConnector(connectorConfig);
 
-    TestEvent event1 = new TestEvent(1, "type1", System.currentTimeMillis(), "hello world!");
-    TestEvent event2 = new TestEvent(2, "type2", System.currentTimeMillis(), "having fun?");
-    TestEvent event3 = new TestEvent(3, "type3", System.currentTimeMillis(), "ignore me");
+    TestEvent event1 = new TestEvent(1, "type1", new Date(), "hello world!");
+    TestEvent event2 = new TestEvent(2, "type2", new Date(), "having fun?");
+    TestEvent event3 = new TestEvent(3, "type3", new Date(), "ignore me");
 
-    send(testTopic, event1);
-    send(testTopic, event2);
-    send(testTopic, event3);
+    send(testTopic, event1, useSchema);
+    send(testTopic, event2, useSchema);
+    send(testTopic, event3, useSchema);
     flush();
 
     Awaitility.await()
