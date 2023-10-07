@@ -23,12 +23,14 @@ import static io.tabular.iceberg.connect.TestEvent.TEST_SPEC;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
+import com.google.api.client.util.Maps;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import org.apache.iceberg.DataFile;
+import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Namespace;
@@ -134,7 +136,15 @@ public class IntegrationTest extends IntegrationTestBase {
   @ValueSource(strings = "test_branch")
   public void testIcebergSinkAutoCreate(String branch) {
     boolean useSchema = branch == null; // use a schema for one of the tests
-    runTest(branch, useSchema, ImmutableMap.of("iceberg.tables.auto-create-enabled", "true"));
+
+    Map<String, String> extraConfig = Maps.newHashMap();
+    extraConfig.put("iceberg.tables.auto-create-enabled", "true");
+    if (useSchema) {
+      // partition the table for one of the tests
+      extraConfig.put("iceberg.tables.default-partition-by", "hour(ts)");
+    }
+
+    runTest(branch, useSchema, extraConfig);
 
     List<DataFile> files = dataFiles(TABLE_IDENTIFIER, branch);
     // may involve 1 or 2 workers
@@ -143,6 +153,9 @@ public class IntegrationTest extends IntegrationTestBase {
     assertSnapshotProps(TABLE_IDENTIFIER, branch);
 
     assertGeneratedSchema(useSchema, LongType.class);
+
+    PartitionSpec spec = catalog.loadTable(TABLE_IDENTIFIER).spec();
+    assertThat(spec.isPartitioned()).isEqualTo(useSchema);
   }
 
   private void assertGeneratedSchema(boolean useSchema, Class<? extends Type> expectedIdType) {

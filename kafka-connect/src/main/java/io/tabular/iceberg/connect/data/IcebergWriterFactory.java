@@ -19,10 +19,7 @@
 package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.TableSinkConfig;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
@@ -31,8 +28,12 @@ import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class IcebergWriterFactory {
+
+  private static final Logger LOG = LoggerFactory.getLogger(IcebergWriterFactory.class);
 
   private final Catalog catalog;
   private final IcebergSinkConfig config;
@@ -48,11 +49,11 @@ public class IcebergWriterFactory {
     Table table;
     try {
       table = catalog.loadTable(identifier);
-    } catch (NoSuchTableException e) {
+    } catch (NoSuchTableException nst) {
       if (ignoreMissingTable) {
         return new RecordWriter() {};
       } else if (!config.autoCreateEnabled()) {
-        throw e;
+        throw nst;
       }
 
       StructType structType;
@@ -66,45 +67,15 @@ public class IcebergWriterFactory {
 
       List<String> partitionBy = config.tableConfig(tableName).partitionBy();
       PartitionSpec spec;
-      if (partitionBy.isEmpty()) {
+      try {
+        spec = SchemaUtils.createPartitionSpec(schema, partitionBy);
+      } catch (Exception e) {
+        LOG.error(
+            "Unable to create partition spec {}, table {} will be unpartitioned",
+            partitionBy,
+            tableName,
+            e);
         spec = PartitionSpec.unpartitioned();
-      } else {
-        Pattern regex = Pattern.compile("(\\w+)\\((.+)\\)");
-        PartitionSpec.Builder specBuilder = PartitionSpec.builderFor(schema);
-        partitionBy.forEach(partitionField -> {
-          Matcher matcher = regex.matcher(partitionField);
-          if (matcher.matches()) {
-            String transform = matcher.group(0);
-            switch (transform) {
-              case "year":
-                specBuilder.year(matcher.group(1));
-                break;
-              case "month":
-                specBuilder.month(matcher.group(1));
-                break;
-              case "day":
-                specBuilder.day(matcher.group(1));
-                break;
-              case "hour":
-                specBuilder.hour(matcher.group(1));
-                break;
-              case "bucket":
-                String[] parts = matcher.group(1).split(",");
-                specBuilder.bucket(parts[0],Integer.parseInt(parts[1]));
-                break;
-              case "truncate":
-                String[] parts2 = matcher.group(1).split(",");
-                specBuilder.truncate(parts2[0],Integer.parseInt(parts2[1]));
-                break;
-              default:
-                throw new UnsupportedOperationException("Unsupported transform: " + transform);
-            }
-          } else {
-            specBuilder.identity(partitionField);
-          }
-        });
-
-        spec = specBuilder.build();
       }
 
       table = catalog.createTable(identifier, schema, spec);

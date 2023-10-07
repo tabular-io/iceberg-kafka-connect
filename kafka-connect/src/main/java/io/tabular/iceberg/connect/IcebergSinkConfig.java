@@ -329,10 +329,12 @@ public class IcebergSinkConfig extends AbstractConfig {
           String idColumnsStr = tableConfig.getOrDefault(ID_COLUMNS, tablesDefaultIdColumns());
           List<String> idColumns = stringToList(idColumnsStr);
 
-          String partitionByStr = tableConfig.getOrDefault(PARTITION_BY, tablesDefaultPartitionBy());
+          String partitionByStr =
+              tableConfig.getOrDefault(PARTITION_BY, tablesDefaultPartitionBy());
           List<String> partitionBy = stringToList(partitionByStr);
 
-          String commitBranch = tableConfig.getOrDefault(COMMIT_BRANCH, tablesDefaultCommitBranch());
+          String commitBranch =
+              tableConfig.getOrDefault(COMMIT_BRANCH, tablesDefaultCommitBranch());
 
           return new TableSinkConfig(routeRegex, idColumns, partitionBy, commitBranch);
         });
@@ -343,7 +345,7 @@ public class IcebergSinkConfig extends AbstractConfig {
       return ImmutableList.of();
     }
 
-    return  Arrays.stream(value.split(",")).map(String::trim).collect(toList());
+    return Arrays.stream(value.split(",")).map(String::trim).collect(toList());
   }
 
   public String tablesCdcField() {
