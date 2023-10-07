@@ -169,6 +169,8 @@ public class RecordConverter {
           String recordFieldName = recordFieldNameObj.toString();
           NestedField tableField = lookupStructField(recordFieldName, schema, structFieldId);
           if (tableField == null) {
+            // add the column if schema evolution is on, otherwise skip the value,
+            // skip the add column if the value is null as we can't infer the type
             if (schemaUpdateConsumer != null && recordFieldValue != null) {
               String parentFieldName =
                   structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
@@ -201,6 +203,7 @@ public class RecordConverter {
             recordField -> {
               NestedField tableField = lookupStructField(recordField.name(), schema, structFieldId);
               if (tableField == null) {
+                // add the column if schema evolution is on, otherwise skip the value
                 if (schemaUpdateConsumer != null) {
                   String parentFieldName =
                       structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
@@ -210,7 +213,8 @@ public class RecordConverter {
                 }
               } else {
                 PrimitiveType evolveDataType =
-                    SchemaUtils.evolveDataType(tableField.type(), recordField.schema());
+                    SchemaUtils.needsDataTypeUpdate(tableField.type(), recordField.schema());
+                // update the type if needed and schema evolution is on, otherwise set the value
                 if (evolveDataType != null && schemaUpdateConsumer != null) {
                   String fieldName = tableSchema.findColumnName(tableField.fieldId());
                   schemaUpdateConsumer.accept(new TypeUpdate(fieldName, evolveDataType));

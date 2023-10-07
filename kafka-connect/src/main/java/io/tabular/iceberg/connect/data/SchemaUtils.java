@@ -64,6 +64,16 @@ public class SchemaUtils {
   private static final Logger LOG = LoggerFactory.getLogger(SchemaUtils.class);
   private static final int COMMIT_RETRY_ATTEMPTS = 2; // 3 total attempts
 
+  public static PrimitiveType needsDataTypeUpdate(Type currentIcebergType, Schema valueSchema) {
+    if (currentIcebergType.typeId() == TypeID.FLOAT && valueSchema.type() == Schema.Type.FLOAT64) {
+      return DoubleType.get();
+    }
+    if (currentIcebergType.typeId() == TypeID.INTEGER && valueSchema.type() == Schema.Type.INT64) {
+      return LongType.get();
+    }
+    return null;
+  }
+
   public static void applySchemaUpdates(Table table, List<SchemaUpdate> updates) {
     if (updates == null || updates.isEmpty()) {
       // no updates to apply
@@ -75,16 +85,6 @@ public class SchemaUtils {
         .run(notUsed -> commitSchemaUpdates(table, updates));
   }
 
-  public static PrimitiveType evolveDataType(Type currentIcebergType, Schema valueSchema) {
-    if (currentIcebergType.typeId() == TypeID.FLOAT && valueSchema.type() == Schema.Type.FLOAT64) {
-      return DoubleType.get();
-    }
-    if (currentIcebergType.typeId() == TypeID.INTEGER && valueSchema.type() == Schema.Type.INT64) {
-      return LongType.get();
-    }
-    return null;
-  }
-
   private static void commitSchemaUpdates(Table table, List<SchemaUpdate> updates) {
     // get the latest schema in case another process updated it
     table.refresh();
@@ -94,15 +94,15 @@ public class SchemaUtils {
         updates.stream()
             .filter(update -> update instanceof AddColumn)
             .map(update -> (AddColumn) update)
-            .filter(update -> !columnExists(table.schema(), update))
+            .filter(addCol -> !columnExists(table.schema(), addCol))
             .collect(toList());
 
-    // filter out columns that have already been added
+    // filter out columns that have the updated type
     List<TypeUpdate> typeUpdates =
         updates.stream()
             .filter(update -> update instanceof TypeUpdate)
             .map(update -> (TypeUpdate) update)
-            .filter(update -> !typeMatches(table.schema(), update))
+            .filter(typeUpdate -> !typeMatches(table.schema(), typeUpdate))
             .collect(toList());
 
     if (addColumns.isEmpty() && typeUpdates.isEmpty()) {

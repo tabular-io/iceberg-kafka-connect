@@ -20,7 +20,9 @@ package io.tabular.iceberg.connect.data;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -39,7 +41,6 @@ import org.apache.iceberg.UpdateSchema;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Type;
-import org.apache.iceberg.types.Type.PrimitiveType;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.types.Types.BinaryType;
 import org.apache.iceberg.types.Types.BooleanType;
@@ -77,17 +78,19 @@ public class SchemaUtilsTest {
     when(table.schema()).thenReturn(SIMPLE_SCHEMA);
     when(table.updateSchema()).thenReturn(updateSchema);
 
+    // the updates to "i" should be ignored as it already exists and is the same type
     List<SchemaUpdate> updates =
         ImmutableList.of(
             new AddColumn(null, "i", Types.IntegerType.get()),
+            new TypeUpdate("i", Types.IntegerType.get()),
             new TypeUpdate("f", Types.DoubleType.get()),
             new AddColumn(null, "s", Types.StringType.get()));
 
     SchemaUtils.applySchemaUpdates(table, updates);
     verify(table).refresh();
     verify(table).updateSchema();
-    verify(updateSchema).addColumn(any(), any(String.class), any(Type.class));
-    verify(updateSchema).updateColumn(any(String.class), any(PrimitiveType.class));
+    verify(updateSchema).addColumn(isNull(), matches("s"), isA(StringType.class));
+    verify(updateSchema).updateColumn(matches("f"), isA(DoubleType.class));
     verify(updateSchema).commit();
   }
 
@@ -103,6 +106,20 @@ public class SchemaUtilsTest {
     SchemaUtils.applySchemaUpdates(table, ImmutableList.of());
     verify(table, times(0)).refresh();
     verify(table, times(0)).updateSchema();
+  }
+
+  @Test
+  public void testNeedsDataTypeUpdate() {
+    // valid updates
+    assertThat(SchemaUtils.needsDataTypeUpdate(FloatType.get(), Schema.FLOAT64_SCHEMA))
+        .isInstanceOf(DoubleType.class);
+    assertThat(SchemaUtils.needsDataTypeUpdate(IntegerType.get(), Schema.INT64_SCHEMA))
+        .isInstanceOf(LongType.class);
+
+    // other updates will be skipped
+    assertThat(SchemaUtils.needsDataTypeUpdate(IntegerType.get(), Schema.STRING_SCHEMA)).isNull();
+    assertThat(SchemaUtils.needsDataTypeUpdate(FloatType.get(), Schema.STRING_SCHEMA)).isNull();
+    assertThat(SchemaUtils.needsDataTypeUpdate(StringType.get(), Schema.INT64_SCHEMA)).isNull();
   }
 
   @Test
