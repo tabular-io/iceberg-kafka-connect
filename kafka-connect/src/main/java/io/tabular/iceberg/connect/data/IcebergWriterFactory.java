@@ -21,10 +21,10 @@ package io.tabular.iceberg.connect.data;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import java.util.List;
 import org.apache.iceberg.PartitionSpec;
-import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.exceptions.AlreadyExistsException;
 import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -56,31 +56,41 @@ public class IcebergWriterFactory {
         throw nst;
       }
 
-      StructType structType;
-      if (sample.valueSchema() == null) {
-        structType = SchemaUtils.inferIcebergType(sample.value()).asStructType();
-      } else {
-        structType = SchemaUtils.toIcebergType(sample.valueSchema()).asStructType();
-      }
-
-      Schema schema = new Schema(structType.fields());
-
-      List<String> partitionBy = config.tableConfig(tableName).partitionBy();
-      PartitionSpec spec;
-      try {
-        spec = SchemaUtils.createPartitionSpec(schema, partitionBy);
-      } catch (Exception e) {
-        LOG.error(
-            "Unable to create partition spec {}, table {} will be unpartitioned",
-            partitionBy,
-            tableName,
-            e);
-        spec = PartitionSpec.unpartitioned();
-      }
-
-      table = catalog.createTable(identifier, schema, spec);
+      table = autoCreateTable(tableName, sample);
     }
 
     return new IcebergWriter(table, tableName, config);
+  }
+
+  private Table autoCreateTable(String tableName, SinkRecord sample) {
+    StructType structType;
+    if (sample.valueSchema() == null) {
+      structType = SchemaUtils.inferIcebergType(sample.value()).asStructType();
+    } else {
+      structType = SchemaUtils.toIcebergType(sample.valueSchema()).asStructType();
+    }
+
+    org.apache.iceberg.Schema schema = new org.apache.iceberg.Schema(structType.fields());
+    TableIdentifier identifier = TableIdentifier.parse(tableName);
+
+    List<String> partitionBy = config.tableConfig(tableName).partitionBy();
+    PartitionSpec spec;
+    try {
+      spec = SchemaUtils.createPartitionSpec(schema, partitionBy);
+    } catch (Exception e) {
+      LOG.error(
+          "Unable to create partition spec {}, table {} will be unpartitioned",
+          partitionBy,
+          identifier,
+          e);
+      spec = PartitionSpec.unpartitioned();
+    }
+
+    try {
+      return catalog.createTable(identifier, schema, spec);
+    } catch (AlreadyExistsException e) {
+      LOG.info("Table {} was already created", identifier);
+      return catalog.loadTable(identifier);
+    }
   }
 }
