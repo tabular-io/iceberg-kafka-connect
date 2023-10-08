@@ -159,6 +159,12 @@ public class IcebergSinkConfig extends AbstractConfig {
         Importance.MEDIUM,
         "Set to true to add any missing record fields to the table schema, false otherwise");
     configDef.define(
+        TABLES_DROP_COL_ENABLED_PROP,
+        Type.BOOLEAN,
+        false,
+        Importance.MEDIUM,
+        "Set to true to enable dropping of columns during schema evolution, false otherwise");
+    configDef.define(
         CATALOG_NAME_PROP,
         Type.STRING,
         DEFAULT_CATALOG_NAME,
