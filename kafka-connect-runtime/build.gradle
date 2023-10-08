@@ -22,13 +22,13 @@ configurations {
 dependencies {
   implementation project(":iceberg-kafka-connect")
   implementation project(":iceberg-kafka-connect-transforms")
-  implementation libs.bundles.iceberg.ext
   implementation(libs.hadoop.common) {
     exclude group: "ch.qos.reload4j"
     exclude group: "com.google.guava"
     exclude group: "log4j"
     exclude group: "org.slf4j"
   }
+  runtimeOnly libs.bundles.iceberg.ext
 
   hive libs.iceberg.hive.metastore
   hive(libs.hive.metastore) {

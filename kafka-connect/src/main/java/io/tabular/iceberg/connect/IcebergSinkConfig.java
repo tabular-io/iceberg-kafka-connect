@@ -57,6 +57,7 @@ public class IcebergSinkConfig extends AbstractConfig {
       "iceberg.coordinator.transactional.suffix";
   private static final String ROUTE_REGEX = "route-regex";
   private static final String ID_COLUMNS = "id-columns";
+  private static final String PARTITION_BY = "partition-by";
   private static final String COMMIT_BRANCH = "commit-branch";
 
   private static final String CATALOG_PROP_PREFIX = "iceberg.catalog.";
@@ -69,6 +70,8 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String TABLES_DYNAMIC_PROP = "iceberg.tables.dynamic-enabled";
   private static final String TABLES_ROUTE_FIELD_PROP = "iceberg.tables.route-field";
   private static final String TABLES_DEFAULT_COMMIT_BRANCH = "iceberg.tables.default-commit-branch";
+  private static final String TABLES_DEFAULT_ID_COLUMNS = "iceberg.tables.default-id-columns";
+  private static final String TABLES_DEFAULT_PARTITION_BY = "iceberg.tables.default-partition-by";
   private static final String TABLES_CDC_FIELD_PROP = "iceberg.tables.cdc-field";
   private static final String TABLES_UPSERT_MODE_ENABLED_PROP =
       "iceberg.tables.upsert-mode-enabled";
@@ -133,6 +136,18 @@ public class IcebergSinkConfig extends AbstractConfig {
         null,
         Importance.MEDIUM,
         "Default branch for commits");
+    configDef.define(
+        TABLES_DEFAULT_ID_COLUMNS,
+        Type.STRING,
+        null,
+        Importance.MEDIUM,
+        "Default ID columns for tables, comma-separated");
+    configDef.define(
+        TABLES_DEFAULT_PARTITION_BY,
+        Type.STRING,
+        null,
+        Importance.MEDIUM,
+        "Default partition spec to use when creating tables, comma-separated");
     configDef.define(
         TABLES_CDC_FIELD_PROP,
         Type.STRING,
@@ -293,28 +308,44 @@ public class IcebergSinkConfig extends AbstractConfig {
     return getString(TABLES_DEFAULT_COMMIT_BRANCH);
   }
 
+  public String tablesDefaultIdColumns() {
+    return getString(TABLES_DEFAULT_ID_COLUMNS);
+  }
+
+  public String tablesDefaultPartitionBy() {
+    return getString(TABLES_DEFAULT_PARTITION_BY);
+  }
+
   public TableSinkConfig tableConfig(String tableName) {
     return tableConfigMap.computeIfAbsent(
         tableName,
         notUsed -> {
-          Map<String, String> tableProps =
+          Map<String, String> tableConfig =
               PropertyUtil.propertiesWithPrefix(originalProps, TABLE_PROP_PREFIX + tableName + ".");
-          String routeRegexStr = tableProps.get(ROUTE_REGEX);
+
+          String routeRegexStr = tableConfig.get(ROUTE_REGEX);
           Pattern routeRegex = routeRegexStr == null ? null : Pattern.compile(routeRegexStr);
 
-          String idColumnsStr = tableProps.get(ID_COLUMNS);
-          List<String> idColumns =
-              idColumnsStr == null || idColumnsStr.isEmpty()
-                  ? ImmutableList.of()
-                  : Arrays.stream(idColumnsStr.split(",")).map(String::trim).collect(toList());
+          String idColumnsStr = tableConfig.getOrDefault(ID_COLUMNS, tablesDefaultIdColumns());
+          List<String> idColumns = stringToList(idColumnsStr);
 
-          String commitBranch = tableProps.get(COMMIT_BRANCH);
-          if (commitBranch == null) {
-            commitBranch = tablesDefaultCommitBranch();
-          }
+          String partitionByStr =
+              tableConfig.getOrDefault(PARTITION_BY, tablesDefaultPartitionBy());
+          List<String> partitionBy = stringToList(partitionByStr);
 
-          return new TableSinkConfig(routeRegex, idColumns, commitBranch);
+          String commitBranch =
+              tableConfig.getOrDefault(COMMIT_BRANCH, tablesDefaultCommitBranch());
+
+          return new TableSinkConfig(routeRegex, idColumns, partitionBy, commitBranch);
         });
+  }
+
+  private List<String> stringToList(String value) {
+    if (value == null || value.isEmpty()) {
+      return ImmutableList.of();
+    }
+
+    return Arrays.stream(value.split(",")).map(String::trim).collect(toList());
   }
 
   public String tablesCdcField() {

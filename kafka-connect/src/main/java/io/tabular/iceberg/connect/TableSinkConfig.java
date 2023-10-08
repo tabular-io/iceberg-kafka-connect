@@ -26,11 +26,14 @@ public class TableSinkConfig {
 
   private final Pattern routeRegex;
   private final List<String> idColumns;
+  private final List<String> partitionBy;
   private final String commitBranch;
 
-  public TableSinkConfig(Pattern routeRegex, List<String> idColumns, String commitBranch) {
+  public TableSinkConfig(
+      Pattern routeRegex, List<String> idColumns, List<String> partitionBy, String commitBranch) {
     this.routeRegex = routeRegex;
     this.idColumns = idColumns;
+    this.partitionBy = partitionBy;
     this.commitBranch = commitBranch;
   }
 
@@ -40,6 +43,10 @@ public class TableSinkConfig {
 
   public List<String> idColumns() {
     return idColumns;
+  }
+
+  public List<String> partitionBy() {
+    return partitionBy;
   }
 
   public Optional<String> commitBranch() {

@@ -22,7 +22,6 @@ import static io.tabular.iceberg.connect.TestConstants.MAPPER;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.google.api.client.util.Lists;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
@@ -35,6 +34,7 @@ import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.core5.http.HttpStatus;
 import org.apache.hc.core5.http.io.entity.StringEntity;
+import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.awaitility.Awaitility;
 import org.testcontainers.containers.GenericContainer;

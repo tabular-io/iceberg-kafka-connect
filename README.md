@@ -26,11 +26,14 @@ The zip archive will be found under `./kafka-connect-runtime/build/distributions
 | iceberg.tables.dynamic-enabled             | Set to `true` to route to a table specified in `routeField` instead of using `routeRegex`, default is `false` |
 | iceberg.tables.route-field                 | For multi-table fan-out, the name of the field used to route records to tables                                |
 | iceberg.tables.default-commit-branch       | Default branch for commits, main is used if not specified                                                     |
+| iceberg.tables.default-id-columns          | Default comma-separated list of columns that identify a row in tables (primary key)                           |
+| iceberg.tables.default-partition-by        | Default comma-separated list of partition fields to use when creating tables                                  |
 | iceberg.tables.cdc-field                   | Name of the field containing the CDC operation, `I`, `U`, or `D`, default is none                             |
 | iceberg.tables.upsert-mode-enabled         | Set to `true` to enable upsert mode, default is `false`                                                       |
 | iceberg.tables.auto-create-enabled         | Set to `true` to automatically create destination tables, default is `false`                                  |
 | iceberg.tables.evolve-schema-enabled       | Set to `true` to add any missing record fields to the table schema, default is `false`                        |
 | iceberg.table.\<table name\>.id-columns    | Comma-separated list of columns that identify a row in the table (primary key)                                |
+| iceberg.table.\<table name\>.partition-by  | Comma-separated list of partition fields to use when creating the table                                       |
 | iceberg.table.\<table name\>.route-regex   | The regex used to match a record's `routeField` to a table                                                    |
 | iceberg.table.\<table name\>.commit-branch | Table-specific branch for commits, use `iceberg.tables.default-commit-branch` if not specified                |
 | iceberg.control.topic                      | Name of the control topic, default is `control-iceberg`                                                       |

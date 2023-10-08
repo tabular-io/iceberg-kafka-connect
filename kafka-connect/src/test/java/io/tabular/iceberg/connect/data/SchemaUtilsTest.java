@@ -36,12 +36,12 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
+import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.UpdateSchema;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Type;
-import org.apache.iceberg.types.Types;
 import org.apache.iceberg.types.Types.BinaryType;
 import org.apache.iceberg.types.Types.BooleanType;
 import org.apache.iceberg.types.Types.DateType;
@@ -52,6 +52,7 @@ import org.apache.iceberg.types.Types.IntegerType;
 import org.apache.iceberg.types.Types.ListType;
 import org.apache.iceberg.types.Types.LongType;
 import org.apache.iceberg.types.Types.MapType;
+import org.apache.iceberg.types.Types.NestedField;
 import org.apache.iceberg.types.Types.StringType;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.types.Types.TimeType;
@@ -68,8 +69,17 @@ public class SchemaUtilsTest {
 
   private static final org.apache.iceberg.Schema SIMPLE_SCHEMA =
       new org.apache.iceberg.Schema(
-          Types.NestedField.required(1, "i", Types.IntegerType.get()),
-          Types.NestedField.required(2, "f", Types.FloatType.get()));
+          NestedField.required(1, "i", IntegerType.get()),
+          NestedField.required(2, "f", FloatType.get()));
+
+  private static final org.apache.iceberg.Schema SCHEMA_FOR_SPEC =
+      new org.apache.iceberg.Schema(
+          NestedField.required(1, "i", IntegerType.get()),
+          NestedField.required(2, "s", StringType.get()),
+          NestedField.required(3, "ts1", TimestampType.withZone()),
+          NestedField.required(4, "ts2", TimestampType.withZone()),
+          NestedField.required(5, "ts3", TimestampType.withZone()),
+          NestedField.required(6, "ts4", TimestampType.withZone()));
 
   @Test
   public void testApplySchemaUpdates() {
@@ -81,10 +91,10 @@ public class SchemaUtilsTest {
     // the updates to "i" should be ignored as it already exists and is the same type
     List<SchemaUpdate> updates =
         ImmutableList.of(
-            new AddColumn(null, "i", Types.IntegerType.get()),
-            new TypeUpdate("i", Types.IntegerType.get()),
-            new TypeUpdate("f", Types.DoubleType.get()),
-            new AddColumn(null, "s", Types.StringType.get()));
+            new AddColumn(null, "i", IntegerType.get()),
+            new TypeUpdate("i", IntegerType.get()),
+            new TypeUpdate("f", DoubleType.get()),
+            new AddColumn(null, "s", StringType.get()));
 
     SchemaUtils.applySchemaUpdates(table, updates);
     verify(table).refresh();
@@ -120,6 +130,34 @@ public class SchemaUtilsTest {
     assertThat(SchemaUtils.needsDataTypeUpdate(IntegerType.get(), Schema.STRING_SCHEMA)).isNull();
     assertThat(SchemaUtils.needsDataTypeUpdate(FloatType.get(), Schema.STRING_SCHEMA)).isNull();
     assertThat(SchemaUtils.needsDataTypeUpdate(StringType.get(), Schema.INT64_SCHEMA)).isNull();
+  }
+
+  @Test
+  public void testCreatePartitionSpecUnpartitioned() {
+    PartitionSpec spec = SchemaUtils.createPartitionSpec(SCHEMA_FOR_SPEC, ImmutableList.of());
+    assertThat(spec.isPartitioned()).isFalse();
+  }
+
+  @Test
+  public void testCreatePartitionSpec() {
+    List<String> partitionFields =
+        ImmutableList.of(
+            "year(ts1)",
+            "month(ts2)",
+            "day(ts3)",
+            "hour(ts4)",
+            "bucket(i, 4)",
+            "truncate(s, 10)",
+            "s");
+    PartitionSpec spec = SchemaUtils.createPartitionSpec(SCHEMA_FOR_SPEC, partitionFields);
+    assertThat(spec.isPartitioned()).isTrue();
+    assertThat(spec.fields()).anyMatch(val -> val.transform().toString().startsWith("year"));
+    assertThat(spec.fields()).anyMatch(val -> val.transform().toString().startsWith("month"));
+    assertThat(spec.fields()).anyMatch(val -> val.transform().toString().startsWith("day"));
+    assertThat(spec.fields()).anyMatch(val -> val.transform().toString().startsWith("hour"));
+    assertThat(spec.fields()).anyMatch(val -> val.transform().toString().startsWith("bucket"));
+    assertThat(spec.fields()).anyMatch(val -> val.transform().toString().startsWith("truncate"));
+    assertThat(spec.fields()).anyMatch(val -> val.transform().toString().startsWith("identity"));
   }
 
   @Test

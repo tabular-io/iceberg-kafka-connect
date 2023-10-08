@@ -30,6 +30,9 @@ import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.UpdateSchema;
 import org.apache.iceberg.types.Type;
@@ -50,6 +53,7 @@ import org.apache.iceberg.types.Types.StringType;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.types.Types.TimeType;
 import org.apache.iceberg.types.Types.TimestampType;
+import org.apache.iceberg.util.Pair;
 import org.apache.iceberg.util.Tasks;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
@@ -62,7 +66,9 @@ import org.slf4j.LoggerFactory;
 public class SchemaUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(SchemaUtils.class);
+
   private static final int COMMIT_RETRY_ATTEMPTS = 2; // 3 total attempts
+  private static final Pattern TRANSFORM_REGEX = Pattern.compile("(\\w+)\\((.+)\\)");
 
   public static PrimitiveType needsDataTypeUpdate(Type currentIcebergType, Schema valueSchema) {
     if (currentIcebergType.typeId() == TypeID.FLOAT && valueSchema.type() == Schema.Type.FLOAT64) {
@@ -130,6 +136,65 @@ public class SchemaUtils {
 
   private static boolean typeMatches(org.apache.iceberg.Schema schema, TypeUpdate update) {
     return schema.findType(update.name()).typeId() == update.type().typeId();
+  }
+
+  public static PartitionSpec createPartitionSpec(
+      org.apache.iceberg.Schema schema, List<String> partitionBy) {
+    if (partitionBy.isEmpty()) {
+      return PartitionSpec.unpartitioned();
+    }
+
+    PartitionSpec.Builder specBuilder = PartitionSpec.builderFor(schema);
+    partitionBy.forEach(
+        partitionField -> {
+          Matcher matcher = TRANSFORM_REGEX.matcher(partitionField);
+          if (matcher.matches()) {
+            String transform = matcher.group(1);
+            switch (transform) {
+              case "year":
+              case "years":
+                specBuilder.year(matcher.group(2));
+                break;
+              case "month":
+              case "months":
+                specBuilder.month(matcher.group(2));
+                break;
+              case "day":
+              case "days":
+                specBuilder.day(matcher.group(2));
+                break;
+              case "hour":
+              case "hours":
+                specBuilder.hour(matcher.group(2));
+                break;
+              case "bucket":
+                {
+                  Pair<String, Integer> args = transformArgPair(matcher.group(2));
+                  specBuilder.bucket(args.first(), args.second());
+                  break;
+                }
+              case "truncate":
+                {
+                  Pair<String, Integer> args = transformArgPair(matcher.group(2));
+                  specBuilder.truncate(args.first(), args.second());
+                  break;
+                }
+              default:
+                throw new UnsupportedOperationException("Unsupported transform: " + transform);
+            }
+          } else {
+            specBuilder.identity(partitionField);
+          }
+        });
+    return specBuilder.build();
+  }
+
+  private static Pair<String, Integer> transformArgPair(String argsStr) {
+    String[] parts = argsStr.split(",");
+    if (parts.length != 2) {
+      throw new IllegalArgumentException("Invalid argument " + argsStr + ", should have 2 parts");
+    }
+    return Pair.of(parts[0].trim(), Integer.parseInt(parts[1].trim()));
   }
 
   public static Type toIcebergType(Schema valueSchema) {

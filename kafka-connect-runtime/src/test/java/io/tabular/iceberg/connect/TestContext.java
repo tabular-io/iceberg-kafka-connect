@@ -30,9 +30,6 @@ import java.util.UUID;
 import java.util.stream.Stream;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.CatalogUtil;
-import org.apache.iceberg.aws.AwsClientProperties;
-import org.apache.iceberg.aws.s3.S3FileIO;
-import org.apache.iceberg.aws.s3.S3FileIOProperties;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.rest.RESTCatalog;
@@ -92,7 +89,7 @@ public class TestContext {
             .dependsOn(minio)
             .withExposedPorts(CATALOG_PORT)
             .withEnv("CATALOG_WAREHOUSE", "s3://" + BUCKET + "/warehouse")
-            .withEnv("CATALOG_IO__IMPL", S3FileIO.class.getName())
+            .withEnv("CATALOG_IO__IMPL", "org.apache.iceberg.aws.s3.S3FileIO")
             .withEnv("CATALOG_S3_ENDPOINT", "http://minio:9000")
             .withEnv("CATALOG_S3_ACCESS__KEY__ID", AWS_ACCESS_KEY)
             .withEnv("CATALOG_S3_SECRET__ACCESS__KEY", AWS_SECRET_KEY)
@@ -170,12 +167,12 @@ public class TestContext {
         "local",
         ImmutableMap.<String, String>builder()
             .put(CatalogProperties.URI, localCatalogUri)
-            .put(CatalogProperties.FILE_IO_IMPL, S3FileIO.class.getName())
-            .put(S3FileIOProperties.ENDPOINT, "http://localhost:" + getLocalMinioPort())
-            .put(S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
-            .put(S3FileIOProperties.SECRET_ACCESS_KEY, AWS_SECRET_KEY)
-            .put(S3FileIOProperties.PATH_STYLE_ACCESS, "true")
-            .put(AwsClientProperties.CLIENT_REGION, AWS_REGION)
+            .put(CatalogProperties.FILE_IO_IMPL, "org.apache.iceberg.aws.s3.S3FileIO")
+            .put("s3.endpoint", "http://localhost:" + getLocalMinioPort())
+            .put("s3.access-key-id", AWS_ACCESS_KEY)
+            .put("s3.secret-access-key", AWS_SECRET_KEY)
+            .put("s3.path-style-access", "true")
+            .put("client.region", AWS_REGION)
             .build());
     return result;
   }
@@ -186,11 +183,14 @@ public class TestContext {
             "iceberg.catalog." + CatalogUtil.ICEBERG_CATALOG_TYPE,
             CatalogUtil.ICEBERG_CATALOG_TYPE_REST)
         .put("iceberg.catalog." + CatalogProperties.URI, "http://iceberg:" + CATALOG_PORT)
-        .put("iceberg.catalog." + S3FileIOProperties.ENDPOINT, "http://minio:" + MINIO_PORT)
-        .put("iceberg.catalog." + S3FileIOProperties.ACCESS_KEY_ID, AWS_ACCESS_KEY)
-        .put("iceberg.catalog." + S3FileIOProperties.SECRET_ACCESS_KEY, AWS_SECRET_KEY)
-        .put("iceberg.catalog." + S3FileIOProperties.PATH_STYLE_ACCESS, true)
-        .put("iceberg.catalog." + AwsClientProperties.CLIENT_REGION, AWS_REGION)
+        .put(
+            "iceberg.catalog." + CatalogProperties.FILE_IO_IMPL,
+            "org.apache.iceberg.aws.s3.S3FileIO")
+        .put("iceberg.catalog.s3.endpoint", "http://minio:" + MINIO_PORT)
+        .put("iceberg.catalog.s3.access-key-id", AWS_ACCESS_KEY)
+        .put("iceberg.catalog.s3.secret-access-key", AWS_SECRET_KEY)
+        .put("iceberg.catalog.s3.path-style-access", true)
+        .put("iceberg.catalog.client.region", AWS_REGION)
         .build();
   }
 
