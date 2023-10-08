@@ -20,6 +20,7 @@ package io.tabular.iceberg.connect.data;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.matches;
@@ -29,7 +30,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
-import io.tabular.iceberg.connect.data.SchemaUpdate.TypeUpdate;
+import io.tabular.iceberg.connect.data.SchemaUpdate.DropColumn;
+import io.tabular.iceberg.connect.data.SchemaUpdate.UpdateType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -63,34 +65,46 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class SchemaUtilsTest {
 
   private static final org.apache.iceberg.Schema SIMPLE_SCHEMA =
       new org.apache.iceberg.Schema(
           Types.NestedField.required(1, "i", Types.IntegerType.get()),
-          Types.NestedField.required(2, "f", Types.FloatType.get()));
+          Types.NestedField.required(2, "f", Types.FloatType.get()),
+          Types.NestedField.required(3, "s1", Types.StringType.get()));
 
-  @Test
-  public void testApplySchemaUpdates() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testApplySchemaUpdates(boolean dropsEnabled) {
     UpdateSchema updateSchema = mock(UpdateSchema.class);
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SIMPLE_SCHEMA);
     when(table.updateSchema()).thenReturn(updateSchema);
 
     // the updates to "i" should be ignored as it already exists and is the same type
+    // drop of "s2" should be ignored as it doesn't exist
     List<SchemaUpdate> updates =
         ImmutableList.of(
             new AddColumn(null, "i", Types.IntegerType.get()),
-            new TypeUpdate("i", Types.IntegerType.get()),
-            new TypeUpdate("f", Types.DoubleType.get()),
+            new DropColumn("s1"),
+            new DropColumn("s2"),
+            new UpdateType("i", Types.IntegerType.get()),
+            new UpdateType("f", Types.DoubleType.get()),
             new AddColumn(null, "s", Types.StringType.get()));
 
-    SchemaUtils.applySchemaUpdates(table, updates);
+    SchemaUtils.applySchemaUpdates(table, updates, dropsEnabled);
     verify(table).refresh();
     verify(table).updateSchema();
     verify(updateSchema).addColumn(isNull(), matches("s"), isA(StringType.class));
     verify(updateSchema).updateColumn(matches("f"), isA(DoubleType.class));
+    if (dropsEnabled) {
+      verify(updateSchema).deleteColumn(matches("s1"));
+    } else {
+      verify(updateSchema, times(0)).deleteColumn(any());
+    }
     verify(updateSchema).commit();
   }
 
@@ -99,11 +113,11 @@ public class SchemaUtilsTest {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SIMPLE_SCHEMA);
 
-    SchemaUtils.applySchemaUpdates(table, null);
+    SchemaUtils.applySchemaUpdates(table, null, true);
     verify(table, times(0)).refresh();
     verify(table, times(0)).updateSchema();
 
-    SchemaUtils.applySchemaUpdates(table, ImmutableList.of());
+    SchemaUtils.applySchemaUpdates(table, ImmutableList.of(), true);
     verify(table, times(0)).refresh();
     verify(table, times(0)).updateSchema();
   }

@@ -21,7 +21,8 @@ package io.tabular.iceberg.connect.data;
 import static java.util.stream.Collectors.toList;
 
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
-import io.tabular.iceberg.connect.data.SchemaUpdate.TypeUpdate;
+import io.tabular.iceberg.connect.data.SchemaUpdate.DropColumn;
+import io.tabular.iceberg.connect.data.SchemaUpdate.UpdateType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -32,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.UpdateSchema;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Type.PrimitiveType;
 import org.apache.iceberg.types.Type.TypeID;
@@ -74,7 +76,8 @@ public class SchemaUtils {
     return null;
   }
 
-  public static void applySchemaUpdates(Table table, List<SchemaUpdate> updates) {
+  public static void applySchemaUpdates(
+      Table table, List<SchemaUpdate> updates, boolean dropsEnabled) {
     if (updates == null || updates.isEmpty()) {
       // no updates to apply
       return;
@@ -82,10 +85,11 @@ public class SchemaUtils {
 
     Tasks.foreach(Collections.singleton(updates))
         .retry(COMMIT_RETRY_ATTEMPTS)
-        .run(notUsed -> commitSchemaUpdates(table, updates));
+        .run(notUsed -> commitSchemaUpdates(table, updates, dropsEnabled));
   }
 
-  private static void commitSchemaUpdates(Table table, List<SchemaUpdate> updates) {
+  private static void commitSchemaUpdates(
+      Table table, List<SchemaUpdate> updates, boolean dropsEnabled) {
     // get the latest schema in case another process updated it
     table.refresh();
 
@@ -98,14 +102,27 @@ public class SchemaUtils {
             .collect(toList());
 
     // filter out columns that have the updated type
-    List<TypeUpdate> typeUpdates =
+    List<UpdateType> updateTypes =
         updates.stream()
-            .filter(update -> update instanceof TypeUpdate)
-            .map(update -> (TypeUpdate) update)
-            .filter(typeUpdate -> !typeMatches(table.schema(), typeUpdate))
+            .filter(update -> update instanceof UpdateType)
+            .map(update -> (UpdateType) update)
+            .filter(updateType -> !typeMatches(table.schema(), updateType))
             .collect(toList());
 
-    if (addColumns.isEmpty() && typeUpdates.isEmpty()) {
+    List<DropColumn> dropColumns;
+    if (dropsEnabled) {
+      // filter out columns that were already dropped
+      dropColumns =
+          updates.stream()
+              .filter(update -> update instanceof DropColumn)
+              .map(update -> (DropColumn) update)
+              .filter(dropCol -> columnExists(table.schema(), dropCol))
+              .collect(toList());
+    } else {
+      dropColumns = ImmutableList.of();
+    }
+
+    if (addColumns.isEmpty() && updateTypes.isEmpty() && dropColumns.isEmpty()) {
       // no updates to apply
       LOG.info("Schema for table {} already up-to-date", table.name());
       return;
@@ -115,9 +132,16 @@ public class SchemaUtils {
     UpdateSchema updateSchema = table.updateSchema();
     addColumns.forEach(
         update -> updateSchema.addColumn(update.parentName(), update.name(), update.type()));
-    typeUpdates.forEach(update -> updateSchema.updateColumn(update.name(), update.type()));
+    updateTypes.forEach(update -> updateSchema.updateColumn(update.name(), update.type()));
+    dropColumns.forEach(update -> updateSchema.deleteColumn(update.name()));
     updateSchema.commit();
-    LOG.info("Schema for table {} updated with new columns", table.name());
+
+    LOG.info(
+        "Schema for table {} was updated with {} columns added, {} types updated, {} columns dropped",
+        table.name(),
+        addColumns.size(),
+        updateTypes.size(),
+        dropColumns.size());
   }
 
   private static boolean columnExists(org.apache.iceberg.Schema schema, AddColumn update) {
@@ -128,7 +152,11 @@ public class SchemaUtils {
     return struct.field(update.name()) != null;
   }
 
-  private static boolean typeMatches(org.apache.iceberg.Schema schema, TypeUpdate update) {
+  private static boolean columnExists(org.apache.iceberg.Schema schema, DropColumn update) {
+    return schema.findField(update.name()) != null;
+  }
+
+  private static boolean typeMatches(org.apache.iceberg.Schema schema, UpdateType update) {
     return schema.findType(update.name()).typeId() == update.type().typeId();
   }
 

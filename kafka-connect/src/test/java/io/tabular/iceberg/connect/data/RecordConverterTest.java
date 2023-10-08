@@ -25,7 +25,8 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
-import io.tabular.iceberg.connect.data.SchemaUpdate.TypeUpdate;
+import io.tabular.iceberg.connect.data.SchemaUpdate.DropColumn;
+import io.tabular.iceberg.connect.data.SchemaUpdate.UpdateType;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -84,6 +85,7 @@ public class RecordConverterTest {
 
   private static final org.apache.iceberg.Schema SCHEMA =
       new org.apache.iceberg.Schema(
+          Types.NestedField.required(20, "id", Types.IntegerType.get()),
           Types.NestedField.required(21, "i", Types.IntegerType.get()),
           Types.NestedField.required(22, "l", Types.LongType.get()),
           Types.NestedField.required(23, "d", Types.DateType.get()),
@@ -110,19 +112,20 @@ public class RecordConverterTest {
 
   private static final org.apache.iceberg.Schema NESTED_SCHEMA =
       new org.apache.iceberg.Schema(
-          Types.NestedField.required(1, "ii", Types.IntegerType.get()),
+          Types.NestedField.required(1, "id", Types.IntegerType.get()),
           Types.NestedField.required(2, "st", SCHEMA.asStruct()));
 
   private static final org.apache.iceberg.Schema SIMPLE_SCHEMA =
       new org.apache.iceberg.Schema(
-          Types.NestedField.required(1, "ii", Types.IntegerType.get()),
+          Types.NestedField.required(1, "id", Types.IntegerType.get()),
           Types.NestedField.required(2, "st", Types.StringType.get()));
 
   private static final org.apache.iceberg.Schema ID_SCHEMA =
-      new org.apache.iceberg.Schema(Types.NestedField.required(1, "ii", Types.IntegerType.get()));
+      new org.apache.iceberg.Schema(Types.NestedField.required(1, "id", Types.IntegerType.get()));
 
   private static final Schema CONNECT_SCHEMA =
       SchemaBuilder.struct()
+          .field("id", Schema.INT32_SCHEMA)
           .field("i", Schema.INT32_SCHEMA)
           .field("l", Schema.INT64_SCHEMA)
           .field("d", org.apache.kafka.connect.data.Date.SCHEMA)
@@ -136,11 +139,12 @@ public class RecordConverterTest {
           .field("u", Schema.STRING_SCHEMA)
           .field("f", Schema.BYTES_SCHEMA)
           .field("b", Schema.BYTES_SCHEMA)
-          .field("li", SchemaBuilder.array(Schema.STRING_SCHEMA))
-          .field("ma", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA));
+          .field("li", SchemaBuilder.array(Schema.STRING_SCHEMA).build())
+          .field("ma", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).build())
+          .build();
 
   private static final Schema CONNECT_NESTED_SCHEMA =
-      SchemaBuilder.struct().field("ii", Schema.INT32_SCHEMA).field("st", CONNECT_SCHEMA);
+      SchemaBuilder.struct().field("id", Schema.INT32_SCHEMA).field("st", CONNECT_SCHEMA).build();
 
   private static final LocalDate DATE_VAL = LocalDate.parse("2023-05-18");
   private static final LocalTime TIME_VAL = LocalTime.parse("07:14:21");
@@ -253,7 +257,7 @@ public class RecordConverterTest {
 
     Map<String, Object> data = ImmutableMap.of("renamed_ii", 123);
     Record record = converter.convert(data);
-    assertThat(record.getField("ii")).isEqualTo(123);
+    assertThat(record.getField("id")).isEqualTo(123);
   }
 
   @Test
@@ -369,7 +373,7 @@ public class RecordConverterTest {
   }
 
   @Test
-  public void testMissingColumnDetectionMap() {
+  public void testAddColumnDetectionMap() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(ID_SCHEMA);
     RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
@@ -407,7 +411,7 @@ public class RecordConverterTest {
   }
 
   @Test
-  public void testMissingColumnDetectionMapNested() {
+  public void testAddColumnDetectionMapNested() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(ID_SCHEMA);
     RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
@@ -418,13 +422,13 @@ public class RecordConverterTest {
 
     assertThat(addCols).hasSize(1);
 
-    assertThat(addCols).hasSize(1);
-
     AddColumn addCol = (AddColumn) addCols.get(0);
     assertThat(addCol.name()).isEqualTo("st");
 
     StructType addedType = addCol.type().asStructType();
-    assertThat(addedType.fields()).hasSize(15);
+    assertThat(addedType.fields()).hasSize(16);
+
+    assertThat(addedType.field("id").type()).isInstanceOf(LongType.class);
     assertThat(addedType.field("i").type()).isInstanceOf(LongType.class);
     assertThat(addedType.field("l").type()).isInstanceOf(LongType.class);
     assertThat(addedType.field("d").type()).isInstanceOf(StringType.class);
@@ -443,7 +447,7 @@ public class RecordConverterTest {
   }
 
   @Test
-  public void testMissingColumnDetectionStruct() {
+  public void testAddColumnDetectionStruct() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(ID_SCHEMA);
     RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
@@ -476,73 +480,7 @@ public class RecordConverterTest {
   }
 
   @Test
-  public void testEvolveTypeDetectionStruct() {
-    org.apache.iceberg.Schema tableSchema =
-        new org.apache.iceberg.Schema(
-            Types.NestedField.required(1, "ii", Types.IntegerType.get()),
-            Types.NestedField.required(2, "ff", Types.FloatType.get()));
-
-    Table table = mock(Table.class);
-    when(table.schema()).thenReturn(tableSchema);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
-
-    Schema valueSchema =
-        SchemaBuilder.struct().field("ii", Schema.INT64_SCHEMA).field("ff", Schema.FLOAT64_SCHEMA);
-    Struct data = new Struct(valueSchema).put("ii", 11L).put("ff", 22d);
-
-    List<SchemaUpdate> updates = Lists.newArrayList();
-    converter.convert(data, updates::add);
-    List<TypeUpdate> addCols =
-        updates.stream().map(update -> (TypeUpdate) update).collect(toList());
-
-    assertThat(addCols).hasSize(2);
-
-    Map<String, TypeUpdate> updateMap = Maps.newHashMap();
-    addCols.forEach(update -> updateMap.put(update.name(), update));
-
-    assertThat(updateMap.get("ii").type()).isInstanceOf(LongType.class);
-    assertThat(updateMap.get("ff").type()).isInstanceOf(DoubleType.class);
-  }
-
-  @Test
-  public void testEvolveTypeDetectionStructNested() {
-    org.apache.iceberg.Schema structColSchema =
-        new org.apache.iceberg.Schema(
-            Types.NestedField.required(1, "ii", Types.IntegerType.get()),
-            Types.NestedField.required(2, "ff", Types.FloatType.get()));
-
-    org.apache.iceberg.Schema tableSchema =
-        new org.apache.iceberg.Schema(
-            Types.NestedField.required(3, "i", Types.IntegerType.get()),
-            Types.NestedField.required(4, "st", structColSchema.asStruct()));
-
-    Table table = mock(Table.class);
-    when(table.schema()).thenReturn(tableSchema);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
-
-    Schema structSchema =
-        SchemaBuilder.struct().field("ii", Schema.INT64_SCHEMA).field("ff", Schema.FLOAT64_SCHEMA);
-    Schema schema =
-        SchemaBuilder.struct().field("i", Schema.INT32_SCHEMA).field("st", structSchema);
-    Struct structValue = new Struct(structSchema).put("ii", 11L).put("ff", 22d);
-    Struct data = new Struct(schema).put("i", 1).put("st", structValue);
-
-    List<SchemaUpdate> updates = Lists.newArrayList();
-    converter.convert(data, updates::add);
-    List<TypeUpdate> addCols =
-        updates.stream().map(update -> (TypeUpdate) update).collect(toList());
-
-    assertThat(addCols).hasSize(2);
-
-    Map<String, TypeUpdate> updateMap = Maps.newHashMap();
-    addCols.forEach(update -> updateMap.put(update.name(), update));
-
-    assertThat(updateMap.get("st.ii").type()).isInstanceOf(LongType.class);
-    assertThat(updateMap.get("st.ff").type()).isInstanceOf(DoubleType.class);
-  }
-
-  @Test
-  public void testMissingColumnDetectionStructNested() {
+  public void testAddColumnDetectionStructNested() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(ID_SCHEMA);
     RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
@@ -557,7 +495,9 @@ public class RecordConverterTest {
     assertThat(addCol.name()).isEqualTo("st");
 
     StructType addedType = addCol.type().asStructType();
-    assertThat(addedType.fields()).hasSize(15);
+    assertThat(addedType.fields()).hasSize(16);
+
+    assertThat(addedType.field("id").type()).isInstanceOf(IntegerType.class);
     assertThat(addedType.field("i").type()).isInstanceOf(IntegerType.class);
     assertThat(addedType.field("l").type()).isInstanceOf(LongType.class);
     assertThat(addedType.field("d").type()).isInstanceOf(DateType.class);
@@ -575,8 +515,135 @@ public class RecordConverterTest {
     assertThat(addedType.field("ma").type()).isInstanceOf(MapType.class);
   }
 
+  @Test
+  public void testUpdateTypeDetectionStruct() {
+    org.apache.iceberg.Schema tableSchema =
+        new org.apache.iceberg.Schema(
+            Types.NestedField.required(1, "ii", Types.IntegerType.get()),
+            Types.NestedField.required(2, "ff", Types.FloatType.get()));
+
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(tableSchema);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+
+    Schema valueSchema =
+        SchemaBuilder.struct()
+            .field("ii", Schema.INT64_SCHEMA)
+            .field("ff", Schema.FLOAT64_SCHEMA)
+            .build();
+    Struct data = new Struct(valueSchema).put("ii", 11L).put("ff", 22d);
+
+    List<SchemaUpdate> updates = Lists.newArrayList();
+    converter.convert(data, updates::add);
+    List<UpdateType> updateTypes =
+        updates.stream().map(update -> (UpdateType) update).collect(toList());
+
+    assertThat(updateTypes).hasSize(2);
+
+    Map<String, UpdateType> updateMap = Maps.newHashMap();
+    updateTypes.forEach(update -> updateMap.put(update.name(), update));
+
+    assertThat(updateMap.get("ii").type()).isInstanceOf(LongType.class);
+    assertThat(updateMap.get("ff").type()).isInstanceOf(DoubleType.class);
+  }
+
+  @Test
+  public void testUpdateTypeDetectionStructNested() {
+    org.apache.iceberg.Schema structColSchema =
+        new org.apache.iceberg.Schema(
+            Types.NestedField.required(1, "ii", Types.IntegerType.get()),
+            Types.NestedField.required(2, "ff", Types.FloatType.get()));
+
+    org.apache.iceberg.Schema tableSchema =
+        new org.apache.iceberg.Schema(
+            Types.NestedField.required(3, "i", Types.IntegerType.get()),
+            Types.NestedField.required(4, "st", structColSchema.asStruct()));
+
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(tableSchema);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+
+    Schema structSchema =
+        SchemaBuilder.struct()
+            .field("ii", Schema.INT64_SCHEMA)
+            .field("ff", Schema.FLOAT64_SCHEMA)
+            .build();
+    Schema schema =
+        SchemaBuilder.struct().field("i", Schema.INT32_SCHEMA).field("st", structSchema).build();
+    Struct structValue = new Struct(structSchema).put("ii", 11L).put("ff", 22d);
+    Struct data = new Struct(schema).put("i", 1).put("st", structValue);
+
+    List<SchemaUpdate> updates = Lists.newArrayList();
+    converter.convert(data, updates::add);
+    List<UpdateType> updateTypes =
+        updates.stream().map(update -> (UpdateType) update).collect(toList());
+
+    assertThat(updateTypes).hasSize(2);
+
+    Map<String, UpdateType> updateMap = Maps.newHashMap();
+    updateTypes.forEach(update -> updateMap.put(update.name(), update));
+
+    assertThat(updateMap.get("st.ii").type()).isInstanceOf(LongType.class);
+    assertThat(updateMap.get("st.ff").type()).isInstanceOf(DoubleType.class);
+  }
+
+  @Test
+  public void testDropColumnDetectionStruct() {
+    org.apache.iceberg.Schema tableSchema =
+        new org.apache.iceberg.Schema(
+            Types.NestedField.required(1, "ii", Types.LongType.get()),
+            Types.NestedField.required(2, "ff", Types.FloatType.get()));
+
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(tableSchema);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+
+    Schema valueSchema = SchemaBuilder.struct().field("ii", Schema.INT64_SCHEMA).build();
+    Struct data = new Struct(valueSchema).put("ii", 11L);
+
+    List<SchemaUpdate> updates = Lists.newArrayList();
+    converter.convert(data, updates::add);
+    List<DropColumn> dropCols =
+        updates.stream().map(update -> (DropColumn) update).collect(toList());
+
+    assertThat(dropCols).hasSize(1);
+    assertThat(dropCols.get(0).name()).isEqualTo("ff");
+  }
+
+  @Test
+  public void testDropColumnDetectionStructNested() {
+    org.apache.iceberg.Schema structColSchema =
+        new org.apache.iceberg.Schema(
+            Types.NestedField.required(1, "ii", Types.LongType.get()),
+            Types.NestedField.required(2, "ff", Types.FloatType.get()));
+
+    org.apache.iceberg.Schema tableSchema =
+        new org.apache.iceberg.Schema(
+            Types.NestedField.required(3, "i", Types.IntegerType.get()),
+            Types.NestedField.required(4, "st", structColSchema.asStruct()));
+
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(tableSchema);
+    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+
+    Schema structSchema = SchemaBuilder.struct().field("ii", Schema.INT64_SCHEMA).build();
+    Schema schema =
+        SchemaBuilder.struct().field("i", Schema.INT32_SCHEMA).field("st", structSchema).build();
+    Struct structValue = new Struct(structSchema).put("ii", 11L);
+    Struct data = new Struct(schema).put("i", 1).put("st", structValue);
+
+    List<SchemaUpdate> updates = Lists.newArrayList();
+    converter.convert(data, updates::add);
+    List<DropColumn> dropCols =
+        updates.stream().map(update -> (DropColumn) update).collect(toList());
+
+    assertThat(dropCols).hasSize(1);
+    assertThat(dropCols.get(0).name()).isEqualTo("st.ff");
+  }
+
   private Map<String, Object> createMapData() {
     return ImmutableMap.<String, Object>builder()
+        .put("id", 1)
         .put("i", 1)
         .put("l", 2L)
         .put("d", DATE_VAL.toString())
@@ -596,11 +663,12 @@ public class RecordConverterTest {
   }
 
   private Map<String, Object> createNestedMapData() {
-    return ImmutableMap.<String, Object>builder().put("ii", 11).put("st", createMapData()).build();
+    return ImmutableMap.<String, Object>builder().put("id", 11).put("st", createMapData()).build();
   }
 
   private Struct createStructData() {
     return new Struct(CONNECT_SCHEMA)
+        .put("id", 1)
         .put("i", 1)
         .put("l", 2L)
         .put("d", new Date(DATE_VAL.toEpochDay() * 24 * 60 * 60 * 1000L))
@@ -619,11 +687,12 @@ public class RecordConverterTest {
   }
 
   private Struct createNestedStructData() {
-    return new Struct(CONNECT_NESTED_SCHEMA).put("ii", 11).put("st", createStructData());
+    return new Struct(CONNECT_NESTED_SCHEMA).put("id", 11).put("st", createStructData());
   }
 
   private void assertRecordValues(Record record) {
     GenericRecord rec = (GenericRecord) record;
+    assertThat(rec.getField("id")).isEqualTo(1);
     assertThat(rec.getField("i")).isEqualTo(1);
     assertThat(rec.getField("l")).isEqualTo(2L);
     assertThat(rec.getField("d")).isEqualTo(DATE_VAL);
@@ -643,7 +712,7 @@ public class RecordConverterTest {
 
   private void assertNestedRecordValues(Record record) {
     GenericRecord rec = (GenericRecord) record;
-    assertThat(rec.getField("ii")).isEqualTo(11);
+    assertThat(rec.getField("id")).isEqualTo(11);
     assertRecordValues((GenericRecord) rec.getField("st"));
   }
 }

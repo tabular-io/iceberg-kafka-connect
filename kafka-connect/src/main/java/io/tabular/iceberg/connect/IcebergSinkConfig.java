@@ -76,6 +76,7 @@ public class IcebergSinkConfig extends AbstractConfig {
       "iceberg.tables.auto-create-enabled";
   private static final String TABLES_EVOLVE_SCHEMA_ENABLED_PROP =
       "iceberg.tables.evolve-schema-enabled";
+  private static final String TABLES_DROP_COL_ENABLED_PROP = "iceberg.tables.drop-col-enabled";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
   private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group-id";
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.control.commit.interval-ms";
@@ -361,6 +362,10 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public boolean evolveSchemaEnabled() {
     return getBoolean(TABLES_EVOLVE_SCHEMA_ENABLED_PROP);
+  }
+
+  public boolean dropColEnabled() {
+    return getBoolean(TABLES_DROP_COL_ENABLED_PROP);
   }
 
   public JsonConverter jsonConverter() {

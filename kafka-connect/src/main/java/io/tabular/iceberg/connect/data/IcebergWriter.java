@@ -89,7 +89,7 @@ public class IcebergWriter implements RecordWriter {
       // complete the current file
       flush();
       // apply the schema updates, this will refresh the table
-      SchemaUtils.applySchemaUpdates(table, updates);
+      SchemaUtils.applySchemaUpdates(table, updates, config.dropColEnabled());
       // initialize a new writer with the new schema
       initNewWriter();
       // convert the row again, this time using the new table schema

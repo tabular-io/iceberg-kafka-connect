@@ -22,7 +22,8 @@ import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
-import io.tabular.iceberg.connect.data.SchemaUpdate.TypeUpdate;
+import io.tabular.iceberg.connect.data.SchemaUpdate.DropColumn;
+import io.tabular.iceberg.connect.data.SchemaUpdate.UpdateType;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
@@ -42,6 +43,7 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import org.apache.iceberg.Schema;
@@ -54,6 +56,7 @@ import org.apache.iceberg.mapping.NameMapping;
 import org.apache.iceberg.mapping.NameMappingParser;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
+import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Type.PrimitiveType;
 import org.apache.iceberg.types.Types;
@@ -196,6 +199,7 @@ public class RecordConverter {
       int structFieldId,
       Consumer<SchemaUpdate> schemaUpdateConsumer) {
     GenericRecord result = GenericRecord.create(schema);
+    Set<Integer> visitedTableFieldIds = Sets.newHashSet();
     struct
         .schema()
         .fields()
@@ -212,12 +216,13 @@ public class RecordConverter {
                       new AddColumn(parentFieldName, recordField.name(), type));
                 }
               } else {
+                visitedTableFieldIds.add(tableField.fieldId());
                 PrimitiveType evolveDataType =
                     SchemaUtils.needsDataTypeUpdate(tableField.type(), recordField.schema());
                 // update the type if needed and schema evolution is on, otherwise set the value
                 if (evolveDataType != null && schemaUpdateConsumer != null) {
                   String fieldName = tableSchema.findColumnName(tableField.fieldId());
-                  schemaUpdateConsumer.accept(new TypeUpdate(fieldName, evolveDataType));
+                  schemaUpdateConsumer.accept(new UpdateType(fieldName, evolveDataType));
                 } else {
                   result.setField(
                       tableField.name(),
@@ -229,6 +234,19 @@ public class RecordConverter {
                 }
               }
             });
+
+    if (schemaUpdateConsumer != null) {
+      // column didn't match any record fields so add it for potential drop
+      // (column will only be dropped if drops are enabled in the sink config)
+      schema.fields().stream()
+          .filter(tableField -> !visitedTableFieldIds.contains(tableField.fieldId()))
+          .forEach(
+              tableField -> {
+                String fieldName = tableSchema.findColumnName(tableField.fieldId());
+                schemaUpdateConsumer.accept(new DropColumn(fieldName));
+              });
+    }
+
     return result;
   }
 

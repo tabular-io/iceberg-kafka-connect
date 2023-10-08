@@ -30,6 +30,7 @@ The zip archive will be found under `./kafka-connect-runtime/build/distributions
 | iceberg.tables.upsert-mode-enabled         | Set to `true` to enable upsert mode, default is `false`                                                       |
 | iceberg.tables.auto-create-enabled         | Set to `true` to automatically create destination tables, default is `false`                                  |
 | iceberg.tables.evolve-schema-enabled       | Set to `true` to add any missing record fields to the table schema, default is `false`                        |
+| iceberg.tables.drop-col-enabled            | Set to `true` to enable dropping of columns during schema evolution, default is `false`                       |
 | iceberg.table.\<table name\>.id-columns    | Comma-separated list of columns that identify a row in the table (primary key)                                |
 | iceberg.table.\<table name\>.route-regex   | The regex used to match a record's `routeField` to a table                                                    |
 | iceberg.table.\<table name\>.commit-branch | Table-specific branch for commits, use `iceberg.tables.default-commit-branch` if not specified                |
