@@ -50,13 +50,13 @@ public class IcebergWriterFactory {
     try {
       table = catalog.loadTable(identifier);
     } catch (NoSuchTableException nst) {
-      if (ignoreMissingTable) {
+      if (config.autoCreateEnabled()) {
+        table = autoCreateTable(tableName, sample);
+      } else if (ignoreMissingTable) {
         return new RecordWriter() {};
-      } else if (!config.autoCreateEnabled()) {
+      } else {
         throw nst;
       }
-
-      table = autoCreateTable(tableName, sample);
     }
 
     return new IcebergWriter(table, tableName, config);
