@@ -31,6 +31,9 @@ import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.hadoop.Configurable;
 import org.apache.iceberg.inmemory.InMemoryCatalog;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -114,5 +117,44 @@ public class UtilitiesTest {
 
     // check that core-site.xml was loaded
     assertThat(conf.get("foo")).isEqualTo("bar");
+  }
+
+  @Test
+  public void testExtractFromRecordValueStruct() {
+    Schema valSchema = SchemaBuilder.struct().field("key", Schema.INT64_SCHEMA).build();
+    Struct val = new Struct(valSchema).put("key", 123L);
+    Object result = Utilities.extractFromRecordValue(val, "key");
+    assertThat(result).isEqualTo(123L);
+  }
+
+  @Test
+  public void testExtractFromRecordValueStructNested() {
+    Schema idSchema = SchemaBuilder.struct().field("key", Schema.INT64_SCHEMA).build();
+    Schema dataSchema = SchemaBuilder.struct().field("id", idSchema).build();
+    Schema valSchema = SchemaBuilder.struct().field("data", dataSchema).build();
+
+    Struct id = new Struct(idSchema).put("key", 123L);
+    Struct data = new Struct(dataSchema).put("id", id);
+    Struct val = new Struct(valSchema).put("data", data);
+
+    Object result = Utilities.extractFromRecordValue(val, "data.id.key");
+    assertThat(result).isEqualTo(123L);
+  }
+
+  @Test
+  public void testExtractFromRecordValueMap() {
+    Map<String, Object> val = ImmutableMap.of("key", 123L);
+    Object result = Utilities.extractFromRecordValue(val, "key");
+    assertThat(result).isEqualTo(123L);
+  }
+
+  @Test
+  public void testExtractFromRecordValueMapNested() {
+    Map<String, Object> id = ImmutableMap.of("key", 123L);
+    Map<String, Object> data = ImmutableMap.of("id", id);
+    Map<String, Object> val = ImmutableMap.of("data", data);
+
+    Object result = Utilities.extractFromRecordValue(val, "data.id.key");
+    assertThat(result).isEqualTo(123L);
   }
 }
