@@ -28,6 +28,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.Requirements;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
@@ -87,14 +88,24 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
     }
 
     // create the CDC metadata
-    Schema cdcSchema = makeCdcSchema(record.keySchema());
+    Struct txn = value.getStruct("transaction");
+    Schema txnSchema = txn == null ? null : txn.schema();
+
+    Schema cdcSchema = makeCdcSchema(record.keySchema(), txnSchema);
     Struct cdcMetadata = new Struct(cdcSchema);
     cdcMetadata.put(CdcConstants.COL_OP, op);
     cdcMetadata.put(CdcConstants.COL_TS, new java.util.Date(value.getInt64("ts_ms")));
+    if (record instanceof SinkRecord) {
+      cdcMetadata.put(CdcConstants.COL_OFFSET, ((SinkRecord) record).kafkaOffset());
+    }
     setTableAndTargetFromSourceStruct(value.getStruct("source"), cdcMetadata);
 
     if (record.keySchema() != null) {
       cdcMetadata.put(CdcConstants.COL_KEY, record.key());
+    }
+
+    if (txnSchema != null) {
+      cdcMetadata.put(CdcConstants.COL_TXN, txn);
     }
 
     // create the new value
@@ -138,10 +149,18 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
     Map<String, Object> cdcMetadata = Maps.newHashMap();
     cdcMetadata.put(CdcConstants.COL_OP, op);
     cdcMetadata.put(CdcConstants.COL_TS, value.get("ts_ms"));
+    if (record instanceof SinkRecord) {
+      cdcMetadata.put(CdcConstants.COL_OFFSET, ((SinkRecord) record).kafkaOffset());
+    }
     setTableAndTargetFromSourceMap(value.get("source"), cdcMetadata);
 
     if (record.key() instanceof Map) {
       cdcMetadata.put(CdcConstants.COL_KEY, record.key());
+    }
+
+    Object txn = value.get("transaction");
+    if (txn instanceof Map) {
+      cdcMetadata.put(CdcConstants.COL_TXN, txn);
     }
 
     // create the new value
@@ -206,16 +225,20 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
         : cdcTargetPattern.replace(DB_PLACEHOLDER, db).replace(TABLE_PLACEHOLDER, table);
   }
 
-  private Schema makeCdcSchema(Schema keySchema) {
+  private Schema makeCdcSchema(Schema keySchema, Schema txnSchema) {
     SchemaBuilder builder =
         SchemaBuilder.struct()
             .field(CdcConstants.COL_OP, Schema.STRING_SCHEMA)
             .field(CdcConstants.COL_TS, Timestamp.SCHEMA)
+            .field(CdcConstants.COL_OFFSET, Schema.OPTIONAL_INT64_SCHEMA)
             .field(CdcConstants.COL_SOURCE, Schema.STRING_SCHEMA)
             .field(CdcConstants.COL_TARGET, Schema.STRING_SCHEMA);
 
     if (keySchema != null) {
       builder.field(CdcConstants.COL_KEY, keySchema);
+    }
+    if (txnSchema != null) {
+      builder.field(CdcConstants.COL_TXN, txnSchema);
     }
 
     return builder.build();

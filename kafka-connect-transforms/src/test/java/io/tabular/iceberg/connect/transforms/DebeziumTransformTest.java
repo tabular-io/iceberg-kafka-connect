@@ -48,7 +48,14 @@ public class DebeziumTransformTest {
           .field("db", Schema.STRING_SCHEMA)
           .field("schema", Schema.STRING_SCHEMA)
           .field("table", Schema.STRING_SCHEMA)
-          .field("txId", Schema.INT64_SCHEMA)
+          .build();
+
+  private static final Schema TXN_SCHEMA =
+      SchemaBuilder.struct()
+          .optional()
+          .field("id", Schema.STRING_SCHEMA)
+          .field("total_order", Schema.INT64_SCHEMA)
+          .field("data_collection_order", Schema.INT64_SCHEMA)
           .build();
 
   private static final Schema VALUE_SCHEMA =
@@ -56,6 +63,7 @@ public class DebeziumTransformTest {
           .field("op", Schema.STRING_SCHEMA)
           .field("ts_ms", Schema.INT64_SCHEMA)
           .field("source", SOURCE_SCHEMA)
+          .field("transaction", TXN_SCHEMA)
           .field("before", ROW_SCHEMA)
           .field("after", ROW_SCHEMA)
           .build();
@@ -90,6 +98,7 @@ public class DebeziumTransformTest {
       assertThat(cdcMetadata.get("source")).isEqualTo("schema.tbl");
       assertThat(cdcMetadata.get("target")).isEqualTo("schema_x.tbl_x");
       assertThat(cdcMetadata.get("key")).isInstanceOf(Map.class);
+      assertThat(cdcMetadata.get("txn")).isInstanceOf(Map.class);
     }
   }
 
@@ -113,6 +122,7 @@ public class DebeziumTransformTest {
       assertThat(cdcMetadata.get("source")).isEqualTo("schema.tbl");
       assertThat(cdcMetadata.get("target")).isEqualTo("schema_x.tbl_x");
       assertThat(cdcMetadata.get("key")).isInstanceOf(Struct.class);
+      assertThat(cdcMetadata.get("txn")).isInstanceOf(Struct.class);
     }
   }
 
@@ -124,6 +134,12 @@ public class DebeziumTransformTest {
             "table", "tbl",
             "txId", 12345);
 
+    Map<String, Object> txn =
+        ImmutableMap.of(
+            "id", "123:123",
+            "total_order", 1L,
+            "data_collection_order", 1L);
+
     Map<String, Object> data =
         ImmutableMap.of(
             "account_id", 1,
@@ -134,17 +150,20 @@ public class DebeziumTransformTest {
         "op", operation,
         "ts_ms", System.currentTimeMillis(),
         "source", source,
+        "transaction", txn,
         "before", data,
         "after", data);
   }
 
   private Struct createDebeziumEventStruct(String operation) {
     Struct source =
-        new Struct(SOURCE_SCHEMA)
-            .put("db", "db")
-            .put("schema", "schema")
-            .put("table", "tbl")
-            .put("txId", 12345L);
+        new Struct(SOURCE_SCHEMA).put("db", "db").put("schema", "schema").put("table", "tbl");
+
+    Struct txn =
+        new Struct(TXN_SCHEMA)
+            .put("id", "123:123")
+            .put("total_order", 1L)
+            .put("data_collection_order", 1L);
 
     Struct data =
         new Struct(ROW_SCHEMA)
@@ -156,6 +175,7 @@ public class DebeziumTransformTest {
         .put("op", operation)
         .put("ts_ms", System.currentTimeMillis())
         .put("source", source)
+        .put("transaction", txn)
         .put("before", data)
         .put("after", data);
   }
