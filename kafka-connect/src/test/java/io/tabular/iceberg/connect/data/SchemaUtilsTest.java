@@ -29,7 +29,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
-import io.tabular.iceberg.connect.data.SchemaUpdate.TypeUpdate;
+import io.tabular.iceberg.connect.data.SchemaUpdate.MakeOptional;
+import io.tabular.iceberg.connect.data.SchemaUpdate.UpdateType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -92,8 +93,9 @@ public class SchemaUtilsTest {
     List<SchemaUpdate> updates =
         ImmutableList.of(
             new AddColumn(null, "i", IntegerType.get()),
-            new TypeUpdate("i", IntegerType.get()),
-            new TypeUpdate("f", DoubleType.get()),
+            new UpdateType("i", IntegerType.get()),
+            new MakeOptional("i"),
+            new UpdateType("f", DoubleType.get()),
             new AddColumn(null, "s", StringType.get()));
 
     SchemaUtils.applySchemaUpdates(table, updates);
@@ -101,6 +103,7 @@ public class SchemaUtilsTest {
     verify(table).updateSchema();
     verify(updateSchema).addColumn(isNull(), matches("s"), isA(StringType.class));
     verify(updateSchema).updateColumn(matches("f"), isA(DoubleType.class));
+    verify(updateSchema).makeColumnOptional(matches("i"));
     verify(updateSchema).commit();
   }
 
