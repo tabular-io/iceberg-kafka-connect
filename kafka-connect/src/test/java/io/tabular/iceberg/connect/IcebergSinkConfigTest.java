@@ -35,14 +35,6 @@ public class IcebergSinkConfigTest {
   }
 
   @Test
-  public void testMissingRequired() {
-    Map<String, String> props = ImmutableMap.of();
-    assertThatThrownBy(() -> new IcebergSinkConfig(props))
-        .isInstanceOf(ConfigException.class)
-        .hasMessageStartingWith("Missing required configuration");
-  }
-
-  @Test
   public void testInvalid() {
     Map<String, String> props =
         ImmutableMap.of(

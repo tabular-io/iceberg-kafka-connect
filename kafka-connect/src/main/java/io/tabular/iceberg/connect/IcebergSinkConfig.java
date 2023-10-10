@@ -27,8 +27,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.regex.Pattern;
 import org.apache.iceberg.IcebergBuild;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
@@ -43,7 +41,6 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
-import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.ConverterType;
 import org.slf4j.Logger;
@@ -86,6 +83,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.control.commit.timeout-ms";
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
   private static final String COMMIT_THREADS_PROP = "iceberg.control.commit.threads";
+  private static final String CONNECT_GROUP_ID_PROP = "iceberg.connect.group-id";
   private static final String HADDOP_CONF_DIR_PROP = "iceberg.hadoop-conf-dir";
 
   private static final String NAME_PROP = "name";
@@ -107,11 +105,6 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   private static ConfigDef newConfigDef() {
     ConfigDef configDef = new ConfigDef();
-    configDef.define(
-        SinkConnector.TOPICS_CONFIG,
-        Type.LIST,
-        Importance.HIGH,
-        "Comma-delimited list of source topics");
     configDef.define(
         TABLES_PROP,
         Type.LIST,
@@ -190,6 +183,12 @@ public class IcebergSinkConfig extends AbstractConfig {
         null,
         Importance.MEDIUM,
         "Name of the consumer group to store offsets");
+    configDef.define(
+        CONNECT_GROUP_ID_PROP,
+        Type.STRING,
+        null,
+        Importance.LOW,
+        "Name of the Connect consumer group, should not be set under normal conditions");
     configDef.define(
         COMMIT_INTERVAL_MS_PROP,
         Type.INT,
@@ -270,10 +269,6 @@ public class IcebergSinkConfig extends AbstractConfig {
   public String transactionalSuffix() {
     // this is for internal use and is not part of the config definition...
     return originalProps.get(INTERNAL_TRANSACTIONAL_SUFFIX_PROP);
-  }
-
-  public SortedSet<String> topics() {
-    return new TreeSet<>(getList(SinkConnector.TOPICS_CONFIG));
   }
 
   public Map<String, String> catalogProps() {
@@ -364,6 +359,17 @@ public class IcebergSinkConfig extends AbstractConfig {
     String connectorName = connectorName();
     Preconditions.checkNotNull(connectorName, "Connector name cannot be null");
     return DEFAULT_CONTROL_GROUP_PREFIX + connectorName;
+  }
+
+  public String connectGroupId() {
+    String result = getString(CONNECT_GROUP_ID_PROP);
+    if (result != null) {
+      return result;
+    }
+
+    String connectorName = connectorName();
+    Preconditions.checkNotNull(connectorName, "Connector name cannot be null");
+    return "connect-" + connectorName;
   }
 
   public int commitIntervalMs() {

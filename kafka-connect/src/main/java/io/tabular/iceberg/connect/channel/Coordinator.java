@@ -33,10 +33,10 @@ import io.tabular.iceberg.connect.events.TableName;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.DataFile;
@@ -50,6 +50,7 @@ import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.util.Tasks;
 import org.apache.iceberg.util.ThreadPools;
+import org.apache.kafka.clients.admin.MemberDescription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,13 +70,18 @@ public class Coordinator extends Channel {
   private final ExecutorService exec;
   private final CommitState commitState;
 
-  public Coordinator(Catalog catalog, IcebergSinkConfig config, KafkaClientFactory clientFactory) {
+  public Coordinator(
+      Catalog catalog,
+      IcebergSinkConfig config,
+      Collection<MemberDescription> members,
+      KafkaClientFactory clientFactory) {
     // pass consumer group ID to which we commit low watermark offsets
     super("coordinator", config.controlGroupId() + "-coord", config, clientFactory);
 
     this.catalog = catalog;
     this.config = config;
-    this.totalPartitionCount = totalPartitionCount();
+    this.totalPartitionCount =
+        members.stream().mapToInt(desc -> desc.assignment().topicPartitions().size()).sum();
     this.snapshotOffsetsProp =
         String.format(OFFSETS_SNAPSHOT_PROP_FMT, config.controlTopic(), config.controlGroupId());
     this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.commitThreads());
@@ -115,21 +121,6 @@ public class Coordinator extends Channel {
         return true;
     }
     return false;
-  }
-
-  @SuppressWarnings("deprecation")
-  private int totalPartitionCount() {
-    // use deprecated values() for backwards compatibility
-    return admin().describeTopics(config.topics()).values().values().stream()
-        .mapToInt(
-            value -> {
-              try {
-                return value.get().partitions().size();
-              } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
-              }
-            })
-        .sum();
   }
 
   private void commit(boolean partialCommit) {

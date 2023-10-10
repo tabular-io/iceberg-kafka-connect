@@ -21,17 +21,22 @@ package io.tabular.iceberg.connect;
 import io.tabular.iceberg.connect.channel.Coordinator;
 import io.tabular.iceberg.connect.channel.CoordinatorThread;
 import io.tabular.iceberg.connect.channel.KafkaClientFactory;
+import io.tabular.iceberg.connect.channel.KafkaUtils;
 import io.tabular.iceberg.connect.channel.NotRunningException;
 import io.tabular.iceberg.connect.channel.Worker;
 import io.tabular.iceberg.connect.data.IcebergWriterFactory;
 import io.tabular.iceberg.connect.data.Utilities;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Map;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.slf4j.Logger;
@@ -45,6 +50,18 @@ public class IcebergSinkTask extends SinkTask {
   private Catalog catalog;
   private CoordinatorThread coordinatorThread;
   private Worker worker;
+
+  static class TopicPartitionComparator implements Comparator<TopicPartition> {
+
+    @Override
+    public int compare(TopicPartition o1, TopicPartition o2) {
+      int result = o1.topic().compareTo(o2.topic());
+      if (result == 0) {
+        result = Integer.compare(o1.partition(), o2.partition());
+      }
+      return result;
+    }
+  }
 
   @Override
   public String version() {
@@ -61,9 +78,14 @@ public class IcebergSinkTask extends SinkTask {
     catalog = Utilities.loadCatalog(config);
     KafkaClientFactory clientFactory = new KafkaClientFactory(config.kafkaProps());
 
-    if (isLeader(partitions)) {
+    Collection<MemberDescription> members;
+    try (Admin admin = clientFactory.createAdmin()) {
+      members = KafkaUtils.consumerGroupMembers(config.connectGroupId(), admin);
+    }
+
+    if (isLeader(members, partitions)) {
       LOG.info("Task elected leader, starting commit coordinator");
-      Coordinator coordinator = new Coordinator(catalog, config, clientFactory);
+      Coordinator coordinator = new Coordinator(catalog, config, members, clientFactory);
       coordinatorThread = new CoordinatorThread(coordinator);
       coordinatorThread.start();
     }
@@ -76,13 +98,17 @@ public class IcebergSinkTask extends SinkTask {
   }
 
   @VisibleForTesting
-  boolean isLeader(Collection<TopicPartition> partitions) {
-    // there should only be one worker assigned partition 0 of the first
-    // topic, so elect that one the leader
-    String firstTopic = config.topics().first();
-    return partitions.stream()
-        .filter(tp -> tp.topic().equals(firstTopic))
-        .anyMatch(tp -> tp.partition() == 0);
+  boolean isLeader(Collection<MemberDescription> members, Collection<TopicPartition> partitions) {
+    // there should only be one task assigned partition 0 of the first topic,
+    // so elect that one the leader
+    TopicPartition firstTopicPartition =
+        members.stream()
+            .flatMap(member -> member.assignment().topicPartitions().stream())
+            .min(new TopicPartitionComparator())
+            .orElseThrow(
+                () -> new ConnectException("No partitions assigned, cannot determine leader"));
+
+    return partitions.contains(firstTopicPartition);
   }
 
   @Override
