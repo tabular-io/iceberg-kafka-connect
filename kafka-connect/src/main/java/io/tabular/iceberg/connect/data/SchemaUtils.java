@@ -256,7 +256,7 @@ public class SchemaUtils {
           return DoubleType.get();
         case ARRAY:
           Type elementType = toIcebergType(valueSchema.valueSchema());
-          if (valueSchema.isOptional()) {
+          if (valueSchema.valueSchema().isOptional()) {
             return ListType.ofOptional(nextId(), elementType);
           } else {
             return ListType.ofRequired(nextId(), elementType);
@@ -264,7 +264,7 @@ public class SchemaUtils {
         case MAP:
           Type keyType = toIcebergType(valueSchema.keySchema());
           Type valueType = toIcebergType(valueSchema.valueSchema());
-          if (valueSchema.isOptional()) {
+          if (valueSchema.valueSchema().isOptional()) {
             return MapType.ofOptional(nextId(), nextId(), keyType, valueType);
           } else {
             return MapType.ofRequired(nextId(), nextId(), keyType, valueType);
