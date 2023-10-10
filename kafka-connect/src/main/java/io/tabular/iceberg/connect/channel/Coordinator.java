@@ -36,7 +36,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.DataFile;
@@ -64,18 +63,22 @@ public class Coordinator extends Channel {
 
   private final Catalog catalog;
   private final IcebergSinkConfig config;
-  private final int totalPartitionCount;
+  private final int totalMemberCount;
   private final String snapshotOffsetsProp;
   private final ExecutorService exec;
   private final CommitState commitState;
 
-  public Coordinator(Catalog catalog, IcebergSinkConfig config, KafkaClientFactory clientFactory) {
+  public Coordinator(
+      Catalog catalog,
+      IcebergSinkConfig config,
+      int totalMemberCount,
+      KafkaClientFactory clientFactory) {
     // pass consumer group ID to which we commit low watermark offsets
     super("coordinator", config.controlGroupId() + "-coord", config, clientFactory);
 
     this.catalog = catalog;
     this.config = config;
-    this.totalPartitionCount = totalPartitionCount();
+    this.totalMemberCount = totalMemberCount;
     this.snapshotOffsetsProp =
         String.format(OFFSETS_SNAPSHOT_PROP_FMT, config.controlTopic(), config.controlGroupId());
     this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.commitThreads());
@@ -109,27 +112,12 @@ public class Coordinator extends Channel {
         return true;
       case COMMIT_READY:
         commitState.addReady(envelope);
-        if (commitState.isCommitReady(totalPartitionCount)) {
+        if (commitState.isCommitReady(totalMemberCount)) {
           commit(false);
         }
         return true;
     }
     return false;
-  }
-
-  @SuppressWarnings("deprecation")
-  private int totalPartitionCount() {
-    // use deprecated values() for backwards compatibility
-    return admin().describeTopics(config.topics()).values().values().stream()
-        .mapToInt(
-            value -> {
-              try {
-                return value.get().partitions().size();
-              } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
-              }
-            })
-        .sum();
   }
 
   private void commit(boolean partialCommit) {

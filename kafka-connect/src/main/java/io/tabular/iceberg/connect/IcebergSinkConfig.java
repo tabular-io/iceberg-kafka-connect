@@ -27,8 +27,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.regex.Pattern;
 import org.apache.iceberg.IcebergBuild;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
@@ -43,7 +41,6 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
-import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.ConverterType;
 import org.slf4j.Logger;
@@ -107,11 +104,6 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   private static ConfigDef newConfigDef() {
     ConfigDef configDef = new ConfigDef();
-    configDef.define(
-        SinkConnector.TOPICS_CONFIG,
-        Type.LIST,
-        Importance.HIGH,
-        "Comma-delimited list of source topics");
     configDef.define(
         TABLES_PROP,
         Type.LIST,
@@ -272,10 +264,6 @@ public class IcebergSinkConfig extends AbstractConfig {
     return originalProps.get(INTERNAL_TRANSACTIONAL_SUFFIX_PROP);
   }
 
-  public SortedSet<String> topics() {
-    return new TreeSet<>(getList(SinkConnector.TOPICS_CONFIG));
-  }
-
   public Map<String, String> catalogProps() {
     return catalogProps;
   }
@@ -364,6 +352,14 @@ public class IcebergSinkConfig extends AbstractConfig {
     String connectorName = connectorName();
     Preconditions.checkNotNull(connectorName, "Connector name cannot be null");
     return DEFAULT_CONTROL_GROUP_PREFIX + connectorName;
+  }
+
+  public String connectGroupId() {
+    // FIXME!!!! override for cases it can't be read
+
+    String connectorName = connectorName();
+    Preconditions.checkNotNull(connectorName, "Connector name cannot be null");
+    return "connect-" + connectorName;
   }
 
   public int commitIntervalMs() {
