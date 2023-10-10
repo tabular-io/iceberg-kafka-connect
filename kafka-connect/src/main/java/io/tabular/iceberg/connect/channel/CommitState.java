@@ -103,30 +103,30 @@ public class CommitState {
     return false;
   }
 
-  public boolean isCommitReady(int expectedMemberCount) {
+  public boolean isCommitReady(int expectedPartitionCount) {
     if (!isCommitInProgress()) {
       return false;
     }
 
-    int receivedMemberCount =
-        (int)
-            readyBuffer.stream()
-                .filter(payload -> payload.commitId().equals(currentCommitId))
-                .count();
+    int receivedPartitionCount =
+        readyBuffer.stream()
+            .filter(payload -> payload.commitId().equals(currentCommitId))
+            .mapToInt(payload -> payload.assignments().size())
+            .sum();
 
-    if (receivedMemberCount >= expectedMemberCount) {
+    if (receivedPartitionCount >= expectedPartitionCount) {
       LOG.info(
-          "Commit {} ready, received responses for all {} members",
+          "Commit {} ready, received responses for all {} partitions",
           currentCommitId,
-          receivedMemberCount);
+          receivedPartitionCount);
       return true;
     }
 
     LOG.info(
-        "Commit {} not ready, received responses for {} of {} members, waiting for more",
+        "Commit {} not ready, received responses for {} of {} partitions, waiting for more",
         currentCommitId,
-        receivedMemberCount,
-        expectedMemberCount);
+        receivedPartitionCount,
+        expectedPartitionCount);
 
     return false;
   }

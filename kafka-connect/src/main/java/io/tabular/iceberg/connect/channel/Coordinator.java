@@ -33,6 +33,7 @@ import io.tabular.iceberg.connect.events.TableName;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -49,6 +50,7 @@ import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.util.Tasks;
 import org.apache.iceberg.util.ThreadPools;
+import org.apache.kafka.clients.admin.MemberDescription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,7 +65,7 @@ public class Coordinator extends Channel {
 
   private final Catalog catalog;
   private final IcebergSinkConfig config;
-  private final int totalMemberCount;
+  private final int totalPartitionCount;
   private final String snapshotOffsetsProp;
   private final ExecutorService exec;
   private final CommitState commitState;
@@ -71,14 +73,15 @@ public class Coordinator extends Channel {
   public Coordinator(
       Catalog catalog,
       IcebergSinkConfig config,
-      int totalMemberCount,
+      Collection<MemberDescription> members,
       KafkaClientFactory clientFactory) {
     // pass consumer group ID to which we commit low watermark offsets
     super("coordinator", config.controlGroupId() + "-coord", config, clientFactory);
 
     this.catalog = catalog;
     this.config = config;
-    this.totalMemberCount = totalMemberCount;
+    this.totalPartitionCount =
+        members.stream().mapToInt(desc -> desc.assignment().topicPartitions().size()).sum();
     this.snapshotOffsetsProp =
         String.format(OFFSETS_SNAPSHOT_PROP_FMT, config.controlTopic(), config.controlGroupId());
     this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.commitThreads());
@@ -112,7 +115,7 @@ public class Coordinator extends Channel {
         return true;
       case COMMIT_READY:
         commitState.addReady(envelope);
-        if (commitState.isCommitReady(totalMemberCount)) {
+        if (commitState.isCommitReady(totalPartitionCount)) {
           commit(false);
         }
         return true;

@@ -85,7 +85,7 @@ public class IcebergSinkTask extends SinkTask {
 
     if (isLeader(members, partitions)) {
       LOG.info("Task elected leader, starting commit coordinator");
-      Coordinator coordinator = new Coordinator(catalog, config, members.size(), clientFactory);
+      Coordinator coordinator = new Coordinator(catalog, config, members, clientFactory);
       coordinatorThread = new CoordinatorThread(coordinator);
       coordinatorThread.start();
     }

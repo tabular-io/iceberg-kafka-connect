@@ -140,7 +140,7 @@ public class CoordinatorTest extends ChannelTestBase {
     when(config.commitIntervalMs()).thenReturn(0);
     when(config.commitTimeoutMs()).thenReturn(Integer.MAX_VALUE);
 
-    Coordinator coordinator = new Coordinator(catalog, config, 1, clientFactory);
+    Coordinator coordinator = new Coordinator(catalog, config, ImmutableList.of(), clientFactory);
     coordinator.start();
 
     // init consumer after subscribe()

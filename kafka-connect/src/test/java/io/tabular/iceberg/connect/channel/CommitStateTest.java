@@ -55,8 +55,8 @@ public class CommitStateTest {
     commitState.addReady(wrapInEnvelope(payload2));
     commitState.addReady(wrapInEnvelope(payload3));
 
-    assertThat(commitState.isCommitReady(2)).isTrue();
-    assertThat(commitState.isCommitReady(3)).isFalse();
+    assertThat(commitState.isCommitReady(3)).isTrue();
+    assertThat(commitState.isCommitReady(4)).isFalse();
   }
 
   @Test
