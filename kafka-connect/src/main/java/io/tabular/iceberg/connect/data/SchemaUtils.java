@@ -21,7 +21,8 @@ package io.tabular.iceberg.connect.data;
 import static java.util.stream.Collectors.toList;
 
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
-import io.tabular.iceberg.connect.data.SchemaUpdate.TypeUpdate;
+import io.tabular.iceberg.connect.data.SchemaUpdate.MakeOptional;
+import io.tabular.iceberg.connect.data.SchemaUpdate.UpdateType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -104,14 +105,22 @@ public class SchemaUtils {
             .collect(toList());
 
     // filter out columns that have the updated type
-    List<TypeUpdate> typeUpdates =
+    List<UpdateType> updateTypes =
         updates.stream()
-            .filter(update -> update instanceof TypeUpdate)
-            .map(update -> (TypeUpdate) update)
-            .filter(typeUpdate -> !typeMatches(table.schema(), typeUpdate))
+            .filter(update -> update instanceof UpdateType)
+            .map(update -> (UpdateType) update)
+            .filter(updateType -> !typeMatches(table.schema(), updateType))
             .collect(toList());
 
-    if (addColumns.isEmpty() && typeUpdates.isEmpty()) {
+    // filter out columns that have already been made optional
+    List<MakeOptional> makeOptionals =
+        updates.stream()
+            .filter(update -> update instanceof MakeOptional)
+            .map(update -> (MakeOptional) update)
+            .filter(makeOptional -> !isOptional(table.schema(), makeOptional))
+            .collect(toList());
+
+    if (addColumns.isEmpty() && updateTypes.isEmpty() && makeOptionals.isEmpty()) {
       // no updates to apply
       LOG.info("Schema for table {} already up-to-date", table.name());
       return;
@@ -121,7 +130,8 @@ public class SchemaUtils {
     UpdateSchema updateSchema = table.updateSchema();
     addColumns.forEach(
         update -> updateSchema.addColumn(update.parentName(), update.name(), update.type()));
-    typeUpdates.forEach(update -> updateSchema.updateColumn(update.name(), update.type()));
+    updateTypes.forEach(update -> updateSchema.updateColumn(update.name(), update.type()));
+    makeOptionals.forEach(update -> updateSchema.makeColumnOptional(update.name()));
     updateSchema.commit();
     LOG.info("Schema for table {} updated with new columns", table.name());
   }
@@ -134,8 +144,12 @@ public class SchemaUtils {
     return struct.field(update.name()) != null;
   }
 
-  private static boolean typeMatches(org.apache.iceberg.Schema schema, TypeUpdate update) {
+  private static boolean typeMatches(org.apache.iceberg.Schema schema, UpdateType update) {
     return schema.findType(update.name()).typeId() == update.type().typeId();
+  }
+
+  private static boolean isOptional(org.apache.iceberg.Schema schema, MakeOptional update) {
+    return schema.findField(update.name()).isOptional();
   }
 
   public static PartitionSpec createPartitionSpec(
@@ -242,18 +256,29 @@ public class SchemaUtils {
           return DoubleType.get();
         case ARRAY:
           Type elementType = toIcebergType(valueSchema.valueSchema());
-          return ListType.ofOptional(nextId(), elementType);
+          if (valueSchema.valueSchema().isOptional()) {
+            return ListType.ofOptional(nextId(), elementType);
+          } else {
+            return ListType.ofRequired(nextId(), elementType);
+          }
         case MAP:
           Type keyType = toIcebergType(valueSchema.keySchema());
           Type valueType = toIcebergType(valueSchema.valueSchema());
-          return MapType.ofOptional(nextId(), nextId(), keyType, valueType);
+          if (valueSchema.valueSchema().isOptional()) {
+            return MapType.ofOptional(nextId(), nextId(), keyType, valueType);
+          } else {
+            return MapType.ofRequired(nextId(), nextId(), keyType, valueType);
+          }
         case STRUCT:
           List<NestedField> structFields =
               valueSchema.fields().stream()
                   .map(
                       field ->
-                          NestedField.optional(
-                              nextId(), field.name(), toIcebergType(field.schema())))
+                          NestedField.of(
+                              nextId(),
+                              field.schema().isOptional(),
+                              field.name(),
+                              toIcebergType(field.schema())))
                   .collect(toList());
           return StructType.of(structFields);
         case STRING:

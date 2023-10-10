@@ -47,11 +47,11 @@ public class SchemaUpdate {
     }
   }
 
-  public static class TypeUpdate extends SchemaUpdate {
+  public static class UpdateType extends SchemaUpdate {
     private final String name;
     private final PrimitiveType type;
 
-    public TypeUpdate(String name, PrimitiveType type) {
+    public UpdateType(String name, PrimitiveType type) {
       this.name = name;
       this.type = type;
     }
@@ -62,6 +62,18 @@ public class SchemaUpdate {
 
     public PrimitiveType type() {
       return type;
+    }
+  }
+
+  public static class MakeOptional extends SchemaUpdate {
+    private final String name;
+
+    public MakeOptional(String name) {
+      this.name = name;
+    }
+
+    public String name() {
+      return name;
     }
   }
 }

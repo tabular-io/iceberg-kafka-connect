@@ -25,7 +25,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
-import io.tabular.iceberg.connect.data.SchemaUpdate.TypeUpdate;
+import io.tabular.iceberg.connect.data.SchemaUpdate.UpdateType;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -492,12 +492,12 @@ public class RecordConverterTest {
 
     List<SchemaUpdate> updates = Lists.newArrayList();
     converter.convert(data, updates::add);
-    List<TypeUpdate> addCols =
-        updates.stream().map(update -> (TypeUpdate) update).collect(toList());
+    List<UpdateType> addCols =
+        updates.stream().map(update -> (UpdateType) update).collect(toList());
 
     assertThat(addCols).hasSize(2);
 
-    Map<String, TypeUpdate> updateMap = Maps.newHashMap();
+    Map<String, UpdateType> updateMap = Maps.newHashMap();
     addCols.forEach(update -> updateMap.put(update.name(), update));
 
     assertThat(updateMap.get("ii").type()).isInstanceOf(LongType.class);
@@ -529,12 +529,12 @@ public class RecordConverterTest {
 
     List<SchemaUpdate> updates = Lists.newArrayList();
     converter.convert(data, updates::add);
-    List<TypeUpdate> addCols =
-        updates.stream().map(update -> (TypeUpdate) update).collect(toList());
+    List<UpdateType> addCols =
+        updates.stream().map(update -> (UpdateType) update).collect(toList());
 
     assertThat(addCols).hasSize(2);
 
-    Map<String, TypeUpdate> updateMap = Maps.newHashMap();
+    Map<String, UpdateType> updateMap = Maps.newHashMap();
     addCols.forEach(update -> updateMap.put(update.name(), update));
 
     assertThat(updateMap.get("st.ii").type()).isInstanceOf(LongType.class);
