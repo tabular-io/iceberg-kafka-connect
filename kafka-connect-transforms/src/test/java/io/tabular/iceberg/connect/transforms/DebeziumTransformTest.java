@@ -84,10 +84,12 @@ public class DebeziumTransformTest {
       Map<String, Object> value = (Map<String, Object>) result.value();
 
       assertThat(value.get("account_id")).isEqualTo(1);
-      assertThat(value.get("_cdc_table")).isEqualTo("schema.tbl");
-      assertThat(value.get("_cdc_target")).isEqualTo("schema_x.tbl_x");
-      assertThat(value.get("_cdc_op")).isEqualTo("U");
-      assertThat(value.get("_cdc_key")).isInstanceOf(Map.class);
+
+      Map<String, Object> cdcMetadata = (Map<String, Object>) value.get("_cdc");
+      assertThat(cdcMetadata.get("op")).isEqualTo("U");
+      assertThat(cdcMetadata.get("source")).isEqualTo("schema.tbl");
+      assertThat(cdcMetadata.get("target")).isEqualTo("schema_x.tbl_x");
+      assertThat(cdcMetadata.get("key")).isInstanceOf(Map.class);
     }
   }
 
@@ -105,10 +107,12 @@ public class DebeziumTransformTest {
       Struct value = (Struct) result.value();
 
       assertThat(value.get("account_id")).isEqualTo(1L);
-      assertThat(value.get("_cdc_table")).isEqualTo("schema.tbl");
-      assertThat(value.get("_cdc_target")).isEqualTo("schema_x.tbl_x");
-      assertThat(value.get("_cdc_op")).isEqualTo("U");
-      assertThat(value.get("_cdc_key")).isInstanceOf(Struct.class);
+
+      Struct cdcMetadata = value.getStruct("_cdc");
+      assertThat(cdcMetadata.get("op")).isEqualTo("U");
+      assertThat(cdcMetadata.get("source")).isEqualTo("schema.tbl");
+      assertThat(cdcMetadata.get("target")).isEqualTo("schema_x.tbl_x");
+      assertThat(cdcMetadata.get("key")).isInstanceOf(Struct.class);
     }
   }
 
