@@ -22,7 +22,8 @@ import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
-import io.tabular.iceberg.connect.data.SchemaUpdate.TypeUpdate;
+import io.tabular.iceberg.connect.data.SchemaUpdate.MakeOptional;
+import io.tabular.iceberg.connect.data.SchemaUpdate.UpdateType;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
@@ -212,13 +213,24 @@ public class RecordConverter {
                       new AddColumn(parentFieldName, recordField.name(), type));
                 }
               } else {
-                PrimitiveType evolveDataType =
-                    SchemaUtils.needsDataTypeUpdate(tableField.type(), recordField.schema());
-                // update the type if needed and schema evolution is on, otherwise set the value
-                if (evolveDataType != null && schemaUpdateConsumer != null) {
-                  String fieldName = tableSchema.findColumnName(tableField.fieldId());
-                  schemaUpdateConsumer.accept(new TypeUpdate(fieldName, evolveDataType));
-                } else {
+                boolean hasSchemaUpdates = false;
+                if (schemaUpdateConsumer != null) {
+                  // update the type if needed and schema evolution is on
+                  PrimitiveType evolveDataType =
+                      SchemaUtils.needsDataTypeUpdate(tableField.type(), recordField.schema());
+                  if (evolveDataType != null) {
+                    String fieldName = tableSchema.findColumnName(tableField.fieldId());
+                    schemaUpdateConsumer.accept(new UpdateType(fieldName, evolveDataType));
+                    hasSchemaUpdates = true;
+                  }
+                  // make optional if needed and schema evolution is on
+                  if (tableField.isRequired() && recordField.schema().isOptional()) {
+                    String fieldName = tableSchema.findColumnName(tableField.fieldId());
+                    schemaUpdateConsumer.accept(new MakeOptional(fieldName));
+                    hasSchemaUpdates = true;
+                  }
+                }
+                if (!hasSchemaUpdates) {
                   result.setField(
                       tableField.name(),
                       convertValue(
