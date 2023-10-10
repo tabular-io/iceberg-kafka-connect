@@ -83,6 +83,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String COMMIT_TIMEOUT_MS_PROP = "iceberg.control.commit.timeout-ms";
   private static final int COMMIT_TIMEOUT_MS_DEFAULT = 30_000;
   private static final String COMMIT_THREADS_PROP = "iceberg.control.commit.threads";
+  private static final String CONNECT_GROUP_ID_PROP = "iceberg.connect.group-id";
   private static final String HADDOP_CONF_DIR_PROP = "iceberg.hadoop-conf-dir";
 
   private static final String NAME_PROP = "name";
@@ -182,6 +183,12 @@ public class IcebergSinkConfig extends AbstractConfig {
         null,
         Importance.MEDIUM,
         "Name of the consumer group to store offsets");
+    configDef.define(
+        CONNECT_GROUP_ID_PROP,
+        Type.STRING,
+        null,
+        Importance.LOW,
+        "Name of the Connect consumer group, should not be set under normal conditions");
     configDef.define(
         COMMIT_INTERVAL_MS_PROP,
         Type.INT,
@@ -355,7 +362,10 @@ public class IcebergSinkConfig extends AbstractConfig {
   }
 
   public String connectGroupId() {
-    // FIXME!!!! override for cases it can't be read
+    String result = getString(CONNECT_GROUP_ID_PROP);
+    if (result != null) {
+      return result;
+    }
 
     String connectorName = connectorName();
     Preconditions.checkNotNull(connectorName, "Connector name cannot be null");
