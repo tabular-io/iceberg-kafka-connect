@@ -88,10 +88,7 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
     }
 
     // create the CDC metadata
-    Struct txn = value.getStruct("transaction");
-    Schema txnSchema = txn == null ? null : txn.schema();
-
-    Schema cdcSchema = makeCdcSchema(record.keySchema(), txnSchema);
+    Schema cdcSchema = makeCdcSchema(record.keySchema());
     Struct cdcMetadata = new Struct(cdcSchema);
     cdcMetadata.put(CdcConstants.COL_OP, op);
     cdcMetadata.put(CdcConstants.COL_TS, new java.util.Date(value.getInt64("ts_ms")));
@@ -102,10 +99,6 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
 
     if (record.keySchema() != null) {
       cdcMetadata.put(CdcConstants.COL_KEY, record.key());
-    }
-
-    if (txnSchema != null) {
-      cdcMetadata.put(CdcConstants.COL_TXN, txn);
     }
 
     // create the new value
@@ -156,11 +149,6 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
 
     if (record.key() instanceof Map) {
       cdcMetadata.put(CdcConstants.COL_KEY, record.key());
-    }
-
-    Object txn = value.get("transaction");
-    if (txn instanceof Map) {
-      cdcMetadata.put(CdcConstants.COL_TXN, txn);
     }
 
     // create the new value
@@ -225,7 +213,7 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
         : cdcTargetPattern.replace(DB_PLACEHOLDER, db).replace(TABLE_PLACEHOLDER, table);
   }
 
-  private Schema makeCdcSchema(Schema keySchema, Schema txnSchema) {
+  private Schema makeCdcSchema(Schema keySchema) {
     SchemaBuilder builder =
         SchemaBuilder.struct()
             .field(CdcConstants.COL_OP, Schema.STRING_SCHEMA)
@@ -236,9 +224,6 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
 
     if (keySchema != null) {
       builder.field(CdcConstants.COL_KEY, keySchema);
-    }
-    if (txnSchema != null) {
-      builder.field(CdcConstants.COL_TXN, txnSchema);
     }
 
     return builder.build();

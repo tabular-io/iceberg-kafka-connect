@@ -31,5 +31,4 @@ public interface CdcConstants {
   String COL_SOURCE = "source";
   String COL_TARGET = "target";
   String COL_KEY = "key";
-  String COL_TXN = "txn";
 }
