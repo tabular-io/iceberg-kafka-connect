@@ -1,6 +1,6 @@
 [versions]
 assertj-ver = "3.24.2"
-avro-ver = "1.11.1"
+avro-ver = "1.11.3"
 awaitility-ver = "4.2.0"
 hadoop-ver = "3.3.6"
 hive-ver = "2.3.9"
