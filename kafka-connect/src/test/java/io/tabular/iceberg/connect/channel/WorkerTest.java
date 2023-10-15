@@ -83,7 +83,7 @@ public class WorkerTest extends ChannelTestBase {
     IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
     when(writerFactory.createWriter(any(), any(), anyBoolean())).thenReturn(writer);
 
-    Worker worker = new Worker(catalog, config, clientFactory, writerFactory, context);
+    Worker worker = new Worker(config, clientFactory, writerFactory, context);
     worker.start();
 
     // init consumer after subscribe()

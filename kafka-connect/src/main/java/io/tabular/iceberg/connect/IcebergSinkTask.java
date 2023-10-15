@@ -92,7 +92,7 @@ public class IcebergSinkTask extends SinkTask {
 
     LOG.info("Starting commit worker");
     IcebergWriterFactory writerFactory = new IcebergWriterFactory(catalog, config);
-    worker = new Worker(catalog, config, clientFactory, writerFactory, context);
+    worker = new Worker(config, clientFactory, writerFactory, context);
     worker.syncCommitOffsets();
     worker.start();
   }

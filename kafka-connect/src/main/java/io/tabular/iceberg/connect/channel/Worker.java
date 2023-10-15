@@ -41,7 +41,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
@@ -53,7 +52,6 @@ import org.apache.kafka.connect.sink.SinkTaskContext;
 
 public class Worker extends Channel {
 
-  private final Catalog catalog;
   private final IcebergSinkConfig config;
   private final IcebergWriterFactory writerFactory;
   private final SinkTaskContext context;
@@ -62,7 +60,6 @@ public class Worker extends Channel {
   private final Map<TopicPartition, Offset> sourceOffsets;
 
   public Worker(
-      Catalog catalog,
       IcebergSinkConfig config,
       KafkaClientFactory clientFactory,
       IcebergWriterFactory writerFactory,
@@ -74,7 +71,6 @@ public class Worker extends Channel {
         config,
         clientFactory);
 
-    this.catalog = catalog;
     this.config = config;
     this.writerFactory = writerFactory;
     this.context = context;
