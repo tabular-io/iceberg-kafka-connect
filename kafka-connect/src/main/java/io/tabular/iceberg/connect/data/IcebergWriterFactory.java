@@ -36,8 +36,6 @@ public class IcebergWriterFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(IcebergWriterFactory.class);
 
-  private static final int CREATE_RETRY_ATTEMPTS = 2; // 3 total attempts
-
   private final Catalog catalog;
   private final IcebergSinkConfig config;
 
@@ -92,7 +90,7 @@ public class IcebergWriterFactory {
     PartitionSpec partitionSpec = spec;
     AtomicReference<Table> result = new AtomicReference<>();
     Tasks.range(1)
-        .retry(CREATE_RETRY_ATTEMPTS)
+        .retry(IcebergSinkConfig.CREATE_TABLE_RETRIES)
         .run(
             notUsed -> {
               try {
