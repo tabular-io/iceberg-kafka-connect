@@ -18,7 +18,7 @@ Finally, we want to correlate the Kafka consumer offsets with Iceberg commits, w
 * Exactly-once delivery semantics
 * Multi-table fan-out
 * Row mutations (update/delete rows), upsert mode
-* Message conversion using the Iceberg schema as the source of truth
+* Automatic table creation and schema evolution
 * Field name mapping via Iceberg’s column mapping functionality
 
 ![Iceberg%20KC](https://github.com/tabular-io/iceberg-kafka-connect/assets/5475421/edb8e698-0878-445f-8e41-140ba05c237e)
@@ -143,13 +143,11 @@ If the table is rolled back to an older snapshot, then that also rolls back to o
 ## Future Enhancements
 
 * Optionally commit as unpartitioned to avoid many small files
-* Commit to branch then merge
 * More seamless snapshot rollback behavior
 * Zombie fencing during offset commit
 * Pluggable commit coordinator
   * Allow a backend to handle instead of requiring a control topic
 * Distribute commits across workers
-* Schema evolution, automatic table creation
 
 ## Alternatives Considered
 
