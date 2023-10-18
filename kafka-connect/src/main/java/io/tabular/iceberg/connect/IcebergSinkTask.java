@@ -33,8 +33,10 @@ import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -78,16 +80,19 @@ public class IcebergSinkTask extends SinkTask {
     catalog = Utilities.loadCatalog(config);
     KafkaClientFactory clientFactory = new KafkaClientFactory(config.kafkaProps());
 
-    Collection<MemberDescription> members;
+    ConsumerGroupDescription groupDesc;
     try (Admin admin = clientFactory.createAdmin()) {
-      members = KafkaUtils.consumerGroupMembers(config.connectGroupId(), admin);
+      groupDesc = KafkaUtils.consumerGroupDescription(config.connectGroupId(), admin);
     }
 
-    if (isLeader(members, partitions)) {
-      LOG.info("Task elected leader, starting commit coordinator");
-      Coordinator coordinator = new Coordinator(catalog, config, members, clientFactory);
-      coordinatorThread = new CoordinatorThread(coordinator);
-      coordinatorThread.start();
+    if (groupDesc.state() == ConsumerGroupState.STABLE) {
+      Collection<MemberDescription> members = groupDesc.members();
+      if (isLeader(members, partitions)) {
+        LOG.info("Task elected leader, starting commit coordinator");
+        Coordinator coordinator = new Coordinator(catalog, config, members, clientFactory);
+        coordinatorThread = new CoordinatorThread(coordinator);
+        coordinatorThread.start();
+      }
     }
 
     LOG.info("Starting commit worker");
