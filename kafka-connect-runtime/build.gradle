@@ -15,7 +15,7 @@ configurations {
     resolutionStrategy.force "org.eclipse.jetty:jetty-webapp:9.4.53.v20231009"
     resolutionStrategy.eachDependency { details ->
       if (details.requested.group == "io.netty") {
-        details.useVersion "4.1.97.Final"
+        details.useVersion "4.1.100.Final"
       }
     }
   }
