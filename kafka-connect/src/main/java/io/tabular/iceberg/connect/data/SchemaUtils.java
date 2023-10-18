@@ -28,7 +28,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -87,9 +86,7 @@ public class SchemaUtils {
       return;
     }
 
-    Tasks.foreach(Collections.singleton(updates))
-        .retry(COMMIT_RETRY_ATTEMPTS)
-        .run(notUsed -> commitSchemaUpdates(table, updates));
+    Tasks.range(1).retry(COMMIT_RETRY_ATTEMPTS).run(notUsed -> commitSchemaUpdates(table, updates));
   }
 
   private static void commitSchemaUpdates(Table table, List<SchemaUpdate> updates) {
