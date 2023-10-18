@@ -18,25 +18,21 @@
  */
 package io.tabular.iceberg.connect.channel;
 
-import java.util.Collection;
 import java.util.concurrent.ExecutionException;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
-import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.connect.errors.ConnectException;
 
 public class KafkaUtils {
 
-  public static Collection<MemberDescription> consumerGroupMembers(
+  public static ConsumerGroupDescription consumerGroupDescription(
       String consumerGroupId, Admin admin) {
     try {
       DescribeConsumerGroupsResult result =
           admin.describeConsumerGroups(ImmutableList.of(consumerGroupId));
-      ConsumerGroupDescription groupDesc = result.describedGroups().get(consumerGroupId).get();
-
-      return groupDesc.members();
+      return result.describedGroups().get(consumerGroupId).get();
 
     } catch (InterruptedException | ExecutionException e) {
       throw new ConnectException(
