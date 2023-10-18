@@ -20,6 +20,7 @@ package io.tabular.iceberg.connect.data;
 
 import static java.util.stream.Collectors.toList;
 
+import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
 import io.tabular.iceberg.connect.data.SchemaUpdate.MakeOptional;
 import io.tabular.iceberg.connect.data.SchemaUpdate.UpdateType;
@@ -28,7 +29,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -68,7 +68,6 @@ public class SchemaUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(SchemaUtils.class);
 
-  private static final int COMMIT_RETRY_ATTEMPTS = 2; // 3 total attempts
   private static final Pattern TRANSFORM_REGEX = Pattern.compile("(\\w+)\\((.+)\\)");
 
   public static PrimitiveType needsDataTypeUpdate(Type currentIcebergType, Schema valueSchema) {
@@ -87,8 +86,8 @@ public class SchemaUtils {
       return;
     }
 
-    Tasks.foreach(Collections.singleton(updates))
-        .retry(COMMIT_RETRY_ATTEMPTS)
+    Tasks.range(1)
+        .retry(IcebergSinkConfig.SCHEMA_UPDATE_RETRIES)
         .run(notUsed -> commitSchemaUpdates(table, updates));
   }
 

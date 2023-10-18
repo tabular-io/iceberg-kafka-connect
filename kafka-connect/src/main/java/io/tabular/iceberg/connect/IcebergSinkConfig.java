@@ -93,6 +93,9 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String DEFAULT_CONTROL_TOPIC = "control-iceberg";
   public static final String DEFAULT_CONTROL_GROUP_PREFIX = "cg-control-";
 
+  public static final int SCHEMA_UPDATE_RETRIES = 2; // 3 total attempts
+  public static final int CREATE_TABLE_RETRIES = 2; // 3 total attempts
+
   public static final ConfigDef CONFIG_DEF = newConfigDef();
 
   public static String version() {

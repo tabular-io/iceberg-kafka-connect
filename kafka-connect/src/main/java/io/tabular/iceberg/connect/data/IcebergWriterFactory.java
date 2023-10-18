@@ -20,13 +20,14 @@ package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
-import org.apache.iceberg.exceptions.AlreadyExistsException;
 import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.types.Types.StructType;
+import org.apache.iceberg.util.Tasks;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,11 +87,18 @@ public class IcebergWriterFactory {
       spec = PartitionSpec.unpartitioned();
     }
 
-    try {
-      return catalog.createTable(identifier, schema, spec);
-    } catch (AlreadyExistsException e) {
-      LOG.info("Table {} was already created", identifier);
-      return catalog.loadTable(identifier);
-    }
+    PartitionSpec partitionSpec = spec;
+    AtomicReference<Table> result = new AtomicReference<>();
+    Tasks.range(1)
+        .retry(IcebergSinkConfig.CREATE_TABLE_RETRIES)
+        .run(
+            notUsed -> {
+              try {
+                result.set(catalog.loadTable(identifier));
+              } catch (NoSuchTableException e) {
+                result.set(catalog.createTable(identifier, schema, partitionSpec));
+              }
+            });
+    return result.get();
   }
 }
