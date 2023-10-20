@@ -26,6 +26,7 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.NoSuchTableException;
+import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.util.Tasks;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -63,7 +64,8 @@ public class IcebergWriterFactory {
     return new IcebergWriter(table, tableName, config);
   }
 
-  private Table autoCreateTable(String tableName, SinkRecord sample) {
+  @VisibleForTesting
+  Table autoCreateTable(String tableName, SinkRecord sample) {
     StructType structType;
     if (sample.valueSchema() == null) {
       structType = SchemaUtils.inferIcebergType(sample.value()).asStructType();
@@ -96,7 +98,9 @@ public class IcebergWriterFactory {
               try {
                 result.set(catalog.loadTable(identifier));
               } catch (NoSuchTableException e) {
-                result.set(catalog.createTable(identifier, schema, partitionSpec));
+                result.set(
+                    catalog.createTable(
+                        identifier, schema, partitionSpec, config.autoCreateProps()));
               }
             });
     return result.get();

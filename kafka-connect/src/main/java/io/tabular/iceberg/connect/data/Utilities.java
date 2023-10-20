@@ -50,6 +50,7 @@ import org.apache.iceberg.io.TaskWriter;
 import org.apache.iceberg.io.UnpartitionedWriter;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.relocated.com.google.common.primitives.Ints;
 import org.apache.iceberg.types.TypeUtil;
@@ -157,13 +158,15 @@ public class Utilities {
 
   public static TaskWriter<Record> createTableWriter(
       Table table, String tableName, IcebergSinkConfig config) {
-    String formatStr =
-        table.properties().getOrDefault(DEFAULT_FILE_FORMAT, DEFAULT_FILE_FORMAT_DEFAULT);
+    Map<String, String> tableProps = Maps.newHashMap(table.properties());
+    tableProps.putAll(config.writeProps());
+
+    String formatStr = tableProps.getOrDefault(DEFAULT_FILE_FORMAT, DEFAULT_FILE_FORMAT_DEFAULT);
     FileFormat format = FileFormat.valueOf(formatStr.toUpperCase());
 
     long targetFileSize =
         PropertyUtil.propertyAsLong(
-            table.properties(), WRITE_TARGET_FILE_SIZE_BYTES, WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT);
+            tableProps, WRITE_TARGET_FILE_SIZE_BYTES, WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT);
 
     Set<Integer> equalityFieldIds = table.schema().identifierFieldIds();
 
@@ -180,7 +183,7 @@ public class Utilities {
     if (equalityFieldIds == null || equalityFieldIds.isEmpty()) {
       appenderFactory =
           new GenericAppenderFactory(table.schema(), table.spec(), null, null, null)
-              .setAll(table.properties());
+              .setAll(tableProps);
     } else {
       appenderFactory =
           new GenericAppenderFactory(
@@ -189,7 +192,7 @@ public class Utilities {
                   Ints.toArray(equalityFieldIds),
                   TypeUtil.select(table.schema(), Sets.newHashSet(equalityFieldIds)),
                   null)
-              .setAll(table.properties());
+              .setAll(tableProps);
     }
 
     // (partition ID + task ID + operation ID) must be unique

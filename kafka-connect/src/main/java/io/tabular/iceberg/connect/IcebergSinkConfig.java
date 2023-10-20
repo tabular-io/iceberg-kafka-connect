@@ -61,6 +61,8 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String HADOOP_PROP_PREFIX = "iceberg.hadoop.";
   private static final String KAFKA_PROP_PREFIX = "iceberg.kafka.";
   private static final String TABLE_PROP_PREFIX = "iceberg.table.";
+  private static final String AUTO_CREATE_PROP_PREFIX = "iceberg.tables.auto-create-props.";
+  private static final String WRITE_PROP_PREFIX = "iceberg.table.write-props.";
 
   private static final String CATALOG_NAME_PROP = "iceberg.catalog";
   private static final String TABLES_PROP = "iceberg.tables";
@@ -223,6 +225,8 @@ public class IcebergSinkConfig extends AbstractConfig {
   private final Map<String, String> catalogProps;
   private final Map<String, String> hadoopProps;
   private final Map<String, String> kafkaProps;
+  private final Map<String, String> autoCreateProps;
+  private final Map<String, String> writeProps;
   private final Map<String, TableSinkConfig> tableConfigMap = Maps.newHashMap();
   private final JsonConverter jsonConverter;
 
@@ -235,6 +239,10 @@ public class IcebergSinkConfig extends AbstractConfig {
 
     this.kafkaProps = Maps.newHashMap(loadWorkerProps());
     kafkaProps.putAll(PropertyUtil.propertiesWithPrefix(originalProps, KAFKA_PROP_PREFIX));
+
+    this.autoCreateProps =
+        PropertyUtil.propertiesWithPrefix(originalProps, AUTO_CREATE_PROP_PREFIX);
+    this.writeProps = PropertyUtil.propertiesWithPrefix(originalProps, WRITE_PROP_PREFIX);
 
     this.jsonConverter = new JsonConverter();
     jsonConverter.configure(
@@ -284,6 +292,14 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public Map<String, String> kafkaProps() {
     return kafkaProps;
+  }
+
+  public Map<String, String> autoCreateProps() {
+    return autoCreateProps;
+  }
+
+  public Map<String, String> writeProps() {
+    return writeProps;
   }
 
   public String catalogName() {

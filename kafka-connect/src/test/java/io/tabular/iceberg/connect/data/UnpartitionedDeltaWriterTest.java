@@ -25,19 +25,24 @@ import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.TableSinkConfig;
+import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.io.WriteResult;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
-import org.junit.jupiter.api.Test;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class UnpartitionedDeltaWriterTest extends BaseWriterTest {
 
-  @Test
-  public void testUnpartitionedDeltaWriter() {
+  @ParameterizedTest
+  @ValueSource(strings = {"parquet", "orc"})
+  public void testUnpartitionedDeltaWriter(String format) {
     IcebergSinkConfig config = mock(IcebergSinkConfig.class);
     when(config.upsertModeEnabled()).thenReturn(true);
     when(config.tableConfig(any())).thenReturn(mock(TableSinkConfig.class));
+    when(config.writeProps()).thenReturn(ImmutableMap.of("write.format.default", format));
 
     Record row = GenericRecord.create(SCHEMA);
     row.setField("id", 123L);
@@ -49,6 +54,9 @@ public class UnpartitionedDeltaWriterTest extends BaseWriterTest {
     // in upsert mode, each write is a delete + append, so we'll have 1 data file
     // and 1 delete file
     assertThat(result.dataFiles()).hasSize(1);
+    assertThat(result.dataFiles()).allMatch(file -> file.format() == FileFormat.fromString(format));
     assertThat(result.deleteFiles()).hasSize(1);
+    assertThat(result.deleteFiles())
+        .allMatch(file -> file.format() == FileFormat.fromString(format));
   }
 }
