@@ -96,7 +96,9 @@ public class IcebergWriterFactory {
               try {
                 result.set(catalog.loadTable(identifier));
               } catch (NoSuchTableException e) {
-                result.set(catalog.createTable(identifier, schema, partitionSpec));
+                result.set(
+                    catalog.createTable(
+                        identifier, schema, partitionSpec, config.autoCreateProps()));
               }
             });
     return result.get();
