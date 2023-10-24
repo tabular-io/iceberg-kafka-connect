@@ -19,6 +19,7 @@
 package io.tabular.iceberg.connect.data;
 
 import java.io.IOException;
+import java.util.Set;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
@@ -38,8 +39,18 @@ public class UnpartitionedDeltaWriter extends BaseDeltaTaskWriter {
       FileIO io,
       long targetFileSize,
       Schema schema,
+      Set<Integer> equalityFieldIds,
       boolean upsertMode) {
-    super(spec, format, appenderFactory, fileFactory, io, targetFileSize, schema, upsertMode);
+    super(
+        spec,
+        format,
+        appenderFactory,
+        fileFactory,
+        io,
+        targetFileSize,
+        schema,
+        equalityFieldIds,
+        upsertMode);
     this.writer = new RowDataDeltaWriter(null);
   }
 

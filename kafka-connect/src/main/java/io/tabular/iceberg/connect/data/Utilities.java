@@ -219,6 +219,7 @@ public class Utilities {
                 table.io(),
                 targetFileSize,
                 table.schema(),
+                equalityFieldIds,
                 config.upsertModeEnabled());
       }
     } else {
@@ -242,6 +243,7 @@ public class Utilities {
                 table.io(),
                 targetFileSize,
                 table.schema(),
+                equalityFieldIds,
                 config.upsertModeEnabled());
       }
     }
