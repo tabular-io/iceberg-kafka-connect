@@ -19,6 +19,7 @@
 package io.tabular.iceberg.connect;
 
 import static io.tabular.iceberg.connect.TestEvent.TEST_SCHEMA;
+import static io.tabular.iceberg.connect.TestEvent.TEST_SCHEMA_NO_ID;
 import static io.tabular.iceberg.connect.TestEvent.TEST_SPEC;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
@@ -156,6 +157,26 @@ public class IntegrationTest extends IntegrationTestBase {
 
     PartitionSpec spec = catalog.loadTable(TABLE_IDENTIFIER).spec();
     assertThat(spec.isPartitioned()).isEqualTo(useSchema);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testIcebergSinkUpsert(boolean hasSchemaIdCols) {
+    Map<String, String> extraConfig = Maps.newHashMap();
+    if (hasSchemaIdCols) {
+      catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA);
+    } else {
+      extraConfig.put("iceberg.tables.default-id-cols", "id");
+      catalog.createTable(TABLE_IDENTIFIER, TEST_SCHEMA_NO_ID);
+    }
+
+    runTest(null, true, extraConfig);
+
+    List<DataFile> files = dataFiles(TABLE_IDENTIFIER, null);
+    // may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(1, 2);
+    assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(2);
+    assertSnapshotProps(TABLE_IDENTIFIER, null);
   }
 
   private void assertGeneratedSchema(boolean useSchema, Class<? extends Type> expectedIdType) {
