@@ -319,3 +319,7 @@ Here is an example config that uses this transform to apply updates to an Iceber
     }
 }
 ```
+
+## Resources
+
+*   [Running IcebergSinkConnector locally](https://github.com/wuerike/kafka-iceberg-streaming)
