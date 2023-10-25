@@ -19,6 +19,7 @@
 package io.tabular.iceberg.connect.data;
 
 import java.io.IOException;
+import java.util.Set;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.PartitionKey;
 import org.apache.iceberg.PartitionSpec;
@@ -50,10 +51,11 @@ abstract class BaseDeltaTaskWriter extends BaseTaskWriter<Record> {
       FileIO io,
       long targetFileSize,
       Schema schema,
+      Set<Integer> identifierFieldIds,
       boolean upsertMode) {
     super(spec, format, appenderFactory, fileFactory, io, targetFileSize);
     this.schema = schema;
-    this.deleteSchema = TypeUtil.select(schema, Sets.newHashSet(schema.identifierFieldIds()));
+    this.deleteSchema = TypeUtil.select(schema, Sets.newHashSet(identifierFieldIds));
     this.wrapper = new InternalRecordWrapper(schema.asStruct());
     this.keyWrapper = new InternalRecordWrapper(deleteSchema.asStruct());
     this.keyProjection = RecordProjection.create(schema, deleteSchema);

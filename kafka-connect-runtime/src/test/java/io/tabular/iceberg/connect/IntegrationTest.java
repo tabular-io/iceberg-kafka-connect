@@ -19,6 +19,7 @@
 package io.tabular.iceberg.connect;
 
 import static io.tabular.iceberg.connect.TestEvent.TEST_SCHEMA;
+import static io.tabular.iceberg.connect.TestEvent.TEST_SCHEMA_NO_ID;
 import static io.tabular.iceberg.connect.TestEvent.TEST_SPEC;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
@@ -29,6 +30,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import org.apache.iceberg.DataFile;
+import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
@@ -156,6 +158,45 @@ public class IntegrationTest extends IntegrationTestBase {
 
     PartitionSpec spec = catalog.loadTable(TABLE_IDENTIFIER).spec();
     assertThat(spec.isPartitioned()).isEqualTo(useSchema);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testIcebergSinkUnpartitionedUpsert(boolean hasSchemaIdCols) {
+    runUpsertTest(hasSchemaIdCols, PartitionSpec.unpartitioned());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testIcebergSinkPartitionedUpsert(boolean hasSchemaIdCols) {
+    runUpsertTest(hasSchemaIdCols, TEST_SPEC);
+  }
+
+  private void runUpsertTest(boolean hasSchemaIdCols, PartitionSpec spec) {
+    Map<String, String> extraConfig = Maps.newHashMap();
+    extraConfig.put("iceberg.tables.upsert-mode-enabled", "true");
+    if (hasSchemaIdCols) {
+      catalog.createTable(
+          TABLE_IDENTIFIER, TEST_SCHEMA, spec, ImmutableMap.of("format-version", "2"));
+    } else {
+      extraConfig.put("iceberg.tables.default-id-columns", "id");
+      catalog.createTable(
+          TABLE_IDENTIFIER, TEST_SCHEMA_NO_ID, spec, ImmutableMap.of("format-version", "2"));
+    }
+
+    runTest(null, true, extraConfig);
+
+    List<DataFile> files = dataFiles(TABLE_IDENTIFIER, null);
+    // may involve 1 or 2 workers
+    assertThat(files).hasSizeBetween(1, 2);
+    assertThat(files.stream().mapToLong(DataFile::recordCount).sum()).isEqualTo(2);
+
+    // may involve 1 or 2 workers
+    List<DeleteFile> deleteFiles = deleteFiles(TABLE_IDENTIFIER, null);
+    assertThat(deleteFiles).hasSizeBetween(1, 2);
+    assertThat(deleteFiles.stream().mapToLong(DeleteFile::recordCount).sum()).isEqualTo(2);
+
+    assertSnapshotProps(TABLE_IDENTIFIER, null);
   }
 
   private void assertGeneratedSchema(boolean useSchema, Class<? extends Type> expectedIdType) {

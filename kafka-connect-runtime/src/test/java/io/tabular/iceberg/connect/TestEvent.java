@@ -48,6 +48,14 @@ public class TestEvent {
               Types.NestedField.required(4, "payload", Types.StringType.get())),
           ImmutableSet.of(1));
 
+  public static final Schema TEST_SCHEMA_NO_ID =
+      new Schema(
+          ImmutableList.of(
+              Types.NestedField.required(1, "id", Types.LongType.get()),
+              Types.NestedField.required(2, "type", Types.StringType.get()),
+              Types.NestedField.required(3, "ts", Types.TimestampType.withZone()),
+              Types.NestedField.required(4, "payload", Types.StringType.get())));
+
   public static final org.apache.kafka.connect.data.Schema TEST_CONNECT_SCHEMA =
       SchemaBuilder.struct()
           .field("id", org.apache.kafka.connect.data.Schema.INT64_SCHEMA)
