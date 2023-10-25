@@ -286,40 +286,6 @@ See above for creating the table
 }
 ```
 
-### AWS DMS example (experimental)
-
-The `io.tabular.iceberg.connect.transforms.DmsTransform` SMT can be used to convert an AWS DMS
-message for use by the sink. This transform will promote the data fields to top level, and add
-three metadata fields. These fields are `_cdc_op` for operation type (I, U, D), `_cdc_table` for
-the source table name, and `_cdc_ts` for the operation timestamp.
-
-Here is an example config that uses this transform to apply updates to an Iceberg table. The
-`routeRegex` is defined to ensure the correct message is routed to the table.
-
-```json
-{
-"name": "dms-cdc-sink",
-"config": {
-    "connector.class": "io.tabular.iceberg.connect.IcebergSinkConnector",
-    "tasks.max": "2",
-    "topics": "dms-topic",
-    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
-    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
-    "value.converter.schemas.enable": "false",
-    "transforms": "dms",
-    "transforms.dms.type": "io.tabular.iceberg.connect.transforms.DmsTransform",
-    "iceberg.tables": "default.dms_test",
-    "iceberg.tables.cdc-field": "_cdc_op",
-    "iceberg.tables.route-field": "_cdc_table",
-    "iceberg.table.default.dms_test.route-regex": "src_db.src_table",
-    "iceberg.catalog.type": "rest",
-    "iceberg.catalog.uri": "https://localhost",
-    "iceberg.catalog.credential": "<credential>",
-    "iceberg.catalog.warehouse": "<warehouse name>"
-    }
-}
-```
-
 ## Resources
 
-*   [Running IcebergSinkConnector locally](https://github.com/wuerike/kafka-iceberg-streaming)
+* [Running IcebergSinkConnector locally](https://github.com/wuerike/kafka-iceberg-streaming)
