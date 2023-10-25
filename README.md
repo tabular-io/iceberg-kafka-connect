@@ -20,34 +20,35 @@ The zip archive will be found under `./kafka-connect-runtime/build/distributions
 
 # Configuration
 
-| Property                                   | Description                                                                                                   |
-|--------------------------------------------|---------------------------------------------------------------------------------------------------------------|
-| iceberg.tables                             | Comma-separated list of destination tables                                                                    |
-| iceberg.tables.dynamic-enabled             | Set to `true` to route to a table specified in `routeField` instead of using `routeRegex`, default is `false` |
-| iceberg.tables.route-field                 | For multi-table fan-out, the name of the field used to route records to tables                                |
-| iceberg.tables.default-commit-branch       | Default branch for commits, main is used if not specified                                                     |
-| iceberg.tables.default-id-columns          | Default comma-separated list of columns that identify a row in tables (primary key)                           |
-| iceberg.tables.default-partition-by        | Default comma-separated list of partition fields to use when creating tables                                  |
-| iceberg.tables.cdc-field                   | Name of the field containing the CDC operation, `I`, `U`, or `D`, default is none                             |
-| iceberg.tables.upsert-mode-enabled         | Set to `true` to enable upsert mode, default is `false`                                                       |
-| iceberg.tables.auto-create-enabled         | Set to `true` to automatically create destination tables, default is `false`                                  |
-| iceberg.tables.evolve-schema-enabled       | Set to `true` to add any missing record fields to the table schema, default is `false`                        |
-| iceberg.tables.auto-create-props.*         | Properties set on new tables during auto-create                                                               |
-| iceberg.tables.write-props.*               | Properties passed through to Iceberg writer initialization, these take precedence                             |
-| iceberg.table.\<table name\>.commit-branch | Table-specific branch for commits, use `iceberg.tables.default-commit-branch` if not specified                |
-| iceberg.table.\<table name\>.id-columns    | Comma-separated list of columns that identify a row in the table (primary key)                                |
-| iceberg.table.\<table name\>.partition-by  | Comma-separated list of partition fields to use when creating the table                                       |
-| iceberg.table.\<table name\>.route-regex   | The regex used to match a record's `routeField` to a table                                                    |
-| iceberg.control.topic                      | Name of the control topic, default is `control-iceberg`                                                       |
-| iceberg.control.group-id                   | Name of the consumer group to store offsets, default is `cg-control-<connector name>`                         |
-| iceberg.control.commit.interval-ms         | Commit interval in msec, default is 300,000 (5 min)                                                           |
-| iceberg.control.commit.timeout-ms          | Commit timeout interval in msec, default is 30,000 (30 sec)                                                   |
-| iceberg.control.commit.threads             | Number of threads to use for commits, default is (cores * 2)                                                  |
-| iceberg.catalog                            | Name of the catalog, default is `iceberg`                                                                     |
-| iceberg.catalog.*                          | Properties passed through to Iceberg catalog initialization                                                   |
-| iceberg.hadoop-conf-dir                    | If specified, Hadoop config files in this directory will be loaded                                            |
-| iceberg.hadoop.*                           | Properties passed through to the Hadoop configuration                                                         |
-| iceberg.kafka.*                            | Properties passed through to control topic Kafka client initialization                                        |
+| Property                                   | Description                                                                                                      |
+|--------------------------------------------|------------------------------------------------------------------------------------------------------------------|
+| iceberg.tables                             | Comma-separated list of destination tables                                                                       |
+| iceberg.tables.dynamic-enabled             | Set to `true` to route to a table specified in `routeField` instead of using `routeRegex`, default is `false`    |
+| iceberg.tables.route-field                 | For multi-table fan-out, the name of the field used to route records to tables                                   |
+| iceberg.tables.default-commit-branch       | Default branch for commits, main is used if not specified                                                        |
+| iceberg.tables.default-id-columns          | Default comma-separated list of columns that identify a row in tables (primary key)                              |
+| iceberg.tables.default-partition-by        | Default comma-separated list of partition fields to use when creating tables                                     |
+| iceberg.tables.cdc-field                   | Name of the field containing the CDC operation, `I`, `U`, or `D`, default is none                                |
+| iceberg.tables.upsert-mode-enabled         | Set to `true` to enable upsert mode, default is `false`                                                          |
+| iceberg.tables.auto-create-enabled         | Set to `true` to automatically create destination tables, default is `false`                                     |
+| iceberg.tables.evolve-schema-enabled       | Set to `true` to add any missing record fields to the table schema, default is `false`                           |
+| iceberg.tables.schema-force-optional       | Set to `true` to set columns as optional during table create and evolution, default is `false` to respect schema |
+| iceberg.tables.auto-create-props.*         | Properties set on new tables during auto-create                                                                  |
+| iceberg.tables.write-props.*               | Properties passed through to Iceberg writer initialization, these take precedence                                |
+| iceberg.table.\<table name\>.commit-branch | Table-specific branch for commits, use `iceberg.tables.default-commit-branch` if not specified                   |
+| iceberg.table.\<table name\>.id-columns    | Comma-separated list of columns that identify a row in the table (primary key)                                   |
+| iceberg.table.\<table name\>.partition-by  | Comma-separated list of partition fields to use when creating the table                                          |
+| iceberg.table.\<table name\>.route-regex   | The regex used to match a record's `routeField` to a table                                                       |
+| iceberg.control.topic                      | Name of the control topic, default is `control-iceberg`                                                          |
+| iceberg.control.group-id                   | Name of the consumer group to store offsets, default is `cg-control-<connector name>`                            |
+| iceberg.control.commit.interval-ms         | Commit interval in msec, default is 300,000 (5 min)                                                              |
+| iceberg.control.commit.timeout-ms          | Commit timeout interval in msec, default is 30,000 (30 sec)                                                      |
+| iceberg.control.commit.threads             | Number of threads to use for commits, default is (cores * 2)                                                     |
+| iceberg.catalog                            | Name of the catalog, default is `iceberg`                                                                        |
+| iceberg.catalog.*                          | Properties passed through to Iceberg catalog initialization                                                      |
+| iceberg.hadoop-conf-dir                    | If specified, Hadoop config files in this directory will be loaded                                               |
+| iceberg.hadoop.*                           | Properties passed through to the Hadoop configuration                                                            |
+| iceberg.kafka.*                            | Properties passed through to control topic Kafka client initialization                                           |
 
 If `iceberg.tables.dynamic-enabled` is `false` (the default) then you must specify `iceberg.tables`. If
 `iceberg.tables.dynamic-enabled` is `true` then you must specify `iceberg.tables.route-field` which will

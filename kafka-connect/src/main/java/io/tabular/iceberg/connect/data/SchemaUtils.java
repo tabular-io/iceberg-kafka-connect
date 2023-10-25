@@ -210,18 +210,24 @@ public class SchemaUtils {
     return Pair.of(parts[0].trim(), Integer.parseInt(parts[1].trim()));
   }
 
-  public static Type toIcebergType(Schema valueSchema) {
-    return new SchemaGenerator().toIcebergType(valueSchema);
+  public static Type toIcebergType(Schema valueSchema, IcebergSinkConfig config) {
+    return new SchemaGenerator(config).toIcebergType(valueSchema);
   }
 
-  public static Type inferIcebergType(Object value) {
-    return new SchemaGenerator().inferIcebergType(value);
+  public static Type inferIcebergType(Object value, IcebergSinkConfig config) {
+    return new SchemaGenerator(config).inferIcebergType(value);
   }
 
   static class SchemaGenerator {
 
     private int fieldId = 1;
+    private final IcebergSinkConfig config;
 
+    SchemaGenerator(IcebergSinkConfig config) {
+      this.config = config;
+    }
+
+    @SuppressWarnings("checkstyle:CyclomaticComplexity")
     Type toIcebergType(Schema valueSchema) {
       switch (valueSchema.type()) {
         case BOOLEAN:
@@ -255,7 +261,7 @@ public class SchemaUtils {
           return DoubleType.get();
         case ARRAY:
           Type elementType = toIcebergType(valueSchema.valueSchema());
-          if (valueSchema.valueSchema().isOptional()) {
+          if (config.schemaForceOptional() || valueSchema.valueSchema().isOptional()) {
             return ListType.ofOptional(nextId(), elementType);
           } else {
             return ListType.ofRequired(nextId(), elementType);
@@ -263,7 +269,7 @@ public class SchemaUtils {
         case MAP:
           Type keyType = toIcebergType(valueSchema.keySchema());
           Type valueType = toIcebergType(valueSchema.valueSchema());
-          if (valueSchema.valueSchema().isOptional()) {
+          if (config.schemaForceOptional() || valueSchema.valueSchema().isOptional()) {
             return MapType.ofOptional(nextId(), nextId(), keyType, valueType);
           } else {
             return MapType.ofRequired(nextId(), nextId(), keyType, valueType);
@@ -275,7 +281,7 @@ public class SchemaUtils {
                       field ->
                           NestedField.of(
                               nextId(),
-                              field.schema().isOptional(),
+                              config.schemaForceOptional() || field.schema().isOptional(),
                               field.name(),
                               toIcebergType(field.schema())))
                   .collect(toList());
