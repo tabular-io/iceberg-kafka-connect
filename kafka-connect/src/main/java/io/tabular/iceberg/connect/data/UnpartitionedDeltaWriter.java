@@ -39,7 +39,7 @@ public class UnpartitionedDeltaWriter extends BaseDeltaTaskWriter {
       FileIO io,
       long targetFileSize,
       Schema schema,
-      Set<Integer> equalityFieldIds,
+      Set<Integer> identifierFieldIds,
       boolean upsertMode) {
     super(
         spec,
@@ -49,7 +49,7 @@ public class UnpartitionedDeltaWriter extends BaseDeltaTaskWriter {
         io,
         targetFileSize,
         schema,
-        equalityFieldIds,
+        identifierFieldIds,
         upsertMode);
     this.writer = new RowDataDeltaWriter(null);
   }

@@ -168,19 +168,19 @@ public class Utilities {
         PropertyUtil.propertyAsLong(
             tableProps, WRITE_TARGET_FILE_SIZE_BYTES, WRITE_TARGET_FILE_SIZE_BYTES_DEFAULT);
 
-    Set<Integer> equalityFieldIds = table.schema().identifierFieldIds();
+    Set<Integer> identifierFieldIds = table.schema().identifierFieldIds();
 
     // override the identifier fields if the config is set
     List<String> idCols = config.tableConfig(tableName).idColumns();
     if (!idCols.isEmpty()) {
-      equalityFieldIds =
+      identifierFieldIds =
           idCols.stream()
               .map(colName -> table.schema().findField(colName).fieldId())
               .collect(toSet());
     }
 
     FileAppenderFactory<Record> appenderFactory;
-    if (equalityFieldIds == null || equalityFieldIds.isEmpty()) {
+    if (identifierFieldIds == null || identifierFieldIds.isEmpty()) {
       appenderFactory =
           new GenericAppenderFactory(table.schema(), table.spec(), null, null, null)
               .setAll(tableProps);
@@ -189,8 +189,8 @@ public class Utilities {
           new GenericAppenderFactory(
                   table.schema(),
                   table.spec(),
-                  Ints.toArray(equalityFieldIds),
-                  TypeUtil.select(table.schema(), Sets.newHashSet(equalityFieldIds)),
+                  Ints.toArray(identifierFieldIds),
+                  TypeUtil.select(table.schema(), Sets.newHashSet(identifierFieldIds)),
                   null)
               .setAll(tableProps);
     }
@@ -219,7 +219,7 @@ public class Utilities {
                 table.io(),
                 targetFileSize,
                 table.schema(),
-                equalityFieldIds,
+                identifierFieldIds,
                 config.upsertModeEnabled());
       }
     } else {
@@ -243,7 +243,7 @@ public class Utilities {
                 table.io(),
                 targetFileSize,
                 table.schema(),
-                equalityFieldIds,
+                identifierFieldIds,
                 config.upsertModeEnabled());
       }
     }

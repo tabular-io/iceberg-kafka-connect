@@ -46,7 +46,7 @@ public class PartitionedDeltaWriter extends BaseDeltaTaskWriter {
       FileIO io,
       long targetFileSize,
       Schema schema,
-      Set<Integer> equalityFieldIds,
+      Set<Integer> identifierFieldIds,
       boolean upsertMode) {
     super(
         spec,
@@ -56,7 +56,7 @@ public class PartitionedDeltaWriter extends BaseDeltaTaskWriter {
         io,
         targetFileSize,
         schema,
-        equalityFieldIds,
+        identifierFieldIds,
         upsertMode);
     this.partitionKey = new PartitionKey(spec, schema);
   }
