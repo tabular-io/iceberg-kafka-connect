@@ -76,8 +76,8 @@ public class IcebergSinkConfig extends AbstractConfig {
       "iceberg.tables.upsert-mode-enabled";
   private static final String TABLES_AUTO_CREATE_ENABLED_PROP =
       "iceberg.tables.auto-create-enabled";
-  private static final String TABLES_AUTO_CREATE_FORCE_OPTIONAL_PROP =
-      "iceberg.tables.auto-create-force-optional";
+  private static final String TABLES_SCHEMA_FORCE_OPTIONAL_PROP =
+      "iceberg.tables.schema-force-optional";
   private static final String TABLES_EVOLVE_SCHEMA_ENABLED_PROP =
       "iceberg.tables.evolve-schema-enabled";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
@@ -167,11 +167,11 @@ public class IcebergSinkConfig extends AbstractConfig {
         Importance.MEDIUM,
         "Set to true to automatically create destination tables, false otherwise");
     configDef.define(
-        TABLES_AUTO_CREATE_FORCE_OPTIONAL_PROP,
+        TABLES_SCHEMA_FORCE_OPTIONAL_PROP,
         Type.BOOLEAN,
         false,
         Importance.MEDIUM,
-        "Set to true to set all columns to optional during auto create, false to respect schema");
+        "Set to true to set columns as optional during table create and evolution, false to respect schema");
     configDef.define(
         TABLES_EVOLVE_SCHEMA_ENABLED_PROP,
         Type.BOOLEAN,
@@ -423,8 +423,8 @@ public class IcebergSinkConfig extends AbstractConfig {
     return getBoolean(TABLES_AUTO_CREATE_ENABLED_PROP);
   }
 
-  public boolean autoCreateForceOptional() {
-    return getBoolean(TABLES_AUTO_CREATE_FORCE_OPTIONAL_PROP);
+  public boolean schemaForceOptional() {
+    return getBoolean(TABLES_SCHEMA_FORCE_OPTIONAL_PROP);
   }
 
   public boolean evolveSchemaEnabled() {

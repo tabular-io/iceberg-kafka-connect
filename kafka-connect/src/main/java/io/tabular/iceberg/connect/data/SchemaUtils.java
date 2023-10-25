@@ -261,7 +261,7 @@ public class SchemaUtils {
           return DoubleType.get();
         case ARRAY:
           Type elementType = toIcebergType(valueSchema.valueSchema());
-          if (config.autoCreateForceOptional() || valueSchema.valueSchema().isOptional()) {
+          if (config.schemaForceOptional() || valueSchema.valueSchema().isOptional()) {
             return ListType.ofOptional(nextId(), elementType);
           } else {
             return ListType.ofRequired(nextId(), elementType);
@@ -269,7 +269,7 @@ public class SchemaUtils {
         case MAP:
           Type keyType = toIcebergType(valueSchema.keySchema());
           Type valueType = toIcebergType(valueSchema.valueSchema());
-          if (config.autoCreateForceOptional() || valueSchema.valueSchema().isOptional()) {
+          if (config.schemaForceOptional() || valueSchema.valueSchema().isOptional()) {
             return MapType.ofOptional(nextId(), nextId(), keyType, valueType);
           } else {
             return MapType.ofRequired(nextId(), nextId(), keyType, valueType);
@@ -281,7 +281,7 @@ public class SchemaUtils {
                       field ->
                           NestedField.of(
                               nextId(),
-                              config.autoCreateForceOptional() || field.schema().isOptional(),
+                              config.schemaForceOptional() || field.schema().isOptional(),
                               field.name(),
                               toIcebergType(field.schema())))
                   .collect(toList());

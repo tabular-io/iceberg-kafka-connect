@@ -170,7 +170,7 @@ public class SchemaUtilsTest {
   @ValueSource(booleans = {false, true})
   public void testToIcebergType(boolean forceOptional) {
     IcebergSinkConfig config = mock(IcebergSinkConfig.class);
-    when(config.autoCreateForceOptional()).thenReturn(forceOptional);
+    when(config.schemaForceOptional()).thenReturn(forceOptional);
 
     assertThat(SchemaUtils.toIcebergType(Schema.BOOLEAN_SCHEMA, config))
         .isInstanceOf(BooleanType.class);
