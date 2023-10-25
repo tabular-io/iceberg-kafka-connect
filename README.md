@@ -31,6 +31,7 @@ The zip archive will be found under `./kafka-connect-runtime/build/distributions
 | iceberg.tables.cdc-field                   | Name of the field containing the CDC operation, `I`, `U`, or `D`, default is none                             |
 | iceberg.tables.upsert-mode-enabled         | Set to `true` to enable upsert mode, default is `false`                                                       |
 | iceberg.tables.auto-create-enabled         | Set to `true` to automatically create destination tables, default is `false`                                  |
+| iceberg.tables.auto-create-force-optional  | Set to `true` to set all columns to optional during auto create, default is `false` to respect schema         |
 | iceberg.tables.evolve-schema-enabled       | Set to `true` to add any missing record fields to the table schema, default is `false`                        |
 | iceberg.tables.auto-create-props.*         | Properties set on new tables during auto-create                                                               |
 | iceberg.tables.write-props.*               | Properties passed through to Iceberg writer initialization, these take precedence                             |

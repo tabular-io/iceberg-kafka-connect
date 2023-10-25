@@ -68,9 +68,9 @@ public class IcebergWriterFactory {
   Table autoCreateTable(String tableName, SinkRecord sample) {
     StructType structType;
     if (sample.valueSchema() == null) {
-      structType = SchemaUtils.inferIcebergType(sample.value()).asStructType();
+      structType = SchemaUtils.inferIcebergType(sample.value(), config).asStructType();
     } else {
-      structType = SchemaUtils.toIcebergType(sample.valueSchema()).asStructType();
+      structType = SchemaUtils.toIcebergType(sample.valueSchema(), config).asStructType();
     }
 
     org.apache.iceberg.Schema schema = new org.apache.iceberg.Schema(structType.fields());

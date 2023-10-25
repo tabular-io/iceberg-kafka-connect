@@ -24,6 +24,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
 import io.tabular.iceberg.connect.data.SchemaUpdate.UpdateType;
 import java.math.BigDecimal;
@@ -153,22 +154,24 @@ public class RecordConverterTest {
   private static final List<String> LIST_VAL = ImmutableList.of("hello", "world");
   private static final Map<String, String> MAP_VAL = ImmutableMap.of("one", "1", "two", "2");
 
-  private static final JsonConverter JSON_CONVERTER = new JsonConverter();
+  private static final IcebergSinkConfig CONFIG = mock(IcebergSinkConfig.class);
 
   static {
-    JSON_CONVERTER.configure(
+    JsonConverter jsonConverter = new JsonConverter();
+    jsonConverter.configure(
         ImmutableMap.of(
             JsonConverterConfig.SCHEMAS_ENABLE_CONFIG,
             false,
             ConverterConfig.TYPE_CONFIG,
             ConverterType.VALUE.getName()));
+    when(CONFIG.jsonConverter()).thenReturn(jsonConverter);
   }
 
   @Test
   public void testMapConvert() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SCHEMA);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     Map<String, Object> data = createMapData();
     Record record = converter.convert(data);
@@ -179,7 +182,7 @@ public class RecordConverterTest {
   public void testNestedMapConvert() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(NESTED_SCHEMA);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     Map<String, Object> nestedData = createNestedMapData();
     Record record = converter.convert(nestedData);
@@ -191,7 +194,7 @@ public class RecordConverterTest {
   public void testMapToString() throws Exception {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SIMPLE_SCHEMA);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     Map<String, Object> nestedData = createNestedMapData();
     Record record = converter.convert(nestedData);
@@ -205,7 +208,7 @@ public class RecordConverterTest {
   public void testStructConvert() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SCHEMA);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     Struct data = createStructData();
     Record record = converter.convert(data);
@@ -216,7 +219,7 @@ public class RecordConverterTest {
   public void testNestedStructConvert() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(NESTED_SCHEMA);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     Struct nestedData = createNestedStructData();
     Record record = converter.convert(nestedData);
@@ -228,7 +231,7 @@ public class RecordConverterTest {
   public void testStructToString() throws Exception {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SIMPLE_SCHEMA);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     Struct nestedData = createNestedStructData();
     Record record = converter.convert(nestedData);
@@ -249,7 +252,7 @@ public class RecordConverterTest {
             ImmutableMap.of(
                 TableProperties.DEFAULT_NAME_MAPPING, NameMappingParser.toJson(nameMapping)));
 
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     Map<String, Object> data = ImmutableMap.of("renamed_ii", 123);
     Record record = converter.convert(data);
@@ -260,7 +263,7 @@ public class RecordConverterTest {
   public void testDecimalConversion() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SIMPLE_SCHEMA);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     BigDecimal expected = new BigDecimal("123.45");
 
@@ -285,7 +288,7 @@ public class RecordConverterTest {
   public void testDateConversion() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SIMPLE_SCHEMA);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     LocalDate expected = LocalDate.of(2023, 11, 15);
 
@@ -307,7 +310,7 @@ public class RecordConverterTest {
   public void testTimeConversion() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SIMPLE_SCHEMA);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     LocalTime expected = LocalTime.of(7, 51, 30, 888_000_000);
 
@@ -342,7 +345,7 @@ public class RecordConverterTest {
   private void convertToTimestamps(Temporal expected, long expectedMillis, TimestampType type) {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SIMPLE_SCHEMA);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     List<Object> inputList =
         ImmutableList.of(
@@ -372,7 +375,7 @@ public class RecordConverterTest {
   public void testMissingColumnDetectionMap() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(ID_SCHEMA);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     Map<String, Object> data = Maps.newHashMap(createMapData());
     data.put("null", null);
@@ -410,7 +413,7 @@ public class RecordConverterTest {
   public void testMissingColumnDetectionMapNested() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(ID_SCHEMA);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     Map<String, Object> nestedData = createNestedMapData();
     List<SchemaUpdate> addCols = Lists.newArrayList();
@@ -446,7 +449,7 @@ public class RecordConverterTest {
   public void testMissingColumnDetectionStruct() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(ID_SCHEMA);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     Struct data = createStructData();
     List<SchemaUpdate> updates = Lists.newArrayList();
@@ -484,7 +487,7 @@ public class RecordConverterTest {
 
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(tableSchema);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     Schema valueSchema =
         SchemaBuilder.struct().field("ii", Schema.INT64_SCHEMA).field("ff", Schema.FLOAT64_SCHEMA);
@@ -518,7 +521,7 @@ public class RecordConverterTest {
 
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(tableSchema);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     Schema structSchema =
         SchemaBuilder.struct().field("ii", Schema.INT64_SCHEMA).field("ff", Schema.FLOAT64_SCHEMA);
@@ -545,7 +548,7 @@ public class RecordConverterTest {
   public void testMissingColumnDetectionStructNested() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(ID_SCHEMA);
-    RecordConverter converter = new RecordConverter(table, JSON_CONVERTER);
+    RecordConverter converter = new RecordConverter(table, CONFIG);
 
     Struct nestedData = createNestedStructData();
     List<SchemaUpdate> addCols = Lists.newArrayList();

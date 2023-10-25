@@ -21,6 +21,7 @@ package io.tabular.iceberg.connect.data;
 import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
 import io.tabular.iceberg.connect.data.SchemaUpdate.MakeOptional;
 import io.tabular.iceberg.connect.data.SchemaUpdate.UpdateType;
@@ -66,7 +67,6 @@ import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.types.Types.TimestampType;
 import org.apache.iceberg.util.DateTimeUtil;
 import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.json.JsonConverter;
 
 public class RecordConverter {
 
@@ -80,13 +80,13 @@ public class RecordConverter {
 
   private final Schema tableSchema;
   private final NameMapping nameMapping;
-  private final JsonConverter jsonConverter;
+  private final IcebergSinkConfig config;
   private final Map<Integer, Map<String, NestedField>> structNameMap = Maps.newHashMap();
 
-  public RecordConverter(Table table, JsonConverter jsonConverter) {
+  public RecordConverter(Table table, IcebergSinkConfig config) {
     this.tableSchema = table.schema();
     this.nameMapping = createNameMapping(table);
-    this.jsonConverter = jsonConverter;
+    this.config = config;
   }
 
   public Record convert(Object data) {
@@ -175,7 +175,7 @@ public class RecordConverter {
             if (schemaUpdateConsumer != null && recordFieldValue != null) {
               String parentFieldName =
                   structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
-              Type type = SchemaUtils.inferIcebergType(recordFieldValue);
+              Type type = SchemaUtils.inferIcebergType(recordFieldValue, config);
               schemaUpdateConsumer.accept(new AddColumn(parentFieldName, recordFieldName, type));
             }
           } else {
@@ -208,7 +208,7 @@ public class RecordConverter {
                 if (schemaUpdateConsumer != null) {
                   String parentFieldName =
                       structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
-                  Type type = SchemaUtils.toIcebergType(recordField.schema());
+                  Type type = SchemaUtils.toIcebergType(recordField.schema(), config);
                   schemaUpdateConsumer.accept(
                       new AddColumn(parentFieldName, recordField.name(), type));
                 }
@@ -375,7 +375,7 @@ public class RecordConverter {
         return MAPPER.writeValueAsString(value);
       } else if (value instanceof Struct) {
         Struct struct = (Struct) value;
-        byte[] data = jsonConverter.fromConnectData(null, struct.schema(), struct);
+        byte[] data = config.jsonConverter().fromConnectData(null, struct.schema(), struct);
         return new String(data, StandardCharsets.UTF_8);
       }
     } catch (IOException e) {

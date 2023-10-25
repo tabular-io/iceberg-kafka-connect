@@ -51,7 +51,7 @@ public class IcebergWriter implements RecordWriter {
 
   private void initNewWriter() {
     this.writer = Utilities.createTableWriter(table, tableName, config);
-    this.recordConverter = new RecordConverter(table, config.jsonConverter());
+    this.recordConverter = new RecordConverter(table, config);
   }
 
   @Override
