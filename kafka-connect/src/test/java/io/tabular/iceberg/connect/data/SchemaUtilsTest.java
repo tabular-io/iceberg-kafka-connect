@@ -38,11 +38,14 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
+import org.apache.iceberg.PartitionField;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.UpdateSchema;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.transforms.Transform;
+import org.apache.iceberg.transforms.Transforms;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types.BinaryType;
 import org.apache.iceberg.types.Types.BooleanType;
@@ -157,13 +160,17 @@ public class SchemaUtilsTest {
             "s");
     PartitionSpec spec = SchemaUtils.createPartitionSpec(SCHEMA_FOR_SPEC, partitionFields);
     assertThat(spec.isPartitioned()).isTrue();
-    assertThat(spec.fields()).anyMatch(val -> val.transform().toString().startsWith("year"));
-    assertThat(spec.fields()).anyMatch(val -> val.transform().toString().startsWith("month"));
-    assertThat(spec.fields()).anyMatch(val -> val.transform().toString().startsWith("day"));
-    assertThat(spec.fields()).anyMatch(val -> val.transform().toString().startsWith("hour"));
-    assertThat(spec.fields()).anyMatch(val -> val.transform().toString().startsWith("bucket"));
-    assertThat(spec.fields()).anyMatch(val -> val.transform().toString().startsWith("truncate"));
-    assertThat(spec.fields()).anyMatch(val -> val.transform().toString().startsWith("identity"));
+    assertThat(spec.fields()).anyMatch(val -> matchingTransform(val, Transforms.year()));
+    assertThat(spec.fields()).anyMatch(val -> matchingTransform(val, Transforms.month()));
+    assertThat(spec.fields()).anyMatch(val -> matchingTransform(val, Transforms.day()));
+    assertThat(spec.fields()).anyMatch(val -> matchingTransform(val, Transforms.hour()));
+    assertThat(spec.fields()).anyMatch(val -> matchingTransform(val, Transforms.bucket(4)));
+    assertThat(spec.fields()).anyMatch(val -> matchingTransform(val, Transforms.truncate(10)));
+    assertThat(spec.fields()).anyMatch(val -> matchingTransform(val, Transforms.identity()));
+  }
+
+  boolean matchingTransform(PartitionField partitionField, Transform<?, ?> expectedTransform) {
+    return partitionField.transform().equals(expectedTransform);
   }
 
   @ParameterizedTest
