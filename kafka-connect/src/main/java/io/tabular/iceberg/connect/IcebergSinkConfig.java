@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Pattern;
 import org.apache.iceberg.IcebergBuild;
+import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
@@ -99,6 +100,8 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public static final int SCHEMA_UPDATE_RETRIES = 2; // 3 total attempts
   public static final int CREATE_TABLE_RETRIES = 2; // 3 total attempts
+
+  @VisibleForTesting static final String COMMA_NO_PARENS_REGEX = ",(?![^()]*+\\))";
 
   public static final ConfigDef CONFIG_DEF = newConfigDef();
 
@@ -349,11 +352,11 @@ public class IcebergSinkConfig extends AbstractConfig {
           Pattern routeRegex = routeRegexStr == null ? null : Pattern.compile(routeRegexStr);
 
           String idColumnsStr = tableConfig.getOrDefault(ID_COLUMNS, tablesDefaultIdColumns());
-          List<String> idColumns = stringToList(idColumnsStr);
+          List<String> idColumns = stringToList(idColumnsStr, ",");
 
           String partitionByStr =
               tableConfig.getOrDefault(PARTITION_BY, tablesDefaultPartitionBy());
-          List<String> partitionBy = stringToList(partitionByStr);
+          List<String> partitionBy = stringToList(partitionByStr, COMMA_NO_PARENS_REGEX);
 
           String commitBranch =
               tableConfig.getOrDefault(COMMIT_BRANCH, tablesDefaultCommitBranch());
@@ -362,12 +365,13 @@ public class IcebergSinkConfig extends AbstractConfig {
         });
   }
 
-  private List<String> stringToList(String value) {
+  @VisibleForTesting
+  static List<String> stringToList(String value, String regex) {
     if (value == null || value.isEmpty()) {
       return ImmutableList.of();
     }
 
-    return Arrays.stream(value.split(",")).map(String::trim).collect(toList());
+    return Arrays.stream(value.split(regex)).map(String::trim).collect(toList());
   }
 
   public String tablesCdcField() {
