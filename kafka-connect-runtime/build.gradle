@@ -7,12 +7,10 @@ configurations {
     extendsFrom runtimeClasspath
   }
   all {
-    resolutionStrategy.force "com.nimbusds:nimbus-jose-jwt:9.31"
     resolutionStrategy.force "org.codehaus.jettison:jettison:1.5.4"
     resolutionStrategy.force "org.xerial.snappy:snappy-java:1.1.10.5"
+    resolutionStrategy.force "org.apache.commons:commons-compress:1.24.0"
     resolutionStrategy.force "org.apache.hadoop.thirdparty:hadoop-shaded-guava:1.1.1-tabular"
-    resolutionStrategy.force "org.eclipse.jetty:jetty-server:9.4.53.v20231009"
-    resolutionStrategy.force "org.eclipse.jetty:jetty-webapp:9.4.53.v20231009"
     resolutionStrategy.eachDependency { details ->
       if (details.requested.group == "io.netty") {
         details.useVersion "4.1.100.Final"
@@ -25,10 +23,18 @@ dependencies {
   implementation project(":iceberg-kafka-connect")
   implementation project(":iceberg-kafka-connect-transforms")
   implementation(libs.hadoop.common) {
-    exclude group: "ch.qos.reload4j"
-    exclude group: "com.google.guava"
     exclude group: "log4j"
     exclude group: "org.slf4j"
+    exclude group: "ch.qos.reload4j"
+    exclude group: "org.apache.avro", module: "avro"
+    exclude group: "com.google.guava"
+    exclude group: "com.google.protobuf"
+    exclude group: "org.apache.curator"
+    exclude group: "org.apache.zookeeper"
+    exclude group: "org.apache.kerby"
+    exclude group: "org.apache.hadoop", module: "hadoop-auth"
+    exclude group: "org.apache.hadoop.thirdparty", module: "hadoop-shaded-protobuf_3_7"
+    exclude group: "org.eclipse.jetty"
   }
   runtimeOnly libs.bundles.iceberg.ext
 
