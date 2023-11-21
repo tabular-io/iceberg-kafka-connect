@@ -31,6 +31,8 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.iceberg.PartitionSpec;
@@ -214,7 +216,7 @@ public class SchemaUtils {
     return new SchemaGenerator(config).toIcebergType(valueSchema);
   }
 
-  public static Type inferIcebergType(Object value, IcebergSinkConfig config) {
+  public static Optional<Type> inferIcebergType(Object value, IcebergSinkConfig config) {
     return new SchemaGenerator(config).inferIcebergType(value);
   }
 
@@ -292,10 +294,14 @@ public class SchemaUtils {
       }
     }
 
+    Optional<Type> inferIcebergType(Object value) {
+      return Optional.ofNullable(doInferIcebergType(value));
+    }
+
     @SuppressWarnings("checkstyle:CyclomaticComplexity")
-    Type inferIcebergType(Object value) {
+    private Type doInferIcebergType(Object value) {
       if (value == null) {
-        throw new UnsupportedOperationException("Cannot infer type from null value");
+        return null;
       } else if (value instanceof String) {
         return StringType.get();
       } else if (value instanceof Boolean) {
@@ -321,27 +327,33 @@ public class SchemaUtils {
         return TimestampType.withoutZone();
       } else if (value instanceof List) {
         List<?> list = (List<?>) value;
-        if (!list.isEmpty()) {
-          Type elementType = inferIcebergType(list.get(0));
-          return ListType.ofOptional(nextId(), elementType);
-        } else {
-          return ListType.ofOptional(nextId(), StringType.get());
+        if (list.isEmpty()) {
+          return null;
         }
+        Optional<Type> elementType = inferIcebergType(list.get(0));
+        return elementType.map(type -> ListType.ofOptional(nextId(), type)).orElse(null);
       } else if (value instanceof Map) {
         Map<?, ?> map = (Map<?, ?>) value;
         List<NestedField> structFields =
             map.entrySet().stream()
                 .filter(entry -> entry.getKey() != null && entry.getValue() != null)
                 .map(
-                    entry ->
-                        NestedField.optional(
-                            nextId(),
-                            entry.getKey().toString(),
-                            inferIcebergType(entry.getValue())))
+                    entry -> {
+                      Optional<Type> valueType = inferIcebergType(entry.getValue());
+                      return valueType
+                          .map(
+                              type ->
+                                  NestedField.optional(nextId(), entry.getKey().toString(), type))
+                          .orElse(null);
+                    })
+                .filter(Objects::nonNull)
                 .collect(toList());
+        if (structFields.isEmpty()) {
+          return null;
+        }
         return StructType.of(structFields);
       } else {
-        return StringType.get();
+        return null;
       }
     }
 
