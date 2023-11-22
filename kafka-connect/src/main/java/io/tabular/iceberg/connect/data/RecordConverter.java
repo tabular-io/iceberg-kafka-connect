@@ -44,6 +44,7 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 import org.apache.iceberg.Schema;
@@ -171,12 +172,15 @@ public class RecordConverter {
           NestedField tableField = lookupStructField(recordFieldName, schema, structFieldId);
           if (tableField == null) {
             // add the column if schema evolution is on, otherwise skip the value,
-            // skip the add column if the value is null as we can't infer the type
-            if (schemaUpdateConsumer != null && recordFieldValue != null) {
-              String parentFieldName =
-                  structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
-              Type type = SchemaUtils.inferIcebergType(recordFieldValue, config);
-              schemaUpdateConsumer.accept(new AddColumn(parentFieldName, recordFieldName, type));
+            // skip the add column if we can't infer the type
+            if (schemaUpdateConsumer != null) {
+              Optional<Type> type = SchemaUtils.inferIcebergType(recordFieldValue, config);
+              if (type.isPresent()) {
+                String parentFieldName =
+                    structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
+                schemaUpdateConsumer.accept(
+                    new AddColumn(parentFieldName, recordFieldName, type.get()));
+              }
             }
           } else {
             result.setField(

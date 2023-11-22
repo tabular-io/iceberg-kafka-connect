@@ -29,6 +29,7 @@ import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.util.Tasks;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,7 +69,10 @@ public class IcebergWriterFactory {
   Table autoCreateTable(String tableName, SinkRecord sample) {
     StructType structType;
     if (sample.valueSchema() == null) {
-      structType = SchemaUtils.inferIcebergType(sample.value(), config).asStructType();
+      structType =
+          SchemaUtils.inferIcebergType(sample.value(), config)
+              .orElseThrow(() -> new DataException("Unable to create table from empty object"))
+              .asStructType();
     } else {
       structType = SchemaUtils.toIcebergType(sample.valueSchema(), config).asStructType();
     }
