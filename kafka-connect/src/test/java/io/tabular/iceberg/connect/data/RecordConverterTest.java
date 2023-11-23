@@ -122,11 +122,6 @@ public class RecordConverterTest {
           Types.NestedField.required(1, "ii", Types.IntegerType.get()),
           Types.NestedField.required(2, "st", Types.StringType.get()));
 
-  private static final org.apache.iceberg.Schema SIMPLE_SCHEMA_UPPER_CASE =
-      new org.apache.iceberg.Schema(
-          Types.NestedField.required(1, "II", Types.IntegerType.get()),
-          Types.NestedField.required(2, "ST", Types.StringType.get()));
-
   private static final org.apache.iceberg.Schema ID_SCHEMA =
       new org.apache.iceberg.Schema(Types.NestedField.required(1, "ii", Types.IntegerType.get()));
 
@@ -277,19 +272,25 @@ public class RecordConverterTest {
   @ValueSource(booleans = {false, true})
   public void testCaseSensitivity(boolean caseInsensitive) {
     Table table = mock(Table.class);
-    when(table.schema()).thenReturn(SIMPLE_SCHEMA_UPPER_CASE);
+    when(table.schema()).thenReturn(SIMPLE_SCHEMA);
 
     when(config.schemaCaseInsensitive()).thenReturn(caseInsensitive);
 
     RecordConverter converter = new RecordConverter(table, config);
 
-    Map<String, Object> data = ImmutableMap.of("ii", 123);
-    Record record = converter.convert(data);
+    Map<String, Object> mapData = ImmutableMap.of("II", 123);
+    Record record1 = converter.convert(mapData);
+
+    Struct structData =
+        new Struct(SchemaBuilder.struct().field("II", Schema.INT32_SCHEMA).build()).put("II", 123);
+    Record record2 = converter.convert(structData);
 
     if (caseInsensitive) {
-      assertThat(record.getField("II")).isEqualTo(123);
+      assertThat(record1.getField("ii")).isEqualTo(123);
+      assertThat(record2.getField("ii")).isEqualTo(123);
     } else {
-      assertThat(record.getField("II")).isEqualTo(null);
+      assertThat(record1.getField("ii")).isEqualTo(null);
+      assertThat(record2.getField("ii")).isEqualTo(null);
     }
   }
 
