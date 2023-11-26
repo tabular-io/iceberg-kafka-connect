@@ -250,7 +250,9 @@ public class RecordConverter {
 
   private NestedField lookupStructField(String fieldName, StructType schema, int structFieldId) {
     if (nameMapping == null) {
-      return schema.field(fieldName);
+      return config.schemaCaseInsensitive()
+          ? schema.caseInsensitiveField(fieldName)
+          : schema.field(fieldName);
     }
 
     return structNameMap
