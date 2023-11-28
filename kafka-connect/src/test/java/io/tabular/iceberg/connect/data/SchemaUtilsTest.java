@@ -19,9 +19,11 @@
 package io.tabular.iceberg.connect.data;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -81,6 +83,11 @@ public class SchemaUtilsTest {
           NestedField.required(1, "i", IntegerType.get()),
           NestedField.required(2, "f", FloatType.get()));
 
+  private static final org.apache.iceberg.Schema NESTED_SCHEMA =
+      new org.apache.iceberg.Schema(
+          NestedField.required(3, "s", StringType.get()),
+          NestedField.required(4, "st", StructType.of(SIMPLE_SCHEMA.columns())));
+
   private static final org.apache.iceberg.Schema SCHEMA_FOR_SPEC =
       new org.apache.iceberg.Schema(
           NestedField.required(1, "i", IntegerType.get()),
@@ -109,10 +116,47 @@ public class SchemaUtilsTest {
     SchemaUtils.applySchemaUpdates(table, updates);
     verify(table).refresh();
     verify(table).updateSchema();
-    verify(updateSchema).addColumn(isNull(), matches("s"), isA(StringType.class));
-    verify(updateSchema).updateColumn(matches("f"), isA(DoubleType.class));
-    verify(updateSchema).makeColumnOptional(matches("i"));
+
+    verify(updateSchema).addColumn(isNull(), eq("s"), isA(StringType.class));
+    verify(updateSchema).updateColumn(eq("f"), isA(DoubleType.class));
+    verify(updateSchema).makeColumnOptional(eq("i"));
     verify(updateSchema).commit();
+
+    // check that there are no unexpected invocations...
+    verify(updateSchema).addColumn(isNull(), anyString(), any());
+    verify(updateSchema).updateColumn(any(), any());
+    verify(updateSchema).makeColumnOptional(any());
+  }
+
+  @Test
+  public void testApplyNestedSchemaUpdates() {
+    UpdateSchema updateSchema = mock(UpdateSchema.class);
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(NESTED_SCHEMA);
+    when(table.updateSchema()).thenReturn(updateSchema);
+
+    // the updates to "st.i" should be ignored as it already exists and is the same type
+    List<SchemaUpdate> updates =
+        ImmutableList.of(
+            new AddColumn("st", "i", IntegerType.get()),
+            new UpdateType("st.i", IntegerType.get()),
+            new MakeOptional("st.i"),
+            new UpdateType("st.f", DoubleType.get()),
+            new AddColumn("st", "s", StringType.get()));
+
+    SchemaUtils.applySchemaUpdates(table, updates);
+    verify(table).refresh();
+    verify(table).updateSchema();
+
+    verify(updateSchema).addColumn(eq("st"), eq("s"), isA(StringType.class));
+    verify(updateSchema).updateColumn(eq("st.f"), isA(DoubleType.class));
+    verify(updateSchema).makeColumnOptional(eq("st.i"));
+    verify(updateSchema).commit();
+
+    // check that there are no unexpected invocations...
+    verify(updateSchema).addColumn(anyString(), anyString(), any());
+    verify(updateSchema).updateColumn(any(), any());
+    verify(updateSchema).makeColumnOptional(any());
   }
 
   @Test
