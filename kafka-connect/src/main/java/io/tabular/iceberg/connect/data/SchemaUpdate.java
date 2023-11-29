@@ -18,10 +18,48 @@
  */
 package io.tabular.iceberg.connect.data;
 
+import java.util.Collection;
+import java.util.Map;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Type.PrimitiveType;
 
 public class SchemaUpdate {
+
+  public static class Consumer {
+    private final Map<String, AddColumn> addColumns = Maps.newHashMap();
+    private final Map<String, UpdateType> updateTypes = Maps.newHashMap();
+    private final Map<String, MakeOptional> makeOptionals = Maps.newHashMap();
+
+    public Collection<AddColumn> addColumns() {
+      return addColumns.values();
+    }
+
+    public Collection<UpdateType> updateTypes() {
+      return updateTypes.values();
+    }
+
+    public Collection<MakeOptional> makeOptionals() {
+      return makeOptionals.values();
+    }
+
+    public boolean empty() {
+      return addColumns.isEmpty() && updateTypes.isEmpty() && makeOptionals.isEmpty();
+    }
+
+    public void addColumn(String parentName, String name, Type type) {
+      AddColumn addCol = new AddColumn(parentName, name, type);
+      addColumns.put(addCol.key(), addCol);
+    }
+
+    public void updateType(String name, PrimitiveType type) {
+      updateTypes.put(name, new UpdateType(name, type));
+    }
+
+    public void makeOptional(String name) {
+      makeOptionals.put(name, new MakeOptional(name));
+    }
+  }
 
   public static class AddColumn extends SchemaUpdate {
     private final String parentName;
@@ -40,6 +78,10 @@ public class SchemaUpdate {
 
     public String name() {
       return name;
+    }
+
+    public String key() {
+      return parentName == null ? name : parentName + "." + name;
     }
 
     public Type type() {

@@ -30,9 +30,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
-import io.tabular.iceberg.connect.data.SchemaUpdate.MakeOptional;
-import io.tabular.iceberg.connect.data.SchemaUpdate.UpdateType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -105,15 +102,14 @@ public class SchemaUtilsTest {
     when(table.updateSchema()).thenReturn(updateSchema);
 
     // the updates to "i" should be ignored as it already exists and is the same type
-    List<SchemaUpdate> updates =
-        ImmutableList.of(
-            new AddColumn(null, "i", IntegerType.get()),
-            new UpdateType("i", IntegerType.get()),
-            new MakeOptional("i"),
-            new UpdateType("f", DoubleType.get()),
-            new AddColumn(null, "s", StringType.get()));
+    SchemaUpdate.Consumer consumer = new SchemaUpdate.Consumer();
+    consumer.addColumn(null, "i", IntegerType.get());
+    consumer.updateType("i", IntegerType.get());
+    consumer.makeOptional("i");
+    consumer.updateType("f", DoubleType.get());
+    consumer.addColumn(null, "s", StringType.get());
 
-    SchemaUtils.applySchemaUpdates(table, updates);
+    SchemaUtils.applySchemaUpdates(table, consumer);
     verify(table).refresh();
     verify(table).updateSchema();
 
@@ -136,15 +132,14 @@ public class SchemaUtilsTest {
     when(table.updateSchema()).thenReturn(updateSchema);
 
     // the updates to "st.i" should be ignored as it already exists and is the same type
-    List<SchemaUpdate> updates =
-        ImmutableList.of(
-            new AddColumn("st", "i", IntegerType.get()),
-            new UpdateType("st.i", IntegerType.get()),
-            new MakeOptional("st.i"),
-            new UpdateType("st.f", DoubleType.get()),
-            new AddColumn("st", "s", StringType.get()));
+    SchemaUpdate.Consumer consumer = new SchemaUpdate.Consumer();
+    consumer.addColumn("st", "i", IntegerType.get());
+    consumer.updateType("st.i", IntegerType.get());
+    consumer.makeOptional("st.i");
+    consumer.updateType("st.f", DoubleType.get());
+    consumer.addColumn("st", "s", StringType.get());
 
-    SchemaUtils.applySchemaUpdates(table, updates);
+    SchemaUtils.applySchemaUpdates(table, consumer);
     verify(table).refresh();
     verify(table).updateSchema();
 
@@ -168,7 +163,7 @@ public class SchemaUtilsTest {
     verify(table, times(0)).refresh();
     verify(table, times(0)).updateSchema();
 
-    SchemaUtils.applySchemaUpdates(table, ImmutableList.of());
+    SchemaUtils.applySchemaUpdates(table, new SchemaUpdate.Consumer());
     verify(table, times(0)).refresh();
     verify(table, times(0)).updateSchema();
   }

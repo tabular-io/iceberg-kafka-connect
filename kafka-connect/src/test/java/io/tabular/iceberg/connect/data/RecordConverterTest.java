@@ -18,7 +18,6 @@
  */
 package io.tabular.iceberg.connect.data;
 
-import static java.util.stream.Collectors.toList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -38,10 +37,12 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.Temporal;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.data.GenericRecord;
@@ -51,8 +52,8 @@ import org.apache.iceberg.mapping.NameMapping;
 import org.apache.iceberg.mapping.NameMappingParser;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
+import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.types.Types.BinaryType;
 import org.apache.iceberg.types.Types.DateType;
@@ -125,6 +126,31 @@ public class RecordConverterTest {
   private static final org.apache.iceberg.Schema ID_SCHEMA =
       new org.apache.iceberg.Schema(Types.NestedField.required(1, "ii", Types.IntegerType.get()));
 
+  private static final org.apache.iceberg.Schema STRUCT_IN_LIST_SCHEMA =
+      new org.apache.iceberg.Schema(
+          Types.NestedField.required(
+              100, "stli", Types.ListType.ofRequired(101, NESTED_SCHEMA.asStruct())));
+
+  private static final org.apache.iceberg.Schema STRUCT_IN_LIST_BASIC_SCHEMA =
+      new org.apache.iceberg.Schema(
+          Types.NestedField.required(
+              100, "stli", Types.ListType.ofRequired(101, ID_SCHEMA.asStruct())));
+
+  private static final org.apache.iceberg.Schema STRUCT_IN_MAP_SCHEMA =
+      new org.apache.iceberg.Schema(
+          Types.NestedField.required(
+              100,
+              "stma",
+              Types.MapType.ofRequired(
+                  101, 102, Types.StringType.get(), NESTED_SCHEMA.asStruct())));
+
+  private static final org.apache.iceberg.Schema STRUCT_IN_MAP_BASIC_SCHEMA =
+      new org.apache.iceberg.Schema(
+          Types.NestedField.required(
+              100,
+              "stma",
+              Types.MapType.ofRequired(101, 102, Types.StringType.get(), ID_SCHEMA.asStruct())));
+
   private static final Schema CONNECT_SCHEMA =
       SchemaBuilder.struct()
           .field("i", Schema.INT32_SCHEMA)
@@ -145,6 +171,14 @@ public class RecordConverterTest {
 
   private static final Schema CONNECT_NESTED_SCHEMA =
       SchemaBuilder.struct().field("ii", Schema.INT32_SCHEMA).field("st", CONNECT_SCHEMA);
+
+  private static final Schema CONNECT_STRUCT_IN_LIST_SCHEMA =
+      SchemaBuilder.struct().field("stli", SchemaBuilder.array(CONNECT_NESTED_SCHEMA)).build();
+
+  private static final Schema CONNECT_STRUCT_IN_MAP_SCHEMA =
+      SchemaBuilder.struct()
+          .field("stma", SchemaBuilder.map(Schema.STRING_SCHEMA, CONNECT_NESTED_SCHEMA))
+          .build();
 
   private static final LocalDate DATE_VAL = LocalDate.parse("2023-05-18");
   private static final LocalTime TIME_VAL = LocalTime.parse("07:14:21");
@@ -214,6 +248,35 @@ public class RecordConverterTest {
   }
 
   @Test
+  public void testMapValueInListConvert() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(STRUCT_IN_LIST_SCHEMA);
+    RecordConverter converter = new RecordConverter(table, config);
+
+    Map<String, Object> data = createNestedMapData();
+    Record record = converter.convert(ImmutableMap.of("stli", ImmutableList.of(data, data)));
+    List<?> fieldVal = (List<?>) record.getField("stli");
+
+    Record elementVal = (Record) fieldVal.get(0);
+    assertNestedRecordValues(elementVal);
+  }
+
+  @Test
+  public void testMapValueInMapConvert() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(STRUCT_IN_MAP_SCHEMA);
+    RecordConverter converter = new RecordConverter(table, config);
+
+    Map<String, Object> data = createNestedMapData();
+    Record record =
+        converter.convert(ImmutableMap.of("stma", ImmutableMap.of("key1", data, "key2", data)));
+
+    Map<?, ?> fieldVal = (Map<?, ?>) record.getField("stma");
+    Record mapVal = (Record) fieldVal.get("key1");
+    assertNestedRecordValues(mapVal);
+  }
+
+  @Test
   public void testStructConvert() {
     Table table = mock(Table.class);
     when(table.schema()).thenReturn(SCHEMA);
@@ -248,6 +311,39 @@ public class RecordConverterTest {
     String str = (String) record.getField("st");
     Map<String, Object> map = (Map<String, Object>) MAPPER.readValue(str, Map.class);
     assertThat(map).hasSize(MAPPED_CNT);
+  }
+
+  @Test
+  public void testStructValueInListConvert() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(STRUCT_IN_LIST_SCHEMA);
+    RecordConverter converter = new RecordConverter(table, config);
+
+    Struct data = createNestedStructData();
+    Struct struct =
+        new Struct(CONNECT_STRUCT_IN_LIST_SCHEMA).put("stli", ImmutableList.of(data, data));
+    Record record = converter.convert(struct);
+
+    List<?> fieldVal = (List<?>) record.getField("stli");
+    Record elementVal = (Record) fieldVal.get(0);
+    assertNestedRecordValues(elementVal);
+  }
+
+  @Test
+  public void testStructValueInMapConvert() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(STRUCT_IN_MAP_SCHEMA);
+    RecordConverter converter = new RecordConverter(table, config);
+
+    Struct data = createNestedStructData();
+    Struct struct =
+        new Struct(CONNECT_STRUCT_IN_MAP_SCHEMA)
+            .put("stma", ImmutableMap.of("key1", data, "key2", data));
+    Record record = converter.convert(struct);
+
+    Map<?, ?> fieldVal = (Map<?, ?>) record.getField("stma");
+    Record mapVal = (Record) fieldVal.get("key1");
+    assertNestedRecordValues(mapVal);
   }
 
   @Test
@@ -416,30 +512,16 @@ public class RecordConverterTest {
     Map<String, Object> data = Maps.newHashMap(createMapData());
     data.put("null", null);
 
-    List<SchemaUpdate> updates = Lists.newArrayList();
-    converter.convert(data, updates::add);
-    List<AddColumn> addCols = updates.stream().map(update -> (AddColumn) update).collect(toList());
+    SchemaUpdate.Consumer consumer = new SchemaUpdate.Consumer();
+    converter.convert(data, consumer);
+    Collection<AddColumn> addCols = consumer.addColumns();
 
     assertThat(addCols).hasSize(15);
 
     Map<String, AddColumn> newColMap = Maps.newHashMap();
     addCols.forEach(addCol -> newColMap.put(addCol.name(), addCol));
 
-    assertThat(newColMap.get("i").type()).isInstanceOf(LongType.class);
-    assertThat(newColMap.get("l").type()).isInstanceOf(LongType.class);
-    assertThat(newColMap.get("d").type()).isInstanceOf(StringType.class);
-    assertThat(newColMap.get("t").type()).isInstanceOf(StringType.class);
-    assertThat(newColMap.get("ts").type()).isInstanceOf(StringType.class);
-    assertThat(newColMap.get("tsz").type()).isInstanceOf(StringType.class);
-    assertThat(newColMap.get("fl").type()).isInstanceOf(DoubleType.class);
-    assertThat(newColMap.get("do").type()).isInstanceOf(DoubleType.class);
-    assertThat(newColMap.get("dec").type()).isInstanceOf(StringType.class);
-    assertThat(newColMap.get("s").type()).isInstanceOf(StringType.class);
-    assertThat(newColMap.get("u").type()).isInstanceOf(StringType.class);
-    assertThat(newColMap.get("f").type()).isInstanceOf(StringType.class);
-    assertThat(newColMap.get("b").type()).isInstanceOf(StringType.class);
-    assertThat(newColMap.get("li").type()).isInstanceOf(ListType.class);
-    assertThat(newColMap.get("ma").type()).isInstanceOf(StructType.class);
+    assertTypesAddedFromMap(col -> newColMap.get(col).type());
 
     // null values should be ignored
     assertThat(newColMap).doesNotContainKey("null");
@@ -452,33 +534,59 @@ public class RecordConverterTest {
     RecordConverter converter = new RecordConverter(table, config);
 
     Map<String, Object> nestedData = createNestedMapData();
-    List<SchemaUpdate> addCols = Lists.newArrayList();
-    converter.convert(nestedData, addCols::add);
+    SchemaUpdate.Consumer consumer = new SchemaUpdate.Consumer();
+    converter.convert(nestedData, consumer);
+    Collection<AddColumn> addCols = consumer.addColumns();
 
     assertThat(addCols).hasSize(1);
 
-    assertThat(addCols).hasSize(1);
-
-    AddColumn addCol = (AddColumn) addCols.get(0);
+    AddColumn addCol = addCols.iterator().next();
     assertThat(addCol.name()).isEqualTo("st");
 
     StructType addedType = addCol.type().asStructType();
     assertThat(addedType.fields()).hasSize(15);
-    assertThat(addedType.field("i").type()).isInstanceOf(LongType.class);
-    assertThat(addedType.field("l").type()).isInstanceOf(LongType.class);
-    assertThat(addedType.field("d").type()).isInstanceOf(StringType.class);
-    assertThat(addedType.field("t").type()).isInstanceOf(StringType.class);
-    assertThat(addedType.field("ts").type()).isInstanceOf(StringType.class);
-    assertThat(addedType.field("tsz").type()).isInstanceOf(StringType.class);
-    assertThat(addedType.field("fl").type()).isInstanceOf(DoubleType.class);
-    assertThat(addedType.field("do").type()).isInstanceOf(DoubleType.class);
-    assertThat(addedType.field("dec").type()).isInstanceOf(StringType.class);
-    assertThat(addedType.field("s").type()).isInstanceOf(StringType.class);
-    assertThat(addedType.field("u").type()).isInstanceOf(StringType.class);
-    assertThat(addedType.field("f").type()).isInstanceOf(StringType.class);
-    assertThat(addedType.field("b").type()).isInstanceOf(StringType.class);
-    assertThat(addedType.field("li").type()).isInstanceOf(ListType.class);
-    assertThat(addedType.field("ma").type()).isInstanceOf(StructType.class);
+    assertTypesAddedFromMap(col -> addedType.field(col).type());
+  }
+
+  @Test
+  public void testMissingColumnDetectionMapListValue() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(STRUCT_IN_LIST_BASIC_SCHEMA);
+    RecordConverter converter = new RecordConverter(table, config);
+
+    Map<String, Object> nestedData = createNestedMapData();
+    Map<String, Object> map = ImmutableMap.of("stli", ImmutableList.of(nestedData, nestedData));
+    SchemaUpdate.Consumer consumer = new SchemaUpdate.Consumer();
+    converter.convert(map, consumer);
+    Collection<AddColumn> addCols = consumer.addColumns();
+
+    assertThat(addCols).hasSize(1);
+
+    AddColumn addCol = addCols.iterator().next();
+    assertThat(addCol.parentName()).isEqualTo("stli.element");
+    assertThat(addCol.name()).isEqualTo("st");
+
+    StructType nestedElementType = addCol.type().asStructType();
+    assertThat(nestedElementType.fields()).hasSize(15);
+    assertTypesAddedFromMap(col -> nestedElementType.field(col).type());
+  }
+
+  private void assertTypesAddedFromMap(Function<String, Type> fn) {
+    assertThat(fn.apply("i")).isInstanceOf(LongType.class);
+    assertThat(fn.apply("l")).isInstanceOf(LongType.class);
+    assertThat(fn.apply("d")).isInstanceOf(StringType.class);
+    assertThat(fn.apply("t")).isInstanceOf(StringType.class);
+    assertThat(fn.apply("ts")).isInstanceOf(StringType.class);
+    assertThat(fn.apply("tsz")).isInstanceOf(StringType.class);
+    assertThat(fn.apply("fl")).isInstanceOf(DoubleType.class);
+    assertThat(fn.apply("do")).isInstanceOf(DoubleType.class);
+    assertThat(fn.apply("dec")).isInstanceOf(StringType.class);
+    assertThat(fn.apply("s")).isInstanceOf(StringType.class);
+    assertThat(fn.apply("u")).isInstanceOf(StringType.class);
+    assertThat(fn.apply("f")).isInstanceOf(StringType.class);
+    assertThat(fn.apply("b")).isInstanceOf(StringType.class);
+    assertThat(fn.apply("li")).isInstanceOf(ListType.class);
+    assertThat(fn.apply("ma")).isInstanceOf(StructType.class);
   }
 
   @Test
@@ -488,30 +596,105 @@ public class RecordConverterTest {
     RecordConverter converter = new RecordConverter(table, config);
 
     Struct data = createStructData();
-    List<SchemaUpdate> updates = Lists.newArrayList();
-    converter.convert(data, updates::add);
-    List<AddColumn> addCols = updates.stream().map(update -> (AddColumn) update).collect(toList());
+    SchemaUpdate.Consumer consumer = new SchemaUpdate.Consumer();
+    converter.convert(data, consumer);
+    Collection<AddColumn> addCols = consumer.addColumns();
 
     assertThat(addCols).hasSize(15);
 
     Map<String, AddColumn> newColMap = Maps.newHashMap();
     addCols.forEach(addCol -> newColMap.put(addCol.name(), addCol));
 
-    assertThat(newColMap.get("i").type()).isInstanceOf(IntegerType.class);
-    assertThat(newColMap.get("l").type()).isInstanceOf(LongType.class);
-    assertThat(newColMap.get("d").type()).isInstanceOf(DateType.class);
-    assertThat(newColMap.get("t").type()).isInstanceOf(TimeType.class);
-    assertThat(newColMap.get("ts").type()).isInstanceOf(TimestampType.class);
-    assertThat(newColMap.get("tsz").type()).isInstanceOf(TimestampType.class);
-    assertThat(newColMap.get("fl").type()).isInstanceOf(FloatType.class);
-    assertThat(newColMap.get("do").type()).isInstanceOf(DoubleType.class);
-    assertThat(newColMap.get("dec").type()).isInstanceOf(DecimalType.class);
-    assertThat(newColMap.get("s").type()).isInstanceOf(StringType.class);
-    assertThat(newColMap.get("u").type()).isInstanceOf(StringType.class);
-    assertThat(newColMap.get("f").type()).isInstanceOf(BinaryType.class);
-    assertThat(newColMap.get("b").type()).isInstanceOf(BinaryType.class);
-    assertThat(newColMap.get("li").type()).isInstanceOf(ListType.class);
-    assertThat(newColMap.get("ma").type()).isInstanceOf(MapType.class);
+    assertTypesAddedFromStruct(col -> newColMap.get(col).type());
+  }
+
+  @Test
+  public void testMissingColumnDetectionStructNested() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(ID_SCHEMA);
+    RecordConverter converter = new RecordConverter(table, config);
+
+    Struct nestedData = createNestedStructData();
+    SchemaUpdate.Consumer consumer = new SchemaUpdate.Consumer();
+    converter.convert(nestedData, consumer);
+    Collection<AddColumn> addCols = consumer.addColumns();
+
+    assertThat(addCols).hasSize(1);
+
+    AddColumn addCol = addCols.iterator().next();
+    assertThat(addCol.name()).isEqualTo("st");
+
+    StructType addedType = addCol.type().asStructType();
+    assertThat(addedType.fields()).hasSize(15);
+    assertTypesAddedFromStruct(col -> addedType.field(col).type());
+  }
+
+  @Test
+  public void testMissingColumnDetectionStructListValue() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(STRUCT_IN_LIST_BASIC_SCHEMA);
+    RecordConverter converter = new RecordConverter(table, config);
+
+    Struct nestedData = createNestedStructData();
+    Struct struct =
+        new Struct(CONNECT_STRUCT_IN_LIST_SCHEMA)
+            .put("stli", ImmutableList.of(nestedData, nestedData));
+    SchemaUpdate.Consumer consumer = new SchemaUpdate.Consumer();
+    converter.convert(struct, consumer);
+    Collection<AddColumn> addCols = consumer.addColumns();
+
+    assertThat(addCols).hasSize(1);
+
+    AddColumn addCol = addCols.iterator().next();
+    assertThat(addCol.parentName()).isEqualTo("stli.element");
+    assertThat(addCol.name()).isEqualTo("st");
+
+    StructType nestedElementType = addCol.type().asStructType();
+    assertThat(nestedElementType.fields()).hasSize(15);
+    assertTypesAddedFromStruct(col -> nestedElementType.field(col).type());
+  }
+
+  @Test
+  public void testMissingColumnDetectionStructMapValue() {
+    Table table = mock(Table.class);
+    when(table.schema()).thenReturn(STRUCT_IN_MAP_BASIC_SCHEMA);
+    RecordConverter converter = new RecordConverter(table, config);
+
+    Struct nestedData = createNestedStructData();
+    Struct struct =
+        new Struct(CONNECT_STRUCT_IN_MAP_SCHEMA)
+            .put("stma", ImmutableMap.of("key1", nestedData, "key2", nestedData));
+    SchemaUpdate.Consumer consumer = new SchemaUpdate.Consumer();
+    converter.convert(struct, consumer);
+    Collection<AddColumn> addCols = consumer.addColumns();
+
+    assertThat(addCols).hasSize(1);
+
+    AddColumn addCol = addCols.iterator().next();
+    assertThat(addCol.parentName()).isEqualTo("stma.value");
+    assertThat(addCol.name()).isEqualTo("st");
+
+    StructType nestedValueType = addCol.type().asStructType();
+    assertThat(nestedValueType.fields()).hasSize(15);
+    assertTypesAddedFromStruct(col -> nestedValueType.field(col).type());
+  }
+
+  private void assertTypesAddedFromStruct(Function<String, Type> fn) {
+    assertThat(fn.apply("i")).isInstanceOf(IntegerType.class);
+    assertThat(fn.apply("l")).isInstanceOf(LongType.class);
+    assertThat(fn.apply("d")).isInstanceOf(DateType.class);
+    assertThat(fn.apply("t")).isInstanceOf(TimeType.class);
+    assertThat(fn.apply("ts")).isInstanceOf(TimestampType.class);
+    assertThat(fn.apply("tsz")).isInstanceOf(TimestampType.class);
+    assertThat(fn.apply("fl")).isInstanceOf(FloatType.class);
+    assertThat(fn.apply("do")).isInstanceOf(DoubleType.class);
+    assertThat(fn.apply("dec")).isInstanceOf(DecimalType.class);
+    assertThat(fn.apply("s")).isInstanceOf(StringType.class);
+    assertThat(fn.apply("u")).isInstanceOf(StringType.class);
+    assertThat(fn.apply("f")).isInstanceOf(BinaryType.class);
+    assertThat(fn.apply("b")).isInstanceOf(BinaryType.class);
+    assertThat(fn.apply("li")).isInstanceOf(ListType.class);
+    assertThat(fn.apply("ma")).isInstanceOf(MapType.class);
   }
 
   @Test
@@ -529,15 +712,14 @@ public class RecordConverterTest {
         SchemaBuilder.struct().field("ii", Schema.INT64_SCHEMA).field("ff", Schema.FLOAT64_SCHEMA);
     Struct data = new Struct(valueSchema).put("ii", 11L).put("ff", 22d);
 
-    List<SchemaUpdate> updates = Lists.newArrayList();
-    converter.convert(data, updates::add);
-    List<UpdateType> addCols =
-        updates.stream().map(update -> (UpdateType) update).collect(toList());
+    SchemaUpdate.Consumer consumer = new SchemaUpdate.Consumer();
+    converter.convert(data, consumer);
+    Collection<UpdateType> updates = consumer.updateTypes();
 
-    assertThat(addCols).hasSize(2);
+    assertThat(updates).hasSize(2);
 
     Map<String, UpdateType> updateMap = Maps.newHashMap();
-    addCols.forEach(update -> updateMap.put(update.name(), update));
+    updates.forEach(update -> updateMap.put(update.name(), update));
 
     assertThat(updateMap.get("ii").type()).isInstanceOf(LongType.class);
     assertThat(updateMap.get("ff").type()).isInstanceOf(DoubleType.class);
@@ -566,52 +748,17 @@ public class RecordConverterTest {
     Struct structValue = new Struct(structSchema).put("ii", 11L).put("ff", 22d);
     Struct data = new Struct(schema).put("i", 1).put("st", structValue);
 
-    List<SchemaUpdate> updates = Lists.newArrayList();
-    converter.convert(data, updates::add);
-    List<UpdateType> addCols =
-        updates.stream().map(update -> (UpdateType) update).collect(toList());
+    SchemaUpdate.Consumer consumer = new SchemaUpdate.Consumer();
+    converter.convert(data, consumer);
+    Collection<UpdateType> updates = consumer.updateTypes();
 
-    assertThat(addCols).hasSize(2);
+    assertThat(updates).hasSize(2);
 
     Map<String, UpdateType> updateMap = Maps.newHashMap();
-    addCols.forEach(update -> updateMap.put(update.name(), update));
+    updates.forEach(update -> updateMap.put(update.name(), update));
 
     assertThat(updateMap.get("st.ii").type()).isInstanceOf(LongType.class);
     assertThat(updateMap.get("st.ff").type()).isInstanceOf(DoubleType.class);
-  }
-
-  @Test
-  public void testMissingColumnDetectionStructNested() {
-    Table table = mock(Table.class);
-    when(table.schema()).thenReturn(ID_SCHEMA);
-    RecordConverter converter = new RecordConverter(table, config);
-
-    Struct nestedData = createNestedStructData();
-    List<SchemaUpdate> addCols = Lists.newArrayList();
-    converter.convert(nestedData, addCols::add);
-
-    assertThat(addCols).hasSize(1);
-
-    AddColumn addCol = (AddColumn) addCols.get(0);
-    assertThat(addCol.name()).isEqualTo("st");
-
-    StructType addedType = addCol.type().asStructType();
-    assertThat(addedType.fields()).hasSize(15);
-    assertThat(addedType.field("i").type()).isInstanceOf(IntegerType.class);
-    assertThat(addedType.field("l").type()).isInstanceOf(LongType.class);
-    assertThat(addedType.field("d").type()).isInstanceOf(DateType.class);
-    assertThat(addedType.field("t").type()).isInstanceOf(TimeType.class);
-    assertThat(addedType.field("ts").type()).isInstanceOf(TimestampType.class);
-    assertThat(addedType.field("tsz").type()).isInstanceOf(TimestampType.class);
-    assertThat(addedType.field("fl").type()).isInstanceOf(FloatType.class);
-    assertThat(addedType.field("do").type()).isInstanceOf(DoubleType.class);
-    assertThat(addedType.field("dec").type()).isInstanceOf(DecimalType.class);
-    assertThat(addedType.field("s").type()).isInstanceOf(StringType.class);
-    assertThat(addedType.field("u").type()).isInstanceOf(StringType.class);
-    assertThat(addedType.field("f").type()).isInstanceOf(BinaryType.class);
-    assertThat(addedType.field("b").type()).isInstanceOf(BinaryType.class);
-    assertThat(addedType.field("li").type()).isInstanceOf(ListType.class);
-    assertThat(addedType.field("ma").type()).isInstanceOf(MapType.class);
   }
 
   private Map<String, Object> createMapData() {

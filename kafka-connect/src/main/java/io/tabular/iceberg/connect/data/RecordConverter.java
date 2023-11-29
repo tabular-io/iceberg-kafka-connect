@@ -22,9 +22,6 @@ import static java.util.stream.Collectors.toList;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.data.SchemaUpdate.AddColumn;
-import io.tabular.iceberg.connect.data.SchemaUpdate.MakeOptional;
-import io.tabular.iceberg.connect.data.SchemaUpdate.UpdateType;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
@@ -46,7 +43,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Consumer;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.TableProperties;
@@ -94,7 +90,7 @@ public class RecordConverter {
     return convert(data, null);
   }
 
-  public Record convert(Object data, Consumer<SchemaUpdate> schemaUpdateConsumer) {
+  public Record convert(Object data, SchemaUpdate.Consumer schemaUpdateConsumer) {
     if (data instanceof Struct || data instanceof Map) {
       return convertStructValue(data, tableSchema.asStruct(), -1, schemaUpdateConsumer);
     }
@@ -107,7 +103,7 @@ public class RecordConverter {
   }
 
   private Object convertValue(
-      Object value, Type type, int fieldId, Consumer<SchemaUpdate> schemaUpdateConsumer) {
+      Object value, Type type, int fieldId, SchemaUpdate.Consumer schemaUpdateConsumer) {
     if (value == null) {
       return null;
     }
@@ -151,7 +147,7 @@ public class RecordConverter {
       Object value,
       StructType schema,
       int parentFieldId,
-      Consumer<SchemaUpdate> schemaUpdateConsumer) {
+      SchemaUpdate.Consumer schemaUpdateConsumer) {
     if (value instanceof Map) {
       return convertToStruct((Map<?, ?>) value, schema, parentFieldId, schemaUpdateConsumer);
     } else if (value instanceof Struct) {
@@ -164,7 +160,7 @@ public class RecordConverter {
       Map<?, ?> map,
       StructType schema,
       int structFieldId,
-      Consumer<SchemaUpdate> schemaUpdateConsumer) {
+      SchemaUpdate.Consumer schemaUpdateConsumer) {
     GenericRecord result = GenericRecord.create(schema);
     map.forEach(
         (recordFieldNameObj, recordFieldValue) -> {
@@ -178,8 +174,7 @@ public class RecordConverter {
               if (type.isPresent()) {
                 String parentFieldName =
                     structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
-                schemaUpdateConsumer.accept(
-                    new AddColumn(parentFieldName, recordFieldName, type.get()));
+                schemaUpdateConsumer.addColumn(parentFieldName, recordFieldName, type.get());
               }
             }
           } else {
@@ -199,7 +194,7 @@ public class RecordConverter {
       Struct struct,
       StructType schema,
       int structFieldId,
-      Consumer<SchemaUpdate> schemaUpdateConsumer) {
+      SchemaUpdate.Consumer schemaUpdateConsumer) {
     GenericRecord result = GenericRecord.create(schema);
     struct
         .schema()
@@ -213,8 +208,7 @@ public class RecordConverter {
                   String parentFieldName =
                       structFieldId < 0 ? null : tableSchema.findColumnName(structFieldId);
                   Type type = SchemaUtils.toIcebergType(recordField.schema(), config);
-                  schemaUpdateConsumer.accept(
-                      new AddColumn(parentFieldName, recordField.name(), type));
+                  schemaUpdateConsumer.addColumn(parentFieldName, recordField.name(), type);
                 }
               } else {
                 boolean hasSchemaUpdates = false;
@@ -224,13 +218,13 @@ public class RecordConverter {
                       SchemaUtils.needsDataTypeUpdate(tableField.type(), recordField.schema());
                   if (evolveDataType != null) {
                     String fieldName = tableSchema.findColumnName(tableField.fieldId());
-                    schemaUpdateConsumer.accept(new UpdateType(fieldName, evolveDataType));
+                    schemaUpdateConsumer.updateType(fieldName, evolveDataType);
                     hasSchemaUpdates = true;
                   }
                   // make optional if needed and schema evolution is on
                   if (tableField.isRequired() && recordField.schema().isOptional()) {
                     String fieldName = tableSchema.findColumnName(tableField.fieldId());
-                    schemaUpdateConsumer.accept(new MakeOptional(fieldName));
+                    schemaUpdateConsumer.makeOptional(fieldName);
                     hasSchemaUpdates = true;
                   }
                 }
@@ -277,7 +271,7 @@ public class RecordConverter {
   }
 
   protected List<Object> convertListValue(
-      Object value, ListType type, Consumer<SchemaUpdate> schemaUpdateConsumer) {
+      Object value, ListType type, SchemaUpdate.Consumer schemaUpdateConsumer) {
     Preconditions.checkArgument(value instanceof List);
     List<?> list = (List<?>) value;
     return list.stream()
@@ -290,14 +284,14 @@ public class RecordConverter {
   }
 
   protected Map<Object, Object> convertMapValue(
-      Object value, MapType type, Consumer<SchemaUpdate> schemaUpdateConsumer) {
+      Object value, MapType type, SchemaUpdate.Consumer schemaUpdateConsumer) {
     Preconditions.checkArgument(value instanceof Map);
     Map<?, ?> map = (Map<?, ?>) value;
     Map<Object, Object> result = Maps.newHashMap();
     map.forEach(
         (k, v) -> {
           int keyFieldId = type.fields().get(0).fieldId();
-          int valueFieldId = type.fields().get(0).fieldId();
+          int valueFieldId = type.fields().get(1).fieldId();
           result.put(
               convertValue(k, type.keyType(), keyFieldId, schemaUpdateConsumer),
               convertValue(v, type.valueType(), valueFieldId, schemaUpdateConsumer));
