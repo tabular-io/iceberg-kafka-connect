@@ -82,8 +82,8 @@ public class SchemaUtils {
     return null;
   }
 
-  public static void applySchemaUpdates(Table table, List<SchemaUpdate> updates) {
-    if (updates == null || updates.isEmpty()) {
+  public static void applySchemaUpdates(Table table, SchemaUpdate.Consumer updates) {
+    if (updates == null || updates.empty()) {
       // no updates to apply
       return;
     }
@@ -93,31 +93,25 @@ public class SchemaUtils {
         .run(notUsed -> commitSchemaUpdates(table, updates));
   }
 
-  private static void commitSchemaUpdates(Table table, List<SchemaUpdate> updates) {
+  private static void commitSchemaUpdates(Table table, SchemaUpdate.Consumer updates) {
     // get the latest schema in case another process updated it
     table.refresh();
 
     // filter out columns that have already been added
     List<AddColumn> addColumns =
-        updates.stream()
-            .filter(update -> update instanceof AddColumn)
-            .map(update -> (AddColumn) update)
+        updates.addColumns().stream()
             .filter(addCol -> !columnExists(table.schema(), addCol))
             .collect(toList());
 
     // filter out columns that have the updated type
     List<UpdateType> updateTypes =
-        updates.stream()
-            .filter(update -> update instanceof UpdateType)
-            .map(update -> (UpdateType) update)
+        updates.updateTypes().stream()
             .filter(updateType -> !typeMatches(table.schema(), updateType))
             .collect(toList());
 
     // filter out columns that have already been made optional
     List<MakeOptional> makeOptionals =
-        updates.stream()
-            .filter(update -> update instanceof MakeOptional)
-            .map(update -> (MakeOptional) update)
+        updates.makeOptionals().stream()
             .filter(makeOptional -> !isOptional(table.schema(), makeOptional))
             .collect(toList());
 

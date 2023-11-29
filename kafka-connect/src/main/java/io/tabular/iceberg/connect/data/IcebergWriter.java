@@ -19,6 +19,7 @@
 package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import io.tabular.iceberg.connect.data.SchemaUpdate.Consumer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Arrays;
@@ -82,10 +83,10 @@ public class IcebergWriter implements RecordWriter {
       return recordConverter.convert(record.value());
     }
 
-    List<SchemaUpdate> updates = Lists.newArrayList();
-    Record row = recordConverter.convert(record.value(), updates::add);
+    SchemaUpdate.Consumer updates = new Consumer();
+    Record row = recordConverter.convert(record.value(), updates);
 
-    if (!updates.isEmpty()) {
+    if (!updates.empty()) {
       // complete the current file
       flush();
       // apply the schema updates, this will refresh the table
@@ -93,7 +94,7 @@ public class IcebergWriter implements RecordWriter {
       // initialize a new writer with the new schema
       initNewWriter();
       // convert the row again, this time using the new table schema
-      row = recordConverter.convert(record.value(), updates::add);
+      row = recordConverter.convert(record.value(), null);
     }
 
     return row;
