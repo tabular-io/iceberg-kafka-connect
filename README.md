@@ -143,7 +143,7 @@ Hence you don't need to configure [HMAC keys](https://cloud.google.com/storage/d
 The ioWriter is going to use your machine's env var `GOOGLE_APPLICATION_CREDENTIALS` to locate the service account credentials.
 Make sure it points to the right path.
 
-### GCS Example
+### GCS with Hive Example
 ```
 "iceberg.catalog.type": "hive",
 "iceberg.catalog.uri": "thrift://hive:9083",
