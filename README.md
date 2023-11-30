@@ -141,7 +141,7 @@ applied. When merging these, the order of precedence is sink config > config dir
 When using GCS storage whatever the catalog, use `org.apache.iceberg.gcp.gcs.GCSFileIO` for `iceberg.catalog.io-impl` property.
 Hence you don't need to configure [HMAC keys](https://cloud.google.com/storage/docs/authentication/managing-hmackeys) for your service account.
 The ioWriter is going to use your machine's env var `GOOGLE_APPLICATION_CREDENTIALS` to locate the service account credentials.
-Make sure it point to the right path.
+Make sure it points to the right path.
 
 ### GCS Example
 ```
