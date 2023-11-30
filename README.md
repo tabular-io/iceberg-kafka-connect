@@ -136,6 +136,21 @@ from the classpath are loaded. Next, if `iceberg.hadoop-conf-dir` is specified, 
 are loaded from that location. Finally, any `iceberg.hadoop.*` properties from the sink config are
 applied. When merging these, the order of precedence is sink config > config dir > classpath.
 
+## GCS configuration
+
+When using GCS storage whatever the catalog, use `org.apache.iceberg.gcp.gcs.GCSFileIO` for `iceberg.catalog.io-impl` property.
+Hence you don't need to configure [HMAC keys](https://cloud.google.com/storage/docs/authentication/managing-hmackeys) for your service account.
+The ioWriter is going to use your machine's env var `GOOGLE_APPLICATION_CREDENTIALS` to locate the service account credentials.
+Make sure it point to the right path.
+
+### GCS Example
+```
+"iceberg.catalog.type": "hive",
+"iceberg.catalog.uri": "thrift://hive:9083",
+"iceberg.catalog.io-impl": "org.apache.iceberg.gcp.gcs.GCSFileIO",
+"iceberg.catalog.warehouse": "s3a://bucket/warehouse",
+```
+
 # Examples
 
 ## Initial setup
