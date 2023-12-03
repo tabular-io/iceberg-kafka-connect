@@ -133,8 +133,8 @@ full details on configuring catalogs.
 
 #### S3FileIO example 
 ```
-"iceberg.catalog.warehouse": "s3a://bucket/warehouse",
 "iceberg.catalog.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
+"iceberg.catalog.warehouse": "s3a://bucket/warehouse",
 ```
 
 #### GCSFileIO example
