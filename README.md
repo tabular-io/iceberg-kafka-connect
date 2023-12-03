@@ -129,27 +129,32 @@ Depending on your setup, you may need to also set `iceberg.catalog.s3.endpoint`,
 or `iceberg.catalog.s3.path-style-access`. See the [Iceberg docs](https://iceberg.apache.org/docs/latest/) for
 full details on configuring catalogs.
 
+### IOs configuration
+
+#### S3FileIO example 
+```
+"iceberg.catalog.warehouse": "s3a://bucket/warehouse",
+"iceberg.catalog.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
+```
+
+#### GCSFileIO example
+```
+"iceberg.catalog.io-impl": "org.apache.iceberg.gcp.gcs.GCSFileIO",
+"iceberg.catalog.warehouse": "gs://bucket/warehouse",
+```
+
+#### ADLSFileIO example
+```
+"iceberg.catalog.io-impl": "org.apache.iceberg.azure.adlsv2.ADLSFileIO"
+"iceberg.catalog.warehouse": "abfss://file-system-name@storage-account-name.dfs.core.windows.net/warehouse"
+```
+
 ## Hadoop configuration
 
 When using HDFS or Hive, the sink will initialize the Hadoop configuration. First, config files
 from the classpath are loaded. Next, if `iceberg.hadoop-conf-dir` is specified, config files
 are loaded from that location. Finally, any `iceberg.hadoop.*` properties from the sink config are
 applied. When merging these, the order of precedence is sink config > config dir > classpath.
-
-## GCS configuration
-
-When using GCS storage whatever the catalog, use `org.apache.iceberg.gcp.gcs.GCSFileIO` for `iceberg.catalog.io-impl` property.
-Hence you don't need to configure [HMAC keys](https://cloud.google.com/storage/docs/authentication/managing-hmackeys) for your service account.
-The ioWriter is going to use your machine's env var `GOOGLE_APPLICATION_CREDENTIALS` to locate the service account credentials.
-Make sure it points to the right path.
-
-### GCS with Hive Example
-```
-"iceberg.catalog.type": "hive",
-"iceberg.catalog.uri": "thrift://hive:9083",
-"iceberg.catalog.io-impl": "org.apache.iceberg.gcp.gcs.GCSFileIO",
-"iceberg.catalog.warehouse": "s3a://bucket/warehouse",
-```
 
 # Examples
 
