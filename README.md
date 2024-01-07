@@ -264,8 +264,8 @@ This example applies inserts, updates, and deletes based on the value of a field
 For example, if the `_cdc_op` field is set to `I` then the record is inserted, if `U` then it is
 upserted, and if `D` then it is deleted. This requires that the table be in Iceberg v2 format.
 The Iceberg identifier field(s) are used to identify a row, if that is not set for the table,
-then the `iceberg.tables.id-columns`configuration can be set instead. CDC can be combined with
-multi-table fan-out.
+then the `iceberg.tables.default-id-columns` or `iceberg.table.\<table name\>.id-columns`configuration
+can be set instead. CDC can be combined with multi-table fan-out.
 
 ### Create the destination table
 See above for creating the table
