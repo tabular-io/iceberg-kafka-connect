@@ -36,6 +36,7 @@ The zip archive will be found under `./kafka-connect-runtime/build/distributions
 | iceberg.tables.schema-case-insensitive     | Set to `true` to look up table columns by case-insensitive name, default is `false` for case-sensitive           |
 | iceberg.tables.auto-create-props.*         | Properties set on new tables during auto-create                                                                  |
 | iceberg.tables.write-props.*               | Properties passed through to Iceberg writer initialization, these take precedence                                |
+| iceberg.tables.default-database            | Default database name to be prepended to the values of the field specified in `iceberg.tables.route-field`       |
 | iceberg.table.\<table name\>.commit-branch | Table-specific branch for commits, use `iceberg.tables.default-commit-branch` if not specified                   |
 | iceberg.table.\<table name\>.id-columns    | Comma-separated list of columns that identify a row in the table (primary key)                                   |
 | iceberg.table.\<table name\>.partition-by  | Comma-separated list of partition fields to use when creating the table                                          |
