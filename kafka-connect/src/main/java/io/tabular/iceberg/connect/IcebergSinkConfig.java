@@ -292,7 +292,8 @@ public class IcebergSinkConfig extends AbstractConfig {
       throw new ConfigException("Must specify table name(s)");
     }
     if (tablesDefaultDatabase() != null) {
-      checkState(dynamicTablesEnabled(), "Default database setting must be used with dynamic tables");
+      checkState(
+          dynamicTablesEnabled(), "Default database setting must be used with dynamic tables");
       checkState(tables() == null, "Cannot specify both tables and default database");
     }
   }

@@ -224,13 +224,13 @@ public class Worker extends Channel {
 
     String routeValue = extractRouteValue(record.value(), routeField);
     if (routeValue != null) {
-        String tableName;
-        if (defaultDatabase != null) {
-            tableName = defaultDatabase + "." + routeValue.toLowerCase();
-        } else {
-            tableName = routeValue.toLowerCase();
-        }
-        writerForTable(tableName, record, true).write(record);
+      String tableName;
+      if (defaultDatabase != null) {
+        tableName = defaultDatabase + "." + routeValue.toLowerCase();
+      } else {
+        tableName = routeValue.toLowerCase();
+      }
+      writerForTable(tableName, record, true).write(record);
     }
   }
 
