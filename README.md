@@ -129,6 +129,31 @@ Depending on your setup, you may need to also set `iceberg.catalog.s3.endpoint`,
 or `iceberg.catalog.s3.path-style-access`. See the [Iceberg docs](https://iceberg.apache.org/docs/latest/) for
 full details on configuring catalogs.
 
+## Azure ADLS configuration example
+
+When using ADLS, Azure requires the passing of AZURE_CLIENT_ID, AZURE_TENANT_ID, and AZURE_CLIENT_SECRET for its Java SDK. If you're running Kafka Connect in a container, be sure to inject those values as environment variables. See the [Azure Identity Client library for Java](https://learn.microsoft.com/en-us/java/api/overview/azure/identity-readme?view=azure-java-stable) for more information.
+
+An example of these would be:
+```
+AZURE_CLIENT_ID=e564f687-7b89-4b48-80b8-111111111111
+AZURE_TENANT_ID=95f2f365-f5b7-44b1-88a1-111111111111
+AZURE_CLIENT_SECRET="XXX"
+```
+Where the CLIENT_ID is the Application ID of a registered application under [App Registrations](https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade), the TENANT_ID is from your [Azure Tenant Properties](https://portal.azure.com/#view/Microsoft_AAD_IAM/TenantProperties.ReactView), and the CLIENT_SECRET is created within the "Certificates & Secrets" section, under "Manage" after choosing your specific App Registration. You might have to choose "Client secrets" in the middle panel and the "+" in front of "New client secret" to generate one. Be sure to set this variable to the Value and not the Id.
+It's also important that the App Registration is granted the Role Assignment "Storage Blob Data Contributor" in your Storage Account's Access Control (IAM), or it won't be able to write new files there.
+
+Then, within the Connector's configuration, you'll want to include the following:
+
+```
+"iceberg.catalog.type": "rest",
+"iceberg.catalog.uri": "https://catalog:8181",
+"iceberg.catalog.warehouse": "abfss://storage-container-name@storageaccount.dfs.core.windows.net/warehouse",
+"iceberg.catalog.io-impl": "org.apache.iceberg.azure.adlsv2.ADLSFileIO",
+"iceberg.catalog.include-credentials": "true"
+```
+
+Where `storage-container-name` is the container name within your Azure Storage Account, `/warehouse` is the location within that container where your Apache Iceberg files will be written by default (or if iceberg.tables.auto-create-enabled=true), and the `include-credentials` parameter passes along the Azure Java client credentials along. This will configure the Iceberg Sink connector to connect to the REST catalog implementation at `iceberg.catalog.uri` to obtain the required Connection String for the ADLSv2 client
+
 ## Hadoop configuration
 
 When using HDFS or Hive, the sink will initialize the Hadoop configuration. First, config files
