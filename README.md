@@ -154,6 +154,15 @@ Then, within the Connector's configuration, you'll want to include the following
 
 Where `storage-container-name` is the container name within your Azure Storage Account, `/warehouse` is the location within that container where your Apache Iceberg files will be written by default (or if iceberg.tables.auto-create-enabled=true), and the `include-credentials` parameter passes along the Azure Java client credentials along. This will configure the Iceberg Sink connector to connect to the REST catalog implementation at `iceberg.catalog.uri` to obtain the required Connection String for the ADLSv2 client
 
+## Google GCS configuration example
+
+```
+"iceberg.catalog.type": "rest",
+"iceberg.catalog.uri": "https://catalog:8181",
+"iceberg.catalog.warehouse": "gs://bucket-name/warehouse",
+"iceberg.catalog.io-impl": "org.apache.iceberg.google.gcs.GCSFileIO"
+```
+
 ## Hadoop configuration
 
 When using HDFS or Hive, the sink will initialize the Hadoop configuration. First, config files
