@@ -37,16 +37,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
+import java.util.stream.Collectors;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.RowDelta;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.Transaction;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.util.Tasks;
 import org.apache.iceberg.util.ThreadPools;
 import org.apache.kafka.clients.admin.MemberDescription;
@@ -213,15 +216,31 @@ public class Coordinator extends Channel {
       LOG.info("Nothing to commit to table {}, skipping", tableIdentifier);
     } else {
       if (deleteFiles.isEmpty()) {
-        AppendFiles appendOp = table.newAppend();
-        branch.ifPresent(appendOp::toBranch);
-        appendOp.set(snapshotOffsetsProp, offsetsJson);
-        appendOp.set(COMMIT_ID_SNAPSHOT_PROP, commitState.currentCommitId().toString());
-        if (vtts != null) {
-          appendOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts));
+        Transaction transaction = table.newTransaction();
+
+        Map<Integer, List<DataFile>> filesBySpec =
+            dataFiles.stream()
+                .collect(Collectors.groupingBy(DataFile::specId, Collectors.toList()));
+
+        List<List<DataFile>> list = Lists.newArrayList(filesBySpec.values());
+        int lastIdx = list.size() - 1;
+        for (int i = 0; i <= lastIdx; i++) {
+          AppendFiles appendOp = transaction.newAppend();
+          branch.ifPresent(appendOp::toBranch);
+
+          list.get(i).forEach(appendOp::appendFile);
+          appendOp.set(COMMIT_ID_SNAPSHOT_PROP, commitState.currentCommitId().toString());
+          if (i == lastIdx) {
+            appendOp.set(snapshotOffsetsProp, offsetsJson);
+            if (vtts != null) {
+              appendOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts));
+            }
+          }
+
+          appendOp.commit();
         }
-        dataFiles.forEach(appendOp::appendFile);
-        appendOp.commit();
+
+        transaction.commitTransaction();
       } else {
         RowDelta deltaOp = table.newRowDelta();
         branch.ifPresent(deltaOp::toBranch);
