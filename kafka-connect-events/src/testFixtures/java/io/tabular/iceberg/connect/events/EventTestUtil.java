@@ -18,102 +18,31 @@
  */
 package io.tabular.iceberg.connect.events;
 
-import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.List;
+import java.util.UUID;
 import org.apache.iceberg.DataFile;
+import org.apache.iceberg.DataFiles;
 import org.apache.iceberg.DeleteFile;
-import org.apache.iceberg.FileContent;
 import org.apache.iceberg.FileFormat;
-import org.apache.iceberg.Metrics;
-import org.apache.iceberg.PartitionData;
-import org.apache.iceberg.common.DynConstructors;
-import org.apache.iceberg.common.DynConstructors.Ctor;
-import org.apache.iceberg.types.Types.NestedField;
-import org.apache.iceberg.types.Types.StringType;
-import org.apache.iceberg.types.Types.StructType;
+import org.apache.iceberg.FileMetadata;
+import org.apache.iceberg.PartitionSpec;
 
 public class EventTestUtil {
   public static DataFile createDataFile() {
-    Ctor<DataFile> ctor =
-        DynConstructors.builder(DataFile.class)
-            .hiddenImpl(
-                "org.apache.iceberg.GenericDataFile",
-                int.class,
-                String.class,
-                FileFormat.class,
-                PartitionData.class,
-                long.class,
-                Metrics.class,
-                ByteBuffer.class,
-                List.class,
-                int[].class,
-                Integer.class)
-            .build();
-
-    PartitionData partitionData =
-        new PartitionData(StructType.of(NestedField.required(999, "type", StringType.get())));
-    Metrics metrics =
-        new Metrics(
-            1L,
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap());
-
-    return ctor.newInstance(
-        1,
-        "path",
-        FileFormat.PARQUET,
-        partitionData,
-        1L,
-        metrics,
-        ByteBuffer.wrap(new byte[] {0}),
-        null,
-        null,
-        1);
+    return DataFiles.builder(PartitionSpec.unpartitioned())
+        .withPath(UUID.randomUUID() + ".parquet")
+        .withFormat(FileFormat.PARQUET)
+        .withFileSizeInBytes(100L)
+        .withRecordCount(5)
+        .build();
   }
 
   public static DeleteFile createDeleteFile() {
-    Ctor<DeleteFile> ctor =
-        DynConstructors.builder(DeleteFile.class)
-            .hiddenImpl(
-                "org.apache.iceberg.GenericDeleteFile",
-                int.class,
-                FileContent.class,
-                String.class,
-                FileFormat.class,
-                PartitionData.class,
-                long.class,
-                Metrics.class,
-                int[].class,
-                Integer.class,
-                List.class,
-                ByteBuffer.class)
-            .build();
-
-    PartitionData partitionData =
-        new PartitionData(StructType.of(NestedField.required(999, "type", StringType.get())));
-    Metrics metrics =
-        new Metrics(
-            1L,
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap());
-
-    return ctor.newInstance(
-        1,
-        FileContent.EQUALITY_DELETES,
-        "path",
-        FileFormat.PARQUET,
-        partitionData,
-        1L,
-        metrics,
-        new int[] {1},
-        1,
-        Collections.singletonList(1L),
-        ByteBuffer.wrap(new byte[] {0}));
+    return FileMetadata.deleteFileBuilder(PartitionSpec.unpartitioned())
+        .ofEqualityDeletes(1)
+        .withPath(UUID.randomUUID() + ".parquet")
+        .withFileSizeInBytes(10)
+        .withRecordCount(1)
+        .build();
   }
 
   private EventTestUtil() {}

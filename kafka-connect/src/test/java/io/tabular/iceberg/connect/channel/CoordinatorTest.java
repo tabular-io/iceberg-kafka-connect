@@ -19,10 +19,6 @@
 package io.tabular.iceberg.connect.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.notNull;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.events.CommitCompletePayload;
@@ -36,37 +32,48 @@ import io.tabular.iceberg.connect.events.EventType;
 import io.tabular.iceberg.connect.events.TableName;
 import io.tabular.iceberg.connect.events.TopicPartitionOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.apache.iceberg.DataFile;
+import org.apache.iceberg.DataFiles;
+import org.apache.iceberg.DataOperations;
 import org.apache.iceberg.DeleteFile;
+import org.apache.iceberg.FileFormat;
+import org.apache.iceberg.PartitionSpec;
+import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 public class CoordinatorTest extends ChannelTestBase {
 
   @Test
   public void testCommitAppend() {
+    Assertions.assertEquals(0, ImmutableList.copyOf(table.snapshots().iterator()).size());
+
     long ts = System.currentTimeMillis();
     UUID commitId =
         coordinatorTest(ImmutableList.of(EventTestUtil.createDataFile()), ImmutableList.of(), ts);
+    table.refresh();
 
     assertThat(producer.history()).hasSize(3);
     assertCommitTable(1, commitId, ts);
     assertCommitComplete(2, commitId, ts);
 
-    verify(appendOp).appendFile(notNull());
-    verify(appendOp).commit();
+    List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
+    Assertions.assertEquals(1, snapshots.size());
 
-    ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-    verify(appendOp, times(3)).set(captor.capture(), notNull());
-    assertThat(captor.getAllValues().get(0)).startsWith("kafka.connect.offsets.");
-    assertThat(captor.getAllValues().get(1)).isEqualTo("kafka.connect.commit-id");
-    assertThat(captor.getAllValues().get(2)).isEqualTo("kafka.connect.vtts");
+    Snapshot snapshot = snapshots.get(0);
+    Assertions.assertEquals(DataOperations.APPEND, snapshot.operation());
+    Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
+    Assertions.assertEquals(0, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
 
-    verify(deltaOp, times(0)).commit();
+    Map<String, String> summary = snapshot.summary();
+    Assertions.assertEquals(commitId.toString(), summary.get(COMMIT_ID_SNAPSHOT_PROP));
+    Assertions.assertEquals("{\"0\":3}", summary.get(OFFSETS_SNAPSHOT_PROP));
+    Assertions.assertEquals(Long.toString(ts), summary.get(VTTS_SNAPSHOT_PROP));
   }
 
   @Test
@@ -82,17 +89,18 @@ public class CoordinatorTest extends ChannelTestBase {
     assertCommitTable(1, commitId, ts);
     assertCommitComplete(2, commitId, ts);
 
-    verify(appendOp, times(0)).commit();
+    List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
+    Assertions.assertEquals(1, snapshots.size());
 
-    verify(deltaOp).addRows(notNull());
-    verify(deltaOp).addDeletes(notNull());
-    verify(deltaOp).commit();
+    Snapshot snapshot = snapshots.get(0);
+    Assertions.assertEquals(DataOperations.OVERWRITE, snapshot.operation());
+    Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
+    Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
 
-    ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-    verify(deltaOp, times(3)).set(captor.capture(), notNull());
-    assertThat(captor.getAllValues().get(0)).startsWith("kafka.connect.offsets.");
-    assertThat(captor.getAllValues().get(1)).isEqualTo("kafka.connect.commit-id");
-    assertThat(captor.getAllValues().get(2)).isEqualTo("kafka.connect.vtts");
+    Map<String, String> summary = snapshot.summary();
+    Assertions.assertEquals(commitId.toString(), summary.get(COMMIT_ID_SNAPSHOT_PROP));
+    Assertions.assertEquals("{\"0\":3}", summary.get(OFFSETS_SNAPSHOT_PROP));
+    Assertions.assertEquals(Long.toString(ts), summary.get(VTTS_SNAPSHOT_PROP));
   }
 
   @Test
@@ -103,18 +111,30 @@ public class CoordinatorTest extends ChannelTestBase {
     assertThat(producer.history()).hasSize(2);
     assertCommitComplete(1, commitId, ts);
 
-    verify(appendOp, times(0)).commit();
-    verify(deltaOp, times(0)).commit();
+    List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
+    Assertions.assertEquals(0, snapshots.size());
   }
 
   @Test
   public void testCommitError() {
-    doThrow(RuntimeException.class).when(appendOp).commit();
+    // this spec isn't registered with the table
+    PartitionSpec badPartitionSpec =
+        PartitionSpec.builderFor(SCHEMA).withSpecId(1).identity("id").build();
+    DataFile badDataFile =
+        DataFiles.builder(badPartitionSpec)
+            .withPath(UUID.randomUUID() + ".parquet")
+            .withFormat(FileFormat.PARQUET)
+            .withFileSizeInBytes(100L)
+            .withRecordCount(5)
+            .build();
 
-    coordinatorTest(ImmutableList.of(EventTestUtil.createDataFile()), ImmutableList.of(), 0L);
+    coordinatorTest(ImmutableList.of(badDataFile), ImmutableList.of(), 0L);
 
     // no commit messages sent
     assertThat(producer.history()).hasSize(1);
+
+    List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
+    Assertions.assertEquals(0, snapshots.size());
   }
 
   private void assertCommitTable(int idx, UUID commitId, long ts) {
@@ -123,7 +143,8 @@ public class CoordinatorTest extends ChannelTestBase {
     assertThat(commitTable.type()).isEqualTo(EventType.COMMIT_TABLE);
     CommitTablePayload commitTablePayload = (CommitTablePayload) commitTable.payload();
     assertThat(commitTablePayload.commitId()).isEqualTo(commitId);
-    assertThat(commitTablePayload.tableName().toIdentifier().toString()).isEqualTo("db.tbl");
+    assertThat(commitTablePayload.tableName().toIdentifier().toString())
+        .isEqualTo(TABLE_IDENTIFIER.toString());
     assertThat(commitTablePayload.vtts()).isEqualTo(ts);
   }
 
@@ -150,8 +171,6 @@ public class CoordinatorTest extends ChannelTestBase {
 
     assertThat(producer.transactionCommitted()).isTrue();
     assertThat(producer.history()).hasSize(1);
-    verify(appendOp, times(0)).commit();
-    verify(deltaOp, times(0)).commit();
 
     byte[] bytes = producer.history().get(0).value();
     Event commitRequest = Event.decode(bytes);
