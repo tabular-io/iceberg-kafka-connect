@@ -1,7 +1,8 @@
 dependencies {
   implementation libs.iceberg.guava
-  implementation libs.slf4j
+  implementation libs.bson
   compileOnly libs.bundles.kafka.connect
+  compileOnly libs.slf4j
 
   testImplementation libs.junit.api
   testRuntimeOnly libs.junit.engine
