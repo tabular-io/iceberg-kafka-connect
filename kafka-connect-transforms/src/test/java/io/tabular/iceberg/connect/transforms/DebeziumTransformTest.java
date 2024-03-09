@@ -19,6 +19,7 @@
 package io.tabular.iceberg.connect.transforms;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.tabular.iceberg.connect.transforms.util.KafkaMetadataAppender;
 import java.math.BigDecimal;
@@ -29,6 +30,7 @@ import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.Test;
 
@@ -134,6 +136,8 @@ public class DebeziumTransformTest {
       Struct value = (Struct) result.value();
 
       assertThat(value.get("account_id")).isEqualTo(1L);
+      assertThrows(
+          DataException.class, () -> value.get(KafkaMetadataAppender.INCLUDE_KAFKA_METADATA));
 
       Struct cdcMetadata = value.getStruct("_cdc");
       assertThat(cdcMetadata.get("op")).isEqualTo("U");

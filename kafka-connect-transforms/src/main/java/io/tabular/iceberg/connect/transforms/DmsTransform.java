@@ -54,7 +54,7 @@ public class DmsTransform<R extends ConnectRecord<R>> implements Transformation<
               ConfigDef.Importance.LOW,
               "key,value representing a String to be injected on Kafka metadata (e.g. Cluster)");
 
-  private static KafkaMetadataAppender kafkaAppender = null;
+  private KafkaMetadataAppender kafkaAppender = null;
 
   @Override
   public R apply(R record) {

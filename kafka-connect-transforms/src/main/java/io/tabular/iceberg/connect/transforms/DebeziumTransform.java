@@ -44,7 +44,7 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
   private static final String CDC_TARGET_PATTERN = "cdc.target.pattern";
   private static final String DB_PLACEHOLDER = "{db}";
   private static final String TABLE_PLACEHOLDER = "{table}";
-  private static KafkaMetadataAppender kafkaAppender = null;
+  private KafkaMetadataAppender kafkaAppender = null;
 
   public static final ConfigDef CONFIG_DEF =
       new ConfigDef()
