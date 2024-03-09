@@ -140,7 +140,7 @@ public class DebeziumTransformTest {
       assertThat(cdcMetadata.get("source")).isEqualTo("schema.tbl");
       assertThat(cdcMetadata.get("target")).isEqualTo("schema_x.tbl_x");
       assertThat(cdcMetadata.get("key")).isInstanceOf(Map.class);
-      assertThat(value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME)).isNull();
+      assertThat(value.keySet()).doesNotContain(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME);
     }
   }
 

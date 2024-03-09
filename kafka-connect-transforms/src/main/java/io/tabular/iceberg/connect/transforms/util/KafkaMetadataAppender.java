@@ -138,7 +138,7 @@ public class KafkaMetadataAppender {
     metadata.put("topic", record.topic());
     metadata.put("partition", record.kafkaPartition());
     metadata.put("offset", record.kafkaOffset());
-    if (record.timestamp() == null) {
+    if (record.timestamp() != null) {
       metadata.put("timestamp", record.timestamp());
     }
     struct.put(this.metadataFieldName, metadata);
@@ -151,7 +151,7 @@ public class KafkaMetadataAppender {
     metadata.put("topic", record.topic());
     metadata.put("partition", record.kafkaPartition());
     metadata.put("offset", record.kafkaOffset());
-    if (record.timestamp() == null) {
+    if (record.timestamp() != null) {
       metadata.put("timestamp", record.timestamp());
     }
     map.put(this.metadataFieldName, metadata);
