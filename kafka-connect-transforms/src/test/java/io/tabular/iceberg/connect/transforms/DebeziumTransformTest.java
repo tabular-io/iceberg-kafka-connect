@@ -19,6 +19,7 @@
 package io.tabular.iceberg.connect.transforms;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.tabular.iceberg.connect.transforms.util.KafkaMetadataAppender;
 import java.math.BigDecimal;
@@ -29,6 +30,7 @@ import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.Test;
 
@@ -125,22 +127,23 @@ public class DebeziumTransformTest {
     try (DebeziumTransform<SinkRecord> smt = new DebeziumTransform<>()) {
       smt.configure(ImmutableMap.of("cdc.target.pattern", "{db}_x.{table}_x"));
 
-      Map<String, Object> event = createDebeziumEventMap("u");
-      Map<String, Object> key = ImmutableMap.of("account_id", 1L);
-      SinkRecord record = new SinkRecord("topic", 0, null, key, null, event, 0);
+      Struct event = createDebeziumEventStruct("u");
+      Struct key = new Struct(KEY_SCHEMA).put("account_id", 1L);
+      SinkRecord record = new SinkRecord("topic", 0, KEY_SCHEMA, key, VALUE_SCHEMA, event, 0);
 
       SinkRecord result = smt.apply(record);
-      assertThat(result.value()).isInstanceOf(Map.class);
-      Map<String, Object> value = (Map<String, Object>) result.value();
+      assertThat(result.value()).isInstanceOf(Struct.class);
+      Struct value = (Struct) result.value();
 
-      assertThat(value.get("account_id")).isEqualTo(1);
+      assertThat(value.get("account_id")).isEqualTo(1L);
+      assertThrows(
+          DataException.class, () -> value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME));
 
-      Map<String, Object> cdcMetadata = (Map<String, Object>) value.get("_cdc");
+      Struct cdcMetadata = value.getStruct("_cdc");
       assertThat(cdcMetadata.get("op")).isEqualTo("U");
       assertThat(cdcMetadata.get("source")).isEqualTo("schema.tbl");
       assertThat(cdcMetadata.get("target")).isEqualTo("schema_x.tbl_x");
-      assertThat(cdcMetadata.get("key")).isInstanceOf(Map.class);
-      assertThat(value.keySet()).doesNotContain(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME);
+      assertThat(cdcMetadata.get("key")).isInstanceOf(Struct.class);
     }
   }
 
