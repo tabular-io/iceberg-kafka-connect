@@ -23,6 +23,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
+
+import io.tabular.iceberg.connect.transforms.util.KafkaMetadataAppender;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
@@ -89,6 +91,27 @@ public class DebeziumTransformTest {
       assertThat(cdcMetadata.get("source")).isEqualTo("schema.tbl");
       assertThat(cdcMetadata.get("target")).isEqualTo("schema_x.tbl_x");
       assertThat(cdcMetadata.get("key")).isInstanceOf(Map.class);
+      assertThat(value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME)).isNull();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testDebeziumTransformSchemalessAndKafkaMetadata() {
+    try (DebeziumTransform<SinkRecord> smt = new DebeziumTransform<>()) {
+      smt.configure(ImmutableMap.of("cdc.target.pattern", "{db}_x.{table}_x", KafkaMetadataAppender.INCLUDE_KAFKA_METADATA, true));
+
+      Map<String, Object> event = createDebeziumEventMap("u");
+      Map<String, Object> key = ImmutableMap.of("account_id", 1L);
+      SinkRecord record = new SinkRecord("topic", 0, null, key, null, event, 0);
+
+      SinkRecord result = smt.apply(record);
+      assertThat(result.value()).isInstanceOf(Map.class);
+      Map<String, Object> value = (Map<String, Object>) result.value();
+
+      assertThat(value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME)).isNotNull();
+      Map<String, Object> metadata = (Map<String, Object>) value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME);
+      assertThat(metadata.get("topic")).isEqualTo("topic");
     }
   }
 
@@ -96,6 +119,30 @@ public class DebeziumTransformTest {
   public void testDebeziumTransformWithSchema() {
     try (DebeziumTransform<SinkRecord> smt = new DebeziumTransform<>()) {
       smt.configure(ImmutableMap.of("cdc.target.pattern", "{db}_x.{table}_x"));
+
+      Map<String, Object> event = createDebeziumEventMap("u");
+      Map<String, Object> key = ImmutableMap.of("account_id", 1L);
+      SinkRecord record = new SinkRecord("topic", 0, null, key, null, event, 0);
+
+      SinkRecord result = smt.apply(record);
+      assertThat(result.value()).isInstanceOf(Map.class);
+      Map<String, Object> value = (Map<String, Object>) result.value();
+
+      assertThat(value.get("account_id")).isEqualTo(1);
+
+      Map<String, Object> cdcMetadata = (Map<String, Object>) value.get("_cdc");
+      assertThat(cdcMetadata.get("op")).isEqualTo("U");
+      assertThat(cdcMetadata.get("source")).isEqualTo("schema.tbl");
+      assertThat(cdcMetadata.get("target")).isEqualTo("schema_x.tbl_x");
+      assertThat(cdcMetadata.get("key")).isInstanceOf(Map.class);
+      assertThat(value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME)).isNull();
+    }
+  }
+
+  @Test
+  public void testDebeziumTransformWithSchemaAndKafkaMetadata() {
+    try (DebeziumTransform<SinkRecord> smt = new DebeziumTransform<>()) {
+      smt.configure(ImmutableMap.of("cdc.target.pattern", "{db}_x.{table}_x", KafkaMetadataAppender.INCLUDE_KAFKA_METADATA, true));
 
       Struct event = createDebeziumEventStruct("u");
       Struct key = new Struct(KEY_SCHEMA).put("account_id", 1L);
@@ -105,13 +152,9 @@ public class DebeziumTransformTest {
       assertThat(result.value()).isInstanceOf(Struct.class);
       Struct value = (Struct) result.value();
 
-      assertThat(value.get("account_id")).isEqualTo(1L);
-
-      Struct cdcMetadata = value.getStruct("_cdc");
-      assertThat(cdcMetadata.get("op")).isEqualTo("U");
-      assertThat(cdcMetadata.get("source")).isEqualTo("schema.tbl");
-      assertThat(cdcMetadata.get("target")).isEqualTo("schema_x.tbl_x");
-      assertThat(cdcMetadata.get("key")).isInstanceOf(Struct.class);
+      assertThat(value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME)).isInstanceOf(Struct.class);
+      Struct metadata = (Struct) value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME);
+      assertThat(metadata.get("topic")).isEqualTo(record.topic());
     }
   }
 

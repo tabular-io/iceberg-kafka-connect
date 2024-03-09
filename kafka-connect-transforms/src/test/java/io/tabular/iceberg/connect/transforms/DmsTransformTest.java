@@ -22,6 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.Map;
+
+import io.tabular.iceberg.connect.transforms.util.KafkaMetadataAppender;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.Test;
@@ -44,6 +46,25 @@ public class DmsTransformTest {
       Map<String, Object> cdcMetadata = (Map<String, Object>) value.get("_cdc");
       assertThat(cdcMetadata.get("op")).isEqualTo("U");
       assertThat(cdcMetadata.get("source")).isEqualTo("db.tbl");
+      assertThat(value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME)).isNull();
+    }
+  }
+
+  @Test
+  public void testDmsTransformWithkafkaMetadata() {
+    try (DmsTransform<SinkRecord> smt = new DmsTransform<>()) {
+      smt.configure(ImmutableMap.of( KafkaMetadataAppender.INCLUDE_KAFKA_METADATA, true));
+
+      Map<String, Object> event = createDmsEvent("update");
+      SinkRecord record = new SinkRecord("topic", 0, null, null, null, event, 0);
+
+      SinkRecord result = smt.apply(record);
+      assertThat(result.value()).isInstanceOf(Map.class);
+      Map<String, Object> value = (Map<String, Object>) result.value();
+
+      assertThat(value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME)).isNotNull();
+      Map<String, Object> metadata = (Map<String, Object>) value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME);
+      assertThat(metadata.get("topic")).isEqualTo("topic");
     }
   }
 
