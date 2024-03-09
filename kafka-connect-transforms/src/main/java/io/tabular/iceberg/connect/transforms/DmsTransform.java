@@ -18,10 +18,8 @@
  */
 package io.tabular.iceberg.connect.transforms;
 
-import java.util.Map;
-import java.util.Objects;
-
 import io.tabular.iceberg.connect.transforms.util.KafkaMetadataAppender;
+import java.util.Map;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -36,27 +34,27 @@ public class DmsTransform<R extends ConnectRecord<R>> implements Transformation<
 
   private static final Logger LOG = LoggerFactory.getLogger(DmsTransform.class.getName());
   public static final ConfigDef CONFIG_DEF =
-          new ConfigDef()
-                  .define(
-                          KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
-                          ConfigDef.Type.BOOLEAN,
-                          false,
-                          ConfigDef.Importance.LOW,
-                          "Include appending of Kafka metadata to SinkRecord"
-                  )
-                  .define(KafkaMetadataAppender.KEY_METADATA_FIELD_NAME,
-                          ConfigDef.Type.STRING,
-                          KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME,
-                          ConfigDef.Importance.LOW,
-                          "field to append Kafka metadata under")
-                  .define(KafkaMetadataAppender.EXTERNAL_KAFKA_METADATA,
-                          ConfigDef.Type.STRING,
-                          "none",
-                          ConfigDef.Importance.LOW,
-                          "key,value representing a String to be injected on Kafka metadata (e.g. Cluster)");
+      new ConfigDef()
+          .define(
+              KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
+              ConfigDef.Type.BOOLEAN,
+              false,
+              ConfigDef.Importance.LOW,
+              "Include appending of Kafka metadata to SinkRecord")
+          .define(
+              KafkaMetadataAppender.KEY_METADATA_FIELD_NAME,
+              ConfigDef.Type.STRING,
+              KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME,
+              ConfigDef.Importance.LOW,
+              "field to append Kafka metadata under")
+          .define(
+              KafkaMetadataAppender.EXTERNAL_KAFKA_METADATA,
+              ConfigDef.Type.STRING,
+              "none",
+              ConfigDef.Importance.LOW,
+              "key,value representing a String to be injected on Kafka metadata (e.g. Cluster)");
 
   private static KafkaMetadataAppender kafkaAppender = null;
-
 
   @Override
   public R apply(R record) {
@@ -108,7 +106,7 @@ public class DmsTransform<R extends ConnectRecord<R>> implements Transformation<
     Map<String, Object> newValue = Maps.newHashMap((Map<String, Object>) dataObj);
     newValue.put(CdcConstants.COL_CDC, cdcMetadata);
 
-    if(Objects.nonNull(kafkaAppender)) {
+    if (kafkaAppender != null) {
       if (record instanceof SinkRecord) {
         kafkaAppender.appendToMap((SinkRecord) record, newValue);
       }

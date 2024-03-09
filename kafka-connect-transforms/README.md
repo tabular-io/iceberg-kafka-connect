@@ -33,7 +33,13 @@ It will promote the `data` element fields to top level and add the following met
 
 ## Configuration
 
-The SMT currently has no configuration.
+| Property                   | Description                                                                                  |
+|:---------------------------|:---------------------------------------------------------------------------------------------|
+| cdc.kafka.include_metadata | Boolean (true) to append Kafka topic/partition/offset/timestamp metadta to each record       |
+| cdc.kafka.metadata_field   | Key to append metadata on.  Defaults to `_kafka_metadta`                                     |
+| cdc.kafka.external_field   | Optional `key,value` string to append a static field with Kafka Metadata.  E.g. cluster name |
+
+Kafka metadata injection only works on `SinkRecords` not `SourceRecords`
 
 # DebeziumTransform
 _(Experimental)_
@@ -44,6 +50,11 @@ It will promote the `before` or `after` element fields to top level and add the 
 
 ## Configuration
 
-| Property            | Description                                                                       |
-|---------------------|-----------------------------------------------------------------------------------|
-| cdc.target.pattern  | Pattern to use for setting the CDC target field value, default is `{db}.{table}`  |
+| Property                   | Description                                                                                  |
+|:---------------------------|:---------------------------------------------------------------------------------------------|
+| cdc.target.pattern         | Pattern to use for setting the CDC target field value, default is `{db}.{table}`             |
+| cdc.kafka.include_metadata | Boolean (true) to append Kafka topic/partition/offset/timestamp metadta to each record       |
+| cdc.kafka.metadata_field   | Key to append metadata on.  Defaults to `_kafka_metadta`                                     |
+| cdc.kafka.external_field   | Optional `key,value` string to append a static field with Kafka Metadata.  E.g. cluster name |
+
+Kafka metadata injection only works on `SinkRecords` not `SourceRecords`

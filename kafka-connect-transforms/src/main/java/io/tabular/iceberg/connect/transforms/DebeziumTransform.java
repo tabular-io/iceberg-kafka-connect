@@ -18,10 +18,8 @@
  */
 package io.tabular.iceberg.connect.transforms;
 
-import java.util.Map;
-import java.util.Objects;
-
 import io.tabular.iceberg.connect.transforms.util.KafkaMetadataAppender;
+import java.util.Map;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -57,22 +55,23 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
               Importance.MEDIUM,
               "Pattern to use for setting the CDC target field value.")
           .define(
-                  KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
-                  ConfigDef.Type.BOOLEAN,
-                  false,
-                  Importance.LOW,
-                  "Include appending of Kafka metadata to SinkRecord"
-          )
-              .define(KafkaMetadataAppender.KEY_METADATA_FIELD_NAME,
-                      ConfigDef.Type.STRING,
-                      KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME,
-                      Importance.LOW,
-                      "field to append Kafka metadata under")
-              .define(KafkaMetadataAppender.EXTERNAL_KAFKA_METADATA,
-                      ConfigDef.Type.STRING,
-                      "none",
-                      Importance.LOW,
-                      "key,value representing a String to be injected on Kafka metadata (e.g. Cluster)");
+              KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
+              ConfigDef.Type.BOOLEAN,
+              false,
+              Importance.LOW,
+              "Include appending of Kafka metadata to SinkRecord")
+          .define(
+              KafkaMetadataAppender.KEY_METADATA_FIELD_NAME,
+              ConfigDef.Type.STRING,
+              KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME,
+              Importance.LOW,
+              "field to append Kafka metadata under")
+          .define(
+              KafkaMetadataAppender.EXTERNAL_KAFKA_METADATA,
+              ConfigDef.Type.STRING,
+              "none",
+              Importance.LOW,
+              "key,value representing a String to be injected on Kafka metadata (e.g. Cluster)");
 
   private String cdcTargetPattern;
 
@@ -134,7 +133,7 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
     }
     newValue.put(CdcConstants.COL_CDC, cdcMetadata);
 
-    if (Objects.nonNull(kafkaAppender)) {
+    if (kafkaAppender != null) {
       if (record instanceof SinkRecord) {
         kafkaAppender.appendToStruct((SinkRecord) record, newValue);
       }
@@ -177,7 +176,7 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
     cdcMetadata.put(CdcConstants.COL_TS, value.get("ts_ms"));
     if (record instanceof SinkRecord) {
       cdcMetadata.put(CdcConstants.COL_OFFSET, ((SinkRecord) record).kafkaOffset());
-      if (Objects.nonNull(kafkaAppender)) {
+      if (kafkaAppender != null) {
         kafkaAppender.appendToMap((SinkRecord) record, newValue);
       }
     }
@@ -272,7 +271,7 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
 
     builder.field(CdcConstants.COL_CDC, cdcSchema);
 
-    if (Objects.nonNull(kafkaAppender)) {
+    if (kafkaAppender != null) {
       kafkaAppender.appendSchema(builder);
     }
     return builder.build();
