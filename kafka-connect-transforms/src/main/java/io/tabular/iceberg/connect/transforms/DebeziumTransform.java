@@ -41,6 +41,7 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
   private static final Logger LOG = LoggerFactory.getLogger(DebeziumTransform.class.getName());
 
   private static final String CDC_TARGET_PATTERN = "cdc.target.pattern";
+  private static final String CDC_TARGET_PATTERN_DBNAME_ALWAYS = "cdc.target.pattern.dbname.always";
   private static final String DB_PLACEHOLDER = "{db}";
   private static final String TABLE_PLACEHOLDER = "{table}";
 
@@ -51,14 +52,23 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
               ConfigDef.Type.STRING,
               null,
               Importance.MEDIUM,
-              "Pattern to use for setting the CDC target field value.");
+              "Pattern to use for setting the CDC target field value.")
+          .define(
+              CDC_TARGET_PATTERN_DBNAME_ALWAYS,
+              ConfigDef.Type.STRING,
+              "false",
+              Importance.LOW,
+              "Always include db name into CDC target field value.");
 
   private String cdcTargetPattern;
+  private Boolean cdcTargetPatternDbnameAlways;
 
   @Override
   public void configure(Map<String, ?> props) {
     SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
     cdcTargetPattern = config.getString(CDC_TARGET_PATTERN);
+    cdcTargetPatternDbnameAlways =
+        config.getString(CDC_TARGET_PATTERN_DBNAME_ALWAYS).equals("true");
   }
 
   @Override
@@ -179,15 +189,23 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
 
   private void setTableAndTargetFromSourceStruct(Struct source, Struct cdcMetadata) {
     String db;
+    String dbSourceCol;
     if (source.schema().field("schema") != null) {
       // prefer schema if present, e.g. for Postgres
-      db = source.getString("schema");
+      if (cdcTargetPatternDbnameAlways) {
+        db = source.getString("db") + "_" + source.getString("schema");
+        dbSourceCol = source.getString("db") + "." + source.getString("schema");
+      } else {
+        db = source.getString("schema");
+        dbSourceCol = db;
+      }
     } else {
       db = source.getString("db");
+      dbSourceCol = db;
     }
     String table = source.getString("table");
 
-    cdcMetadata.put(CdcConstants.COL_SOURCE, db + "." + table);
+    cdcMetadata.put(CdcConstants.COL_SOURCE, dbSourceCol + "." + table);
     cdcMetadata.put(CdcConstants.COL_TARGET, target(db, table));
   }
 
@@ -195,15 +213,23 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
     Map<String, Object> map = Requirements.requireMap(source, "Debezium transform");
 
     String db;
+    String dbSourceCol;
     if (map.containsKey("schema")) {
       // prefer schema if present, e.g. for Postgres
-      db = map.get("schema").toString();
+      if (cdcTargetPatternDbnameAlways) {
+        db = map.get("db").toString() + "_" + map.get("schema").toString();
+        dbSourceCol = map.get("db").toString() + "." + map.get("schema").toString();
+      } else {
+        db = map.get("schema").toString();
+        dbSourceCol = db;
+      }
     } else {
       db = map.get("db").toString();
+      dbSourceCol = db;
     }
     String table = map.get("table").toString();
 
-    cdcMetadata.put(CdcConstants.COL_SOURCE, db + "." + table);
+    cdcMetadata.put(CdcConstants.COL_SOURCE, dbSourceCol + "." + table);
     cdcMetadata.put(CdcConstants.COL_TARGET, target(db, table));
   }
 

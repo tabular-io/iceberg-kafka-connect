@@ -44,6 +44,7 @@ It will promote the `before` or `after` element fields to top level and add the 
 
 ## Configuration
 
-| Property            | Description                                                                       |
-|---------------------|-----------------------------------------------------------------------------------|
-| cdc.target.pattern  | Pattern to use for setting the CDC target field value, default is `{db}.{table}`  |
+| Property                          | Description                                                                                    |
+|-----------------------------------|------------------------------------------------------------------------------------------------|
+| cdc.target.pattern                | Pattern to use for setting the CDC target field value, default is `{db}.{table}`               |
+| cdc.target.pattern.dbname.always  | Always include database name into CDC target `{db}` along with the schema, default is `false`  |
