@@ -32,10 +32,10 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 public abstract class KafkaMetadataAppender {
 
-  public static final String INCLUDE_KAFKA_METADATA = "cdc.kafka.include_metadata";
-  public static final String EXTERNAL_KAFKA_METADATA = "cdc.kafka.external_field";
-  public static final String KEY_METADATA_FIELD_NAME = "cdc.kafka.metadata_field";
-  public static final String KEY_METADATA_IS_NESTED = "cdc.kafka.metadata_is_nested";
+  public static final String INCLUDE_KAFKA_METADATA = "transforms.kafka_metadata.include_metadata";
+  public static final String EXTERNAL_KAFKA_METADATA = "transforms.kafka_metadata.external_field";
+  public static final String KEY_METADATA_FIELD_NAME = "transforms.kafka_metadata.metadata_field";
+  public static final String KEY_METADATA_IS_NESTED = "transforms.kafka_metadata.nested";
   public static final String DEFAULT_METADATA_FIELD_NAME = "_kafka_metadata";
 
   public static final ConfigDef CONFIG_DEF =
@@ -43,7 +43,7 @@ public abstract class KafkaMetadataAppender {
           .define(
               KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
               ConfigDef.Type.BOOLEAN,
-              false,
+              true,
               ConfigDef.Importance.LOW,
               "Include appending of Kafka metadata to SinkRecord")
           .define(
@@ -75,8 +75,7 @@ public abstract class KafkaMetadataAppender {
   }
 
   private static <R extends ConnectRecord<R>> RecordAppender<R> from(SimpleConfig config) {
-    RecordAppender<R> externalFieldAppender =
-        getExternalFieldAppender(config.getString(EXTERNAL_KAFKA_METADATA));
+    RecordAppender<R> externalFieldAppender;
     String metadataFieldName = config.getString(KEY_METADATA_FIELD_NAME);
     Boolean nestedMetadata = config.getBoolean(KEY_METADATA_IS_NESTED);
 
@@ -90,6 +89,9 @@ public abstract class KafkaMetadataAppender {
       partitionFieldName = "partition";
       offsetFieldName = "offset";
       timestampFieldName = "record_timestamp";
+
+      externalFieldAppender =
+          getExternalFieldAppender(config.getString(EXTERNAL_KAFKA_METADATA), name -> name);
 
       SchemaBuilder nestedSchemaBuilder = SchemaBuilder.struct();
       nestedSchemaBuilder
@@ -149,6 +151,8 @@ public abstract class KafkaMetadataAppender {
       offsetFieldName = namer.apply("offset");
       timestampFieldName = namer.apply("record_timestamp");
 
+      externalFieldAppender =
+          getExternalFieldAppender(config.getString(EXTERNAL_KAFKA_METADATA), namer);
       return new RecordAppender<R>() {
         @Override
         public SchemaBuilder addToSchema(SchemaBuilder builder) {
@@ -177,14 +181,14 @@ public abstract class KafkaMetadataAppender {
 
         @Override
         public Map<String, Object> addToMap(R record, Map<String, Object> map) {
-          map.put("topic", record.topic());
-          map.put("partition", record.kafkaPartition());
+          map.put(topicFieldName, record.topic());
+          map.put(partitionFieldName, record.kafkaPartition());
           if (record instanceof SinkRecord) {
             SinkRecord sinkRecord = (SinkRecord) record;
-            map.put("offset", sinkRecord.kafkaOffset());
+            map.put(offsetFieldName, sinkRecord.kafkaOffset());
           }
           if (record.timestamp() != null) {
-            map.put("record_timestamp", record.timestamp());
+            map.put(timestampFieldName, record.timestamp());
           }
           externalFieldAppender.addToMap(record, map);
           return map;
@@ -212,7 +216,7 @@ public abstract class KafkaMetadataAppender {
   }
 
   private static <R extends ConnectRecord<R>> RecordAppender<R> getExternalFieldAppender(
-      String field) {
+      String field, Function<String, String> fieldNamer) {
     if (field.equals("none")) {
       return new NoOpRecordAppender<>();
     }
@@ -221,7 +225,7 @@ public abstract class KafkaMetadataAppender {
       throw new ConfigException(
           String.format("Could not parse %s for %s", field, EXTERNAL_KAFKA_METADATA));
     }
-    String fieldName = parts[0];
+    String fieldName = fieldNamer.apply(parts[0]);
     String fieldValue = parts[1];
     return new RecordAppender<R>() {
 

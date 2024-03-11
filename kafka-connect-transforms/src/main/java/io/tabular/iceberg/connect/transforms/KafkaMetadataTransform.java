@@ -24,14 +24,17 @@ import java.util.Map;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.data.Field;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.Requirements;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.kafka.connect.transforms.util.SchemaUtil;
 
-public class DmsTransform<R extends ConnectRecord<R>> implements Transformation<R> {
+public class KafkaMetadataTransform<R extends ConnectRecord<R>> implements Transformation<R> {
+  private RecordAppender<R> kafkaAppender;
 
-  private static final Logger LOG = LoggerFactory.getLogger(DmsTransform.class.getName());
   public static final ConfigDef CONFIG_DEF =
       new ConfigDef()
           .define(
@@ -58,7 +61,6 @@ public class DmsTransform<R extends ConnectRecord<R>> implements Transformation<
               "none",
               ConfigDef.Importance.LOW,
               "key,value representing a String to be injected on Kafka metadata (e.g. Cluster)");
-  private RecordAppender<R> kafkaAppender = null;
 
   @Override
   public R apply(R record) {
@@ -67,50 +69,33 @@ public class DmsTransform<R extends ConnectRecord<R>> implements Transformation<
     } else if (record.valueSchema() == null) {
       return applySchemaless(record);
     } else {
-      throw new UnsupportedOperationException("Schema not support for DMS records");
+      return applyWithSchema(record);
     }
   }
 
-  @SuppressWarnings("unchecked")
+  private R applyWithSchema(R record) {
+    Struct value = Requirements.requireStruct(record.value(), "KafkaMetadata transform");
+    Schema newSchema = makeUpdatedSchema(record.valueSchema());
+    Struct newValue = new Struct(newSchema);
+    for (Field field : record.valueSchema().fields()) {
+      newValue.put(field.name(), value.get(field));
+    }
+    kafkaAppender.addToStruct(record, newValue);
+    return record.newRecord(
+        record.topic(),
+        record.kafkaPartition(),
+        record.keySchema(),
+        record.key(),
+        newSchema,
+        newValue,
+        record.timestamp(),
+        record.headers());
+  }
+
   private R applySchemaless(R record) {
-    Map<String, Object> value = Requirements.requireMap(record.value(), "DMS transform");
-
-    // promote fields under "data"
-    Object dataObj = value.get("data");
-    Object metadataObj = value.get("metadata");
-    if (!(dataObj instanceof Map) || !(metadataObj instanceof Map)) {
-      LOG.debug("Unable to transform DMS record, skipping...");
-      return null;
-    }
-
-    Map<String, Object> metadata = (Map<String, Object>) metadataObj;
-
-    String dmsOp = metadata.get("operation").toString();
-    String op;
-    switch (dmsOp) {
-      case "update":
-        op = CdcConstants.OP_UPDATE;
-        break;
-      case "delete":
-        op = CdcConstants.OP_DELETE;
-        break;
-      default:
-        op = CdcConstants.OP_INSERT;
-    }
-
-    // create the CDC metadata
-    Map<String, Object> cdcMetadata = Maps.newHashMap();
-    cdcMetadata.put(CdcConstants.COL_OP, op);
-    cdcMetadata.put(CdcConstants.COL_TS, metadata.get("timestamp"));
-    cdcMetadata.put(
-        CdcConstants.COL_SOURCE,
-        String.format("%s.%s", metadata.get("schema-name"), metadata.get("table-name")));
-
-    // create the new value
-    Map<String, Object> newValue = Maps.newHashMap((Map<String, Object>) dataObj);
-    newValue.put(CdcConstants.COL_CDC, cdcMetadata);
-
-    this.kafkaAppender.addToMap(record, newValue);
+    Map<String, Object> value = Requirements.requireMap(record.value(), "KafkaMetadata transform");
+    Map<String, Object> newValue = Maps.newHashMap(value);
+    kafkaAppender.addToMap(record, newValue);
 
     return record.newRecord(
         record.topic(),
@@ -119,7 +104,17 @@ public class DmsTransform<R extends ConnectRecord<R>> implements Transformation<
         record.key(),
         null,
         newValue,
-        record.timestamp());
+        record.timestamp(),
+        record.headers());
+  }
+
+  private Schema makeUpdatedSchema(Schema schema) {
+    SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
+    for (Field field : schema.fields()) {
+      builder.field(field.name(), field.schema());
+    }
+    kafkaAppender.addToSchema(builder);
+    return builder.build();
   }
 
   @Override
@@ -132,6 +127,6 @@ public class DmsTransform<R extends ConnectRecord<R>> implements Transformation<
 
   @Override
   public void configure(Map<String, ?> configs) {
-    this.kafkaAppender = KafkaMetadataAppender.from(configs);
+    kafkaAppender = KafkaMetadataAppender.from(configs);
   }
 }

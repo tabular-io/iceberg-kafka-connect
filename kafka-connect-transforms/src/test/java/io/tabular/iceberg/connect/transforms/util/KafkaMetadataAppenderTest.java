@@ -147,6 +147,40 @@ public class KafkaMetadataAppenderTest {
   }
 
   @Test
+  @DisplayName("appendToStruct should append flattened record metadata under the configured key")
+  public void appendToStructFlat() {
+    RecordAppender<SinkRecord> appenderWithExternalField =
+        KafkaMetadataAppender.from(
+            ImmutableMap.of(
+                KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
+                true,
+                KafkaMetadataAppender.EXTERNAL_KAFKA_METADATA,
+                "external,value"));
+
+    SinkRecord recordWithTimestamp = genSinkRecord(true);
+    SinkRecord recordWithoutTimestamp = genSinkRecord(false);
+
+    Schema schema =
+        appenderWithExternalField.addToSchema(
+            SchemaBuilder.struct().field("id", Schema.STRING_SCHEMA));
+
+    Struct result = appenderWithExternalField.addToStruct(recordWithTimestamp, new Struct(schema));
+    Struct resultWithoutTime =
+        appenderWithExternalField.addToStruct(recordWithoutTimestamp, new Struct(schema));
+
+    assertThat(result.get("_kafka_metadata_external")).isEqualTo("value");
+    assertThat(resultWithoutTime.get("_kafka_metadata_external")).isEqualTo("value");
+    assertThat(result.get("_kafka_metadata_topic")).isEqualTo(TOPIC);
+    assertThat(resultWithoutTime.get("_kafka_metadata_topic")).isEqualTo(TOPIC);
+    assertThat(result.get("_kafka_metadata_partition")).isEqualTo(PARTITION);
+    assertThat(resultWithoutTime.get("_kafka_metadata_partition")).isEqualTo(PARTITION);
+    assertThat(result.get("_kafka_metadata_offset")).isEqualTo(OFFSET);
+    assertThat(resultWithoutTime.get("_kafka_metadata_offset")).isEqualTo(OFFSET);
+    assertThat(result.get("_kafka_metadata_record_timestamp")).isEqualTo(TIMESTAMP);
+    assertThat(resultWithoutTime.get("_kafka_metadata_record_timestamp")).isNull();
+  }
+
+  @Test
   @DisplayName("appendToMap should append record metadata under the configured key")
   public void appendToMap() {
     RecordAppender<SinkRecord> appenderWithExternalField =
@@ -185,6 +219,61 @@ public class KafkaMetadataAppenderTest {
                 "partition", PARTITION,
                 "offset", OFFSET,
                 "external", "value"));
+
+    Map<String, Object> result = appenderWithExternalField.addToMap(recordWithTimestamp, record1);
+    Map<String, Object> resultWithoutTime =
+        appenderWithExternalField.addToMap(recordWithoutTimestamp, record2);
+
+    assertThat(result).isEqualTo(expected);
+    assertThat(resultWithoutTime).isEqualTo(expectedWithoutTime);
+  }
+
+  @Test
+  @DisplayName("appendToMap should append flattened record metadata under the configured key")
+  public void appendToMapFlat() {
+    RecordAppender<SinkRecord> appenderWithExternalField =
+        KafkaMetadataAppender.from(
+            ImmutableMap.of(
+                KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
+                true,
+                KafkaMetadataAppender.EXTERNAL_KAFKA_METADATA,
+                "external,value"));
+
+    SinkRecord recordWithTimestamp = genSinkRecordAsMap(true);
+    SinkRecord recordWithoutTimestamp = genSinkRecordAsMap(false);
+
+    Map<String, Object> record1 = Maps.newHashMap();
+    record1.put("id", "id");
+
+    Map<String, Object> record2 = Maps.newHashMap();
+    record2.put("id", "id");
+    Map<String, Object> expected =
+        ImmutableMap.of(
+            "id",
+            "id",
+            "_kafka_metadata_topic",
+            TOPIC,
+            "_kafka_metadata_partition",
+            PARTITION,
+            "_kafka_metadata_offset",
+            OFFSET,
+            "_kafka_metadata_record_timestamp",
+            TIMESTAMP,
+            "_kafka_metadata_external",
+            "value");
+
+    Map<String, Object> expectedWithoutTime =
+        ImmutableMap.of(
+            "id",
+            "id",
+            "_kafka_metadata_topic",
+            TOPIC,
+            "_kafka_metadata_partition",
+            PARTITION,
+            "_kafka_metadata_offset",
+            OFFSET,
+            "_kafka_metadata_external",
+            "value");
 
     Map<String, Object> result = appenderWithExternalField.addToMap(recordWithTimestamp, record1);
     Map<String, Object> resultWithoutTime =

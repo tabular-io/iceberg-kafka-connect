@@ -54,7 +54,31 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
               ConfigDef.Type.STRING,
               null,
               Importance.MEDIUM,
-              "Pattern to use for setting the CDC target field value.");
+              "Pattern to use for setting the CDC target field value.")
+          .define(
+              KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
+              ConfigDef.Type.BOOLEAN,
+              false,
+              ConfigDef.Importance.LOW,
+              "Include appending of Kafka metadata to SinkRecord")
+          .define(
+              KafkaMetadataAppender.KEY_METADATA_FIELD_NAME,
+              ConfigDef.Type.STRING,
+              KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME,
+              ConfigDef.Importance.LOW,
+              "field to append Kafka metadata under")
+          .define(
+              KafkaMetadataAppender.KEY_METADATA_IS_NESTED,
+              ConfigDef.Type.BOOLEAN,
+              false,
+              ConfigDef.Importance.LOW,
+              "(true/false) to make a nested record under name or prefix names on the top level")
+          .define(
+              KafkaMetadataAppender.EXTERNAL_KAFKA_METADATA,
+              ConfigDef.Type.STRING,
+              "none",
+              ConfigDef.Importance.LOW,
+              "key,value representing a String to be injected on Kafka metadata (e.g. Cluster)");
 
   private String cdcTargetPattern;
 

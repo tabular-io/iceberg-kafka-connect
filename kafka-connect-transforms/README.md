@@ -24,6 +24,27 @@ The `CopyValue` SMT copies a value from one field to a new field.
 "transforms.copyId.target.field": "id_copy",
 ```
 
+# KafkaMetadataTransform
+_(Experimental)_
+
+The `KafkaMetadata` injects `topic`, `partition`, `offset`, `record timestamp`.
+
+## Configuration
+
+| Property                                   | Description (default value)                                                       |
+|--------------------------------------------|-----------------------------------------------------------------------------------|
+| transforms.kafka_metadata.include_metadata | (true) includes kafka metadata.  False becomes a no-op                            | 
+| transforms.kafka_metadata.metadata_field   | (_kafka_metadata) prefix for fields                                               | 
+| transforms.kafka_metadata.nested           | (false) if true, nests data on a struct else adds to top level as prefixed fields |
+| transforms.kafka_metadata.external_field   | (none) appends a constant `key,value` to the metadata (e.g. cluster name)         | 
+
+If `nested` is on: 
+
+`_kafka_metadata.topic`, `_kafka_metadata.partition`, `kafka_metadata.offset`, `kafka_metadata.record_timestamp`
+
+If `nested` is off:
+`_kafka_metdata_topic`, `kafka_metadata_partition`, `kafka_metadata_offset`, `kafka_metadata_record_timestamp`
+
 # DmsTransform
 _(Experimental)_
 
@@ -33,12 +54,16 @@ It will promote the `data` element fields to top level and add the following met
 
 ## Configuration
 
-| Property                     | Description                                                                                             |
-|:-----------------------------|:--------------------------------------------------------------------------------------------------------|
-| cdc.kafka.include_metadata   | Boolean (true) to append Kafka topic/partition/offset/timestamp metadta to each record                  |
-| cdc.kafka.metadata_field     | Key to append metadata on.  Defaults to `_kafka_metadta`                                                |
-| cdc.kafka.metadata_is_nested | If true nests metadata on a struct under field name, otherwise prefixes metadata fields with field name | 
-| cdc.kafka.external_field     | Optional `key,value` string to append a static field with Kafka Metadata.  E.g. cluster name            |
+The DMS transform can also append Kafka Metadata without an additional record copy as per the `KafkaMetadataTransform` with the following
+configuration: 
+
+| Property                                   | Description (default value)                                                       |
+|--------------------------------------------|-----------------------------------------------------------------------------------|
+| transforms.kafka_metadata.include_metadata | (false) includes kafka metadata.  False will not append data to DMS transform     | 
+| transforms.kafka_metadata.metadata_field   | (_kafka_metadata) prefix for fields                                               | 
+| transforms.kafka_metadata.nested           | (false) if true, nests data on a struct else adds to top level as prefixed fields |
+| transforms.kafka_metadata.external_field   | (none) appends a constant `key,value` to the metadata (e.g. cluster name)         | 
+
 
 # DebeziumTransform
 _(Experimental)_
@@ -47,18 +72,18 @@ The `DebeziumTransform` SMT transforms a Debezium formatted message for use by t
 It will promote the `before` or `after` element fields to top level and add the following metadata fields:
 `_cdc.op`, `_cdc.ts`, `_cdc.offset`, `_cdc.source`, `_cdc.target`, and `_cdc.key`.
 
-If `cdc.kafka.include_metadata` it will add the following metadata fields:
-`_kafka_metadata_topic`, `_kafka_metadata_partition`, `_kafka_metadata_offset`, and `_kafka_metadata_record_timestamp`.
-
 ## Configuration
 
 | Property                     | Description                                                                                             |
 |:-----------------------------|:--------------------------------------------------------------------------------------------------------|
 | cdc.target.pattern           | Pattern to use for setting the CDC target field value, default is `{db}.{table}`                        |
-| cdc.kafka.include_metadata   | Boolean (true) to append Kafka topic/partition/offset/timestamp metadta to each record                  |
-| cdc.kafka.metadata_field     | Key to append metadata on.  Defaults to `_kafka_metadta`                                                |
-| cdc.kafka.metadata_is_nested | If true nests metadata on a struct under field name, otherwise prefixes metadata fields with field name |
-| cdc.kafka.external_field     | Optional `key,value` string to append a static field with Kafka Metadata.  E.g. cluster name            |
 
-If `cdc.kafka.include_metadata` it will add the following metadata fields:
-`_kafka_metadata_topic`, `_kafka_metadata_partition`, `_kafka_metadata_offset`, and `_kafka_metadata_record_timestamp`. 
+The Debezium transform can also append Kafka Metadata without an additional record copy as per the `KafkaMetadataTransform` with the following
+configuration:
+
+| Property                                   | Description (default value)                                                       |
+|--------------------------------------------|-----------------------------------------------------------------------------------|
+| transforms.kafka_metadata.include_metadata | (false) includes kafka metadata.  False will not append data to DMS transform     | 
+| transforms.kafka_metadata.metadata_field   | (_kafka_metadata) prefix for fields                                               | 
+| transforms.kafka_metadata.nested           | (false) if true, nests data on a struct else adds to top level as prefixed fields |
+| transforms.kafka_metadata.external_field   | (none) appends a constant `key,value` to the metadata (e.g. cluster name)         | 
