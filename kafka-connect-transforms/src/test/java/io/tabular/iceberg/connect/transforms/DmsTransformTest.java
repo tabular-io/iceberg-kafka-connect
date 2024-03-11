@@ -33,6 +33,7 @@ public class DmsTransformTest {
   @SuppressWarnings("unchecked")
   public void testDmsTransform() {
     try (DmsTransform<SinkRecord> smt = new DmsTransform<>()) {
+      smt.configure(ImmutableMap.of());
       Map<String, Object> event = createDmsEvent("update");
       SinkRecord record = new SinkRecord("topic", 0, null, null, null, event, 0);
 
@@ -52,7 +53,12 @@ public class DmsTransformTest {
   @Test
   public void testDmsTransformWithkafkaMetadata() {
     try (DmsTransform<SinkRecord> smt = new DmsTransform<>()) {
-      smt.configure(ImmutableMap.of(KafkaMetadataAppender.INCLUDE_KAFKA_METADATA, true));
+      smt.configure(
+          ImmutableMap.of(
+              KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
+              true,
+              KafkaMetadataAppender.KEY_METADATA_IS_NESTED,
+              true));
 
       Map<String, Object> event = createDmsEvent("update");
       SinkRecord record = new SinkRecord("topic", 0, null, null, null, event, 0);

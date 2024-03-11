@@ -20,8 +20,6 @@ package io.tabular.iceberg.connect.transforms.util;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.tabular.iceberg.connect.transforms.util.KafkaMetadataAppender.EmptyExternalData;
-import io.tabular.iceberg.connect.transforms.util.KafkaMetadataAppender.ExternalStringKafkaData;
 import java.util.Map;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
@@ -39,8 +37,8 @@ public class KafkaMetadataAppenderTest {
     return SchemaBuilder.struct()
         .field("topic", Schema.STRING_SCHEMA)
         .field("partition", Schema.INT32_SCHEMA)
-        .field("offset", Schema.INT64_SCHEMA)
-        .field("timestamp", Schema.OPTIONAL_INT64_SCHEMA);
+        .field("offset", Schema.OPTIONAL_INT64_SCHEMA)
+        .field("record_timestamp", Schema.OPTIONAL_INT64_SCHEMA);
   }
 
   private static final long TIMESTAMP = 100L;
@@ -50,10 +48,7 @@ public class KafkaMetadataAppenderTest {
   private static final Schema SCHEMA = baseBuilder().build();
 
   private static final Schema SCHEMA_WITH_EXT_FIELD =
-      baseBuilder().field("external", Schema.STRING_SCHEMA);
-
-  private static final ExternalStringKafkaData EXT_FIELD =
-      new ExternalStringKafkaData("external", "value");
+      baseBuilder().field("external", Schema.STRING_SCHEMA).build();
 
   private static final Schema RECORD_SCHEMA =
       SchemaBuilder.struct().field("id", Schema.STRING_SCHEMA).build();
@@ -90,15 +85,20 @@ public class KafkaMetadataAppenderTest {
   @Test
   @DisplayName("appendSchema should append the configured schema")
   public void appendSchema() {
-    KafkaMetadataAppender appender =
-        new KafkaMetadataAppender(
-            new EmptyExternalData(), SCHEMA, KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME);
-    KafkaMetadataAppender appenderWithExternalField =
-        new KafkaMetadataAppender(
-            EXT_FIELD, SCHEMA_WITH_EXT_FIELD, KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME);
+    RecordAppender<SinkRecord> appender =
+        KafkaMetadataAppender.from(
+            ImmutableMap.of(
+                KafkaMetadataAppender.INCLUDE_KAFKA_METADATA, true,
+                KafkaMetadataAppender.KEY_METADATA_IS_NESTED, true));
+    RecordAppender<SinkRecord> appenderWithExternalField =
+        KafkaMetadataAppender.from(
+            ImmutableMap.of(
+                KafkaMetadataAppender.INCLUDE_KAFKA_METADATA, true,
+                KafkaMetadataAppender.KEY_METADATA_IS_NESTED, true,
+                KafkaMetadataAppender.EXTERNAL_KAFKA_METADATA, "external,value"));
 
-    Schema appendResult = appender.appendSchema(SchemaBuilder.struct());
-    Schema appendExternalResult = appenderWithExternalField.appendSchema(SchemaBuilder.struct());
+    Schema appendResult = appender.addToSchema(SchemaBuilder.struct());
+    Schema appendExternalResult = appenderWithExternalField.addToSchema(SchemaBuilder.struct());
 
     assertThat(appendResult.field(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME).schema())
         .isEqualTo(SCHEMA);
@@ -110,24 +110,27 @@ public class KafkaMetadataAppenderTest {
   @Test
   @DisplayName("appendToStruct should append record metadata under the configured key")
   public void appendToStruct() {
-    KafkaMetadataAppender appenderWithExternalField =
-        new KafkaMetadataAppender(
-            EXT_FIELD, SCHEMA_WITH_EXT_FIELD, KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME);
+    RecordAppender<SinkRecord> appenderWithExternalField =
+        KafkaMetadataAppender.from(
+            ImmutableMap.of(
+                KafkaMetadataAppender.INCLUDE_KAFKA_METADATA, true,
+                KafkaMetadataAppender.KEY_METADATA_IS_NESTED, true,
+                KafkaMetadataAppender.EXTERNAL_KAFKA_METADATA, "external,value"));
 
     SinkRecord recordWithTimestamp = genSinkRecord(true);
     SinkRecord recordWithoutTimestamp = genSinkRecord(false);
 
     Schema schema =
-        appenderWithExternalField.appendSchema(
+        appenderWithExternalField.addToSchema(
             SchemaBuilder.struct().field("id", Schema.STRING_SCHEMA));
 
     Struct resultParent =
-        appenderWithExternalField.appendToStruct(recordWithTimestamp, new Struct(schema));
+        appenderWithExternalField.addToStruct(recordWithTimestamp, new Struct(schema));
     Struct result = (Struct) resultParent.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME);
     Struct resultWithoutTime =
         (Struct)
             appenderWithExternalField
-                .appendToStruct(recordWithoutTimestamp, new Struct(schema))
+                .addToStruct(recordWithoutTimestamp, new Struct(schema))
                 .get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME);
 
     assertThat(resultParent.schema().field("id").schema().type()).isEqualTo(Schema.Type.STRING);
@@ -139,16 +142,19 @@ public class KafkaMetadataAppenderTest {
     assertThat(resultWithoutTime.get("partition")).isEqualTo(PARTITION);
     assertThat(result.get("offset")).isEqualTo(OFFSET);
     assertThat(resultWithoutTime.get("offset")).isEqualTo(OFFSET);
-    assertThat(result.get("timestamp")).isEqualTo(TIMESTAMP);
-    assertThat(resultWithoutTime.get("timestamp")).isNull();
+    assertThat(result.get("record_timestamp")).isEqualTo(TIMESTAMP);
+    assertThat(resultWithoutTime.get("record_timestamp")).isNull();
   }
 
   @Test
   @DisplayName("appendToMap should append record metadata under the configured key")
   public void appendToMap() {
-    KafkaMetadataAppender appenderWithExternalField =
-        new KafkaMetadataAppender(
-            EXT_FIELD, SCHEMA_WITH_EXT_FIELD, KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME);
+    RecordAppender<SinkRecord> appenderWithExternalField =
+        KafkaMetadataAppender.from(
+            ImmutableMap.of(
+                KafkaMetadataAppender.INCLUDE_KAFKA_METADATA, true,
+                KafkaMetadataAppender.KEY_METADATA_IS_NESTED, true,
+                KafkaMetadataAppender.EXTERNAL_KAFKA_METADATA, "external,value"));
 
     SinkRecord recordWithTimestamp = genSinkRecordAsMap(true);
     SinkRecord recordWithoutTimestamp = genSinkRecordAsMap(false);
@@ -166,7 +172,7 @@ public class KafkaMetadataAppenderTest {
                 "topic", TOPIC,
                 "partition", PARTITION,
                 "offset", OFFSET,
-                "timestamp", TIMESTAMP,
+                "record_timestamp", TIMESTAMP,
                 "external", "value"));
 
     Map<String, Object> expectedWithoutTime =
@@ -180,10 +186,9 @@ public class KafkaMetadataAppenderTest {
                 "offset", OFFSET,
                 "external", "value"));
 
-    Map<String, Object> result =
-        appenderWithExternalField.appendToMap(recordWithTimestamp, record1);
+    Map<String, Object> result = appenderWithExternalField.addToMap(recordWithTimestamp, record1);
     Map<String, Object> resultWithoutTime =
-        appenderWithExternalField.appendToMap(recordWithoutTimestamp, record2);
+        appenderWithExternalField.addToMap(recordWithoutTimestamp, record2);
 
     assertThat(result).isEqualTo(expected);
     assertThat(resultWithoutTime).isEqualTo(expectedWithoutTime);

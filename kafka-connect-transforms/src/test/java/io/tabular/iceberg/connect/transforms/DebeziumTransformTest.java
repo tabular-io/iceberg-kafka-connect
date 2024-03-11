@@ -105,6 +105,8 @@ public class DebeziumTransformTest {
               "cdc.target.pattern",
               "{db}_x.{table}_x",
               KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
+              true,
+              KafkaMetadataAppender.KEY_METADATA_IS_NESTED,
               true));
 
       Map<String, Object> event = createDebeziumEventMap("u");
@@ -155,6 +157,8 @@ public class DebeziumTransformTest {
               "cdc.target.pattern",
               "{db}_x.{table}_x",
               KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
+              true,
+              KafkaMetadataAppender.KEY_METADATA_IS_NESTED,
               true));
 
       Struct event = createDebeziumEventStruct("u");
