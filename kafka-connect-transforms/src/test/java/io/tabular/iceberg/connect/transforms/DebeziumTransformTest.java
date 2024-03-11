@@ -100,7 +100,7 @@ public class DebeziumTransformTest {
           ImmutableMap.of(
               "cdc.target.pattern", "pattern.{db}_{table}",
               // takes no effect
-              "cdc.target.pattern.dbname.always", "true"));
+              "cdc.target.schema.replace.dbname", "false"));
 
       Map<String, Object> event = createDebeziumEventMap("u");
       Map<String, Object> key = ImmutableMap.of("account_id", 1L);
@@ -148,10 +148,8 @@ public class DebeziumTransformTest {
     try (DebeziumTransform<SinkRecord> smt = new DebeziumTransform<>()) {
       smt.configure(
           ImmutableMap.of(
-              "cdc.target.pattern", "pattern.{db}_{table}",
-              "cdc.target.pattern.dbname.always", "true"));
-      // smt.configure(ImmutableMap.of("cdc.target.pattern.dbname.always", "true"));
-      // smt.configure(ImmutableMap.of("cdc.target.pattern", "pattern.{db}_{table}"));
+              "cdc.target.pattern", "pattern.{db}_{schema}_{table}",
+              "cdc.target.schema.replace.dbname", "false"));
 
       Struct event = createDebeziumEventStruct("u");
       Struct key = new Struct(KEY_SCHEMA).put("account_id", 1L);
@@ -167,6 +165,29 @@ public class DebeziumTransformTest {
       assertThat(cdcMetadata.get("op")).isEqualTo("U");
       assertThat(cdcMetadata.get("source")).isEqualTo("test_db.test_schema.test_table");
       assertThat(cdcMetadata.get("target")).isEqualTo("pattern.test_db_test_schema_test_table");
+      assertThat(cdcMetadata.get("key")).isInstanceOf(Struct.class);
+    }
+  }
+
+  @Test
+  public void testDebeziumTransformWithSchemaNotReplaceDbname() {
+    try (DebeziumTransform<SinkRecord> smt = new DebeziumTransform<>()) {
+      smt.configure(ImmutableMap.of("cdc.target.schema.replace.dbname", "false"));
+
+      Struct event = createDebeziumEventStruct("u");
+      Struct key = new Struct(KEY_SCHEMA).put("account_id", 1L);
+      SinkRecord record = new SinkRecord("topic", 0, KEY_SCHEMA, key, VALUE_SCHEMA, event, 0);
+
+      SinkRecord result = smt.apply(record);
+      assertThat(result.value()).isInstanceOf(Struct.class);
+      Struct value = (Struct) result.value();
+
+      assertThat(value.get("account_id")).isEqualTo(1L);
+
+      Struct cdcMetadata = value.getStruct("_cdc");
+      assertThat(cdcMetadata.get("op")).isEqualTo("U");
+      assertThat(cdcMetadata.get("source")).isEqualTo("test_db.test_schema.test_table");
+      assertThat(cdcMetadata.get("target")).isEqualTo("test_db.test_schema.test_table");
       assertThat(cdcMetadata.get("key")).isInstanceOf(Struct.class);
     }
   }
