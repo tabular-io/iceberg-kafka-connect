@@ -48,7 +48,7 @@ It will promote the `before` or `after` element fields to top level and add the 
 `_cdc.op`, `_cdc.ts`, `_cdc.offset`, `_cdc.source`, `_cdc.target`, and `_cdc.key`.
 
 If `cdc.kafka.include_metadata` it will add the following metadata fields:
-`_kafka_metadata_topic`, `kafka_metadata_partition`, `kafka_metadata_offset`, and `kafka_metadata_record_timestamp`.
+`_kafka_metadata_topic`, `_kafka_metadata_partition`, `_kafka_metadata_offset`, and `_kafka_metadata_record_timestamp`.
 
 ## Configuration
 
@@ -61,4 +61,4 @@ If `cdc.kafka.include_metadata` it will add the following metadata fields:
 | cdc.kafka.external_field     | Optional `key,value` string to append a static field with Kafka Metadata.  E.g. cluster name            |
 
 If `cdc.kafka.include_metadata` it will add the following metadata fields:
-`_kafka_metadata_topic`, `kafka_metadata_partition`, `kafka_metadata_offset`, and `kafka_metadata_record_timestamp`. 
+`_kafka_metadata_topic`, `_kafka_metadata_partition`, `_kafka_metadata_offset`, and `_kafka_metadata_record_timestamp`. 
