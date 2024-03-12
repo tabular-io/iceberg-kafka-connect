@@ -51,6 +51,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.util.Tasks;
 import org.apache.iceberg.util.ThreadPools;
 import org.apache.kafka.clients.admin.MemberDescription;
+import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,16 +75,17 @@ public class Coordinator extends Channel {
       Catalog catalog,
       IcebergSinkConfig config,
       Collection<MemberDescription> members,
-      KafkaClientFactory clientFactory) {
+      KafkaClientFactory clientFactory,
+      SinkTaskContext context) {
     // pass consumer group ID to which we commit low watermark offsets
-    super("coordinator", config.controlGroupId() + "-coord", config, clientFactory);
+    super("coordinator", config.connectGroupId() + "-coord", config, clientFactory, context);
 
     this.catalog = catalog;
     this.config = config;
     this.totalPartitionCount =
         members.stream().mapToInt(desc -> desc.assignment().topicPartitions().size()).sum();
     this.snapshotOffsetsProp =
-        String.format(OFFSETS_SNAPSHOT_PROP_FMT, config.controlTopic(), config.controlGroupId());
+        String.format(OFFSETS_SNAPSHOT_PROP_FMT, config.controlTopic(), config.connectGroupId());
     this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.commitThreads());
     this.commitState = new CommitState(config);
   }
@@ -94,7 +96,7 @@ public class Coordinator extends Channel {
       commitState.startNewCommit();
       Event event =
           new Event(
-              config.controlGroupId(),
+              config.connectGroupId(),
               EventType.COMMIT_REQUEST,
               new CommitRequestPayload(commitState.currentCommitId()));
       send(event);
@@ -153,7 +155,7 @@ public class Coordinator extends Channel {
 
     Event event =
         new Event(
-            config.controlGroupId(),
+            config.connectGroupId(),
             EventType.COMMIT_COMPLETE,
             new CommitCompletePayload(commitState.currentCommitId(), vtts));
     send(event);
@@ -240,7 +242,7 @@ public class Coordinator extends Channel {
       Long snapshotId = latestSnapshot(table, branch.orElse(null)).snapshotId();
       Event event =
           new Event(
-              config.controlGroupId(),
+              config.connectGroupId(),
               EventType.COMMIT_TABLE,
               new CommitTablePayload(
                   commitState.currentCommitId(), TableName.of(tableIdentifier), snapshotId, vtts));
