@@ -77,6 +77,8 @@ public class IcebergSinkTask extends SinkTask {
 
   @Override
   public void open(Collection<TopicPartition> partitions) {
+    // destroy any state if KC re-uses object
+    close();
     catalog = Utilities.loadCatalog(config);
     KafkaClientFactory clientFactory = new KafkaClientFactory(config.kafkaProps());
 
