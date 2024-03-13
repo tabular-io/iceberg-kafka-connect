@@ -34,6 +34,7 @@ import io.tabular.iceberg.connect.events.TopicPartitionOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DataFiles;
 import org.apache.iceberg.DataOperations;
@@ -74,6 +75,10 @@ public class CoordinatorTest extends ChannelTestBase {
     Assertions.assertEquals(commitId.toString(), summary.get(COMMIT_ID_SNAPSHOT_PROP));
     Assertions.assertEquals("{\"0\":3}", summary.get(OFFSETS_SNAPSHOT_PROP));
     Assertions.assertEquals(Long.toString(ts), summary.get(VTTS_SNAPSHOT_PROP));
+
+    assertThat(memoryAppender.getWarnOrHigher())
+        .as("Expected no warn or higher log messages")
+        .hasSize(0);
   }
 
   @Test
@@ -101,6 +106,10 @@ public class CoordinatorTest extends ChannelTestBase {
     Assertions.assertEquals(commitId.toString(), summary.get(COMMIT_ID_SNAPSHOT_PROP));
     Assertions.assertEquals("{\"0\":3}", summary.get(OFFSETS_SNAPSHOT_PROP));
     Assertions.assertEquals(Long.toString(ts), summary.get(VTTS_SNAPSHOT_PROP));
+
+    assertThat(memoryAppender.getWarnOrHigher())
+        .as("Expected no warn or higher log messages")
+        .hasSize(0);
   }
 
   @Test
@@ -113,6 +122,10 @@ public class CoordinatorTest extends ChannelTestBase {
 
     List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
     Assertions.assertEquals(0, snapshots.size());
+
+    assertThat(memoryAppender.getWarnOrHigher())
+        .as("Expected no warn or higher log messages")
+        .hasSize(0);
   }
 
   @Test
@@ -135,6 +148,198 @@ public class CoordinatorTest extends ChannelTestBase {
 
     List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
     Assertions.assertEquals(0, snapshots.size());
+
+    List<String> warnOrHigherLogMessages = memoryAppender.getWarnOrHigher();
+    assertThat(warnOrHigherLogMessages).as("Expected 1 log message").hasSize(1);
+    assertThat(warnOrHigherLogMessages.get(0))
+        .as("Expected commit failed message warning")
+        .isEqualTo("Commit failed, will try again next cycle");
+  }
+
+  @Test
+  public void testShouldDeduplicateDataFilesAcrossBatchBeforeAppending() {
+    long ts = System.currentTimeMillis();
+    DataFile dataFile = EventTestUtil.createDataFile();
+
+    UUID commitId =
+        coordinatorTest(
+            currentCommitId -> {
+              Event duplicateCommitResponse =
+                  new Event(
+                      config.controlGroupId(),
+                      EventType.COMMIT_RESPONSE,
+                      new CommitResponsePayload(
+                          StructType.of(),
+                          currentCommitId,
+                          new TableName(ImmutableList.of("db"), "tbl"),
+                          ImmutableList.of(dataFile),
+                          ImmutableList.of()));
+
+              return ImmutableList.of(
+                  duplicateCommitResponse,
+                  duplicateCommitResponse,
+                  new Event(
+                      config.controlGroupId(),
+                      EventType.COMMIT_READY,
+                      new CommitReadyPayload(
+                          currentCommitId,
+                          ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts)))));
+            });
+
+    assertCommitTable(1, commitId, ts);
+    assertCommitComplete(2, commitId, ts);
+
+    List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
+    Assertions.assertEquals(1, snapshots.size());
+
+    Snapshot snapshot = snapshots.get(0);
+    Assertions.assertEquals(DataOperations.APPEND, snapshot.operation());
+    Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
+    Assertions.assertEquals(0, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
+
+    List<String> warnOrHigherLogMessages = memoryAppender.getWarnOrHigher();
+    assertThat(warnOrHigherLogMessages).as("Expected 1 log message").hasSize(1);
+    assertThat(warnOrHigherLogMessages.get(0))
+        .as("Expected duplicates detected message warning")
+        .matches(
+            "Detected 2 data files with the same path=.*\\.parquet across payloads during commitId=.* for table=db\\.tbl");
+  }
+
+  @Test
+  public void testShouldDeduplicateDeleteFilesAcrossBatchBeforeAppending() {
+    long ts = System.currentTimeMillis();
+    DeleteFile deleteFile = EventTestUtil.createDeleteFile();
+
+    UUID commitId =
+        coordinatorTest(
+            currentCommitId -> {
+              Event duplicateCommitResponse =
+                  new Event(
+                      config.controlGroupId(),
+                      EventType.COMMIT_RESPONSE,
+                      new CommitResponsePayload(
+                          StructType.of(),
+                          currentCommitId,
+                          new TableName(ImmutableList.of("db"), "tbl"),
+                          ImmutableList.of(),
+                          ImmutableList.of(deleteFile)));
+
+              return ImmutableList.of(
+                  duplicateCommitResponse,
+                  duplicateCommitResponse,
+                  new Event(
+                      config.controlGroupId(),
+                      EventType.COMMIT_READY,
+                      new CommitReadyPayload(
+                          currentCommitId,
+                          ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts)))));
+            });
+
+    assertCommitTable(1, commitId, ts);
+    assertCommitComplete(2, commitId, ts);
+
+    List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
+    Assertions.assertEquals(1, snapshots.size());
+
+    Snapshot snapshot = snapshots.get(0);
+    Assertions.assertEquals(DataOperations.OVERWRITE, snapshot.operation());
+    Assertions.assertEquals(0, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
+    Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
+
+    List<String> warnOrHigherLogMessages = memoryAppender.getWarnOrHigher();
+    assertThat(warnOrHigherLogMessages).as("Expected 1 log message").hasSize(1);
+    assertThat(warnOrHigherLogMessages.get(0))
+        .as("Expected duplicates detected message warning")
+        .matches(
+            "Detected 2 delete files with the same path=.*\\.parquet across payloads during commitId=.* for table=db\\.tbl");
+  }
+
+  @Test
+  public void testShouldDeduplicateDataFilesInPayloadBeforeAppending() {
+    long ts = System.currentTimeMillis();
+    DataFile duplicateDataFile = EventTestUtil.createDataFile();
+
+    UUID commitId =
+        coordinatorTest(
+            currentCommitId ->
+                ImmutableList.of(
+                    new Event(
+                        config.controlGroupId(),
+                        EventType.COMMIT_RESPONSE,
+                        new CommitResponsePayload(
+                            StructType.of(),
+                            currentCommitId,
+                            new TableName(ImmutableList.of("db"), "tbl"),
+                            ImmutableList.of(duplicateDataFile, duplicateDataFile),
+                            ImmutableList.of())),
+                    new Event(
+                        config.controlGroupId(),
+                        EventType.COMMIT_READY,
+                        new CommitReadyPayload(
+                            currentCommitId,
+                            ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))))));
+
+    assertCommitTable(1, commitId, ts);
+    assertCommitComplete(2, commitId, ts);
+
+    List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
+    Assertions.assertEquals(1, snapshots.size());
+
+    Snapshot snapshot = snapshots.get(0);
+    Assertions.assertEquals(DataOperations.APPEND, snapshot.operation());
+    Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
+    Assertions.assertEquals(0, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
+
+    List<String> warnOrHigherLogMessages = memoryAppender.getWarnOrHigher();
+    assertThat(warnOrHigherLogMessages).as("Expected 1 log message").hasSize(1);
+    assertThat(warnOrHigherLogMessages.get(0))
+        .as("Expected duplicates detected message warning")
+        .matches(
+            "Detected 2 data files with the same path=.*\\.parquet in payload with commitId=.* for table=db\\.tbl");
+  }
+
+  @Test
+  public void testShouldDeduplicateDeleteFilesInPayloadBeforeAppending() {
+    long ts = System.currentTimeMillis();
+    DeleteFile duplicateDeleteFile = EventTestUtil.createDeleteFile();
+
+    UUID commitId =
+        coordinatorTest(
+            currentCommitId ->
+                ImmutableList.of(
+                    new Event(
+                        config.controlGroupId(),
+                        EventType.COMMIT_RESPONSE,
+                        new CommitResponsePayload(
+                            StructType.of(),
+                            currentCommitId,
+                            new TableName(ImmutableList.of("db"), "tbl"),
+                            ImmutableList.of(),
+                            ImmutableList.of(duplicateDeleteFile, duplicateDeleteFile))),
+                    new Event(
+                        config.controlGroupId(),
+                        EventType.COMMIT_READY,
+                        new CommitReadyPayload(
+                            currentCommitId,
+                            ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))))));
+
+    assertCommitTable(1, commitId, ts);
+    assertCommitComplete(2, commitId, ts);
+
+    List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
+    Assertions.assertEquals(1, snapshots.size());
+
+    Snapshot snapshot = snapshots.get(0);
+    Assertions.assertEquals(DataOperations.OVERWRITE, snapshot.operation());
+    Assertions.assertEquals(0, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
+    Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
+
+    List<String> warnOrHigherLogMessages = memoryAppender.getWarnOrHigher();
+    assertThat(warnOrHigherLogMessages).as("Expected 1 log message").hasSize(1);
+    assertThat(warnOrHigherLogMessages.get(0))
+        .as("Expected duplicates detected message warning")
+        .matches(
+            "Detected 2 delete files with the same path=.*\\.parquet in payload with commitId=.* for table=db\\.tbl");
   }
 
   private void assertCommitTable(int idx, UUID commitId, long ts) {
@@ -199,6 +404,41 @@ public class CoordinatorTest extends ChannelTestBase {
                 commitId, ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))));
     bytes = Event.encode(commitReady);
     consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, 2, "key", bytes));
+
+    when(config.commitIntervalMs()).thenReturn(0);
+
+    coordinator.process();
+
+    return commitId;
+  }
+
+  private UUID coordinatorTest(Function<UUID, List<Event>> eventsFn) {
+    when(config.commitIntervalMs()).thenReturn(0);
+    when(config.commitTimeoutMs()).thenReturn(Integer.MAX_VALUE);
+
+    Coordinator coordinator = new Coordinator(catalog, config, ImmutableList.of(), clientFactory);
+    coordinator.start();
+
+    // init consumer after subscribe()
+    initConsumer();
+
+    coordinator.process();
+
+    assertThat(producer.transactionCommitted()).isTrue();
+    assertThat(producer.history()).hasSize(1);
+
+    byte[] bytes = producer.history().get(0).value();
+    Event commitRequest = Event.decode(bytes);
+    assertThat(commitRequest.type()).isEqualTo(EventType.COMMIT_REQUEST);
+
+    UUID commitId = ((CommitRequestPayload) commitRequest.payload()).commitId();
+
+    int currentOffset = 1;
+    for (Event event : eventsFn.apply(commitId)) {
+      bytes = Event.encode(event);
+      consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, currentOffset, "key", bytes));
+      currentOffset += 1;
+    }
 
     when(config.commitIntervalMs()).thenReturn(0);
 

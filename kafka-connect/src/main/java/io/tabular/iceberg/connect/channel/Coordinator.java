@@ -37,7 +37,11 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.stream.Stream;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
@@ -48,6 +52,8 @@ import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.relocated.com.google.common.collect.Lists;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.util.Tasks;
 import org.apache.iceberg.util.ThreadPools;
 import org.apache.kafka.clients.admin.MemberDescription;
@@ -198,18 +204,44 @@ public class Coordinator extends Channel {
             .collect(toList());
 
     List<DataFile> dataFiles =
-        payloads.stream()
-            .filter(payload -> payload.dataFiles() != null)
-            .flatMap(payload -> payload.dataFiles().stream())
-            .filter(dataFile -> dataFile.recordCount() > 0)
-            .collect(toList());
+        deduplicateBatch(
+            payloads.stream()
+                .filter(payload -> payload.dataFiles() != null)
+                .flatMap(
+                    payload ->
+                        deduplicatePayload(
+                            payload.dataFiles(),
+                            Coordinator::dataFilePath,
+                            "data",
+                            payload.commitId(),
+                            payload.tableName().toIdentifier())
+                            .stream())
+                .filter(dataFile -> dataFile.recordCount() > 0)
+                .collect(toList()),
+            Coordinator::dataFilePath,
+            "data",
+            commitState.currentCommitId(),
+            tableIdentifier);
 
     List<DeleteFile> deleteFiles =
-        payloads.stream()
-            .filter(payload -> payload.deleteFiles() != null)
-            .flatMap(payload -> payload.deleteFiles().stream())
-            .filter(deleteFile -> deleteFile.recordCount() > 0)
-            .collect(toList());
+        deduplicateBatch(
+            payloads.stream()
+                .filter(payload -> payload.deleteFiles() != null)
+                .flatMap(
+                    payload ->
+                        deduplicatePayload(
+                            payload.deleteFiles(),
+                            Coordinator::deleteFilePath,
+                            "delete",
+                            payload.commitId(),
+                            payload.tableName().toIdentifier())
+                            .stream())
+                .filter(deleteFile -> deleteFile.recordCount() > 0)
+                .collect(toList()),
+            Coordinator::deleteFilePath,
+            "delete",
+            commitState.currentCommitId(),
+            tableIdentifier);
 
     if (dataFiles.isEmpty() && deleteFiles.isEmpty()) {
       LOG.info("Nothing to commit to table {}, skipping", tableIdentifier);
@@ -253,6 +285,77 @@ public class Coordinator extends Channel {
           commitState.currentCommitId(),
           vtts);
     }
+  }
+
+  private static String dataFilePath(DataFile dataFile) {
+    return dataFile.path().toString();
+  }
+
+  private static String deleteFilePath(DeleteFile deleteFile) {
+    return deleteFile.path().toString();
+  }
+
+  private <T> List<T> deduplicateBatch(
+      List<T> files,
+      Function<T, String> getPathFn,
+      String fileType,
+      UUID commitId,
+      TableIdentifier tableIdentifier) {
+    return deduplicate(
+        files,
+        getPathFn,
+        (numDuplicatedFiles, duplicatedPath) ->
+            String.format(
+                "Detected %d %s files with the same path=%s across payloads during commitId=%s for table=%s",
+                numDuplicatedFiles,
+                fileType,
+                duplicatedPath,
+                commitId.toString(),
+                tableIdentifier.toString()));
+  }
+
+  private <T> List<T> deduplicatePayload(
+      List<T> files,
+      Function<T, String> getPathFn,
+      String fileType,
+      UUID commitId,
+      TableIdentifier tableIdentifier) {
+    return deduplicate(
+        files,
+        getPathFn,
+        (numDuplicatedFiles, duplicatedPath) ->
+            String.format(
+                "Detected %d %s files with the same path=%s in payload with commitId=%s for table=%s",
+                numDuplicatedFiles,
+                fileType,
+                duplicatedPath,
+                commitId.toString(),
+                tableIdentifier.toString()));
+  }
+
+  private <T> List<T> deduplicate(
+      List<T> files,
+      Function<T, String> getPathFn,
+      BiFunction<Integer, String, String> logMessageFn) {
+    Map<String, List<T>> pathToFilesMapping = Maps.newHashMap();
+    files.forEach(
+        f ->
+            pathToFilesMapping
+                .computeIfAbsent(getPathFn.apply(f), ignored -> Lists.newArrayList())
+                .add(f));
+
+    return pathToFilesMapping.entrySet().stream()
+        .flatMap(
+            entry -> {
+              String maybeDuplicatedPath = entry.getKey();
+              List<T> maybeDuplicatedFiles = entry.getValue();
+              int numDuplicatedFiles = maybeDuplicatedFiles.size();
+              if (numDuplicatedFiles > 1) {
+                LOG.warn(logMessageFn.apply(numDuplicatedFiles, maybeDuplicatedPath));
+              }
+              return Stream.of(maybeDuplicatedFiles.get(0));
+            })
+        .collect(toList());
   }
 
   private Snapshot latestSnapshot(Table table, String branch) {
