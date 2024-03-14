@@ -76,7 +76,7 @@ public class CoordinatorTest extends ChannelTestBase {
     Assertions.assertEquals("{\"0\":3}", summary.get(OFFSETS_SNAPSHOT_PROP));
     Assertions.assertEquals(Long.toString(ts), summary.get(VTTS_SNAPSHOT_PROP));
 
-    assertThat(memoryAppender.getWarnOrHigher())
+    assertThat(deduplicatedMemoryAppender.getWarnOrHigher())
         .as("Expected no warn or higher log messages")
         .hasSize(0);
   }
@@ -107,7 +107,7 @@ public class CoordinatorTest extends ChannelTestBase {
     Assertions.assertEquals("{\"0\":3}", summary.get(OFFSETS_SNAPSHOT_PROP));
     Assertions.assertEquals(Long.toString(ts), summary.get(VTTS_SNAPSHOT_PROP));
 
-    assertThat(memoryAppender.getWarnOrHigher())
+    assertThat(deduplicatedMemoryAppender.getWarnOrHigher())
         .as("Expected no warn or higher log messages")
         .hasSize(0);
   }
@@ -123,7 +123,7 @@ public class CoordinatorTest extends ChannelTestBase {
     List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
     Assertions.assertEquals(0, snapshots.size());
 
-    assertThat(memoryAppender.getWarnOrHigher())
+    assertThat(deduplicatedMemoryAppender.getWarnOrHigher())
         .as("Expected no warn or higher log messages")
         .hasSize(0);
   }
@@ -149,11 +149,8 @@ public class CoordinatorTest extends ChannelTestBase {
     List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
     Assertions.assertEquals(0, snapshots.size());
 
-    List<String> warnOrHigherLogMessages = memoryAppender.getWarnOrHigher();
-    assertThat(warnOrHigherLogMessages).as("Expected 1 log message").hasSize(1);
-    assertThat(warnOrHigherLogMessages.get(0))
-        .as("Expected commit failed message warning")
-        .isEqualTo("Commit failed, will try again next cycle");
+    List<String> warnOrHigherLogMessages = deduplicatedMemoryAppender.getWarnOrHigher();
+    assertThat(warnOrHigherLogMessages).as("Expected 0 log messages").hasSize(0);
   }
 
   @Test
@@ -197,7 +194,7 @@ public class CoordinatorTest extends ChannelTestBase {
     Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
     Assertions.assertEquals(0, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
 
-    List<String> warnOrHigherLogMessages = memoryAppender.getWarnOrHigher();
+    List<String> warnOrHigherLogMessages = deduplicatedMemoryAppender.getWarnOrHigher();
     assertThat(warnOrHigherLogMessages).as("Expected 1 log message").hasSize(1);
     assertThat(warnOrHigherLogMessages.get(0))
         .as("Expected duplicates detected message warning")
@@ -246,7 +243,7 @@ public class CoordinatorTest extends ChannelTestBase {
     Assertions.assertEquals(0, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
     Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
 
-    List<String> warnOrHigherLogMessages = memoryAppender.getWarnOrHigher();
+    List<String> warnOrHigherLogMessages = deduplicatedMemoryAppender.getWarnOrHigher();
     assertThat(warnOrHigherLogMessages).as("Expected 1 log message").hasSize(1);
     assertThat(warnOrHigherLogMessages.get(0))
         .as("Expected duplicates detected message warning")
@@ -290,12 +287,12 @@ public class CoordinatorTest extends ChannelTestBase {
     Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
     Assertions.assertEquals(0, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
 
-    List<String> warnOrHigherLogMessages = memoryAppender.getWarnOrHigher();
+    List<String> warnOrHigherLogMessages = deduplicatedMemoryAppender.getWarnOrHigher();
     assertThat(warnOrHigherLogMessages).as("Expected 1 log message").hasSize(1);
     assertThat(warnOrHigherLogMessages.get(0))
         .as("Expected duplicates detected message warning")
         .matches(
-            "Detected 2 data files with the same path=.*\\.parquet in payload with commitId=.* for table=db\\.tbl at partition=0 and offset=1");
+            "Detected 2 data files with the same path=.*\\.parquet in payload with payload-commit-id=.* for table=db\\.tbl at partition=0 and offset=1");
   }
 
   @Test
@@ -334,12 +331,12 @@ public class CoordinatorTest extends ChannelTestBase {
     Assertions.assertEquals(0, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
     Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
 
-    List<String> warnOrHigherLogMessages = memoryAppender.getWarnOrHigher();
+    List<String> warnOrHigherLogMessages = deduplicatedMemoryAppender.getWarnOrHigher();
     assertThat(warnOrHigherLogMessages).as("Expected 1 log message").hasSize(1);
     assertThat(warnOrHigherLogMessages.get(0))
         .as("Expected duplicates detected message warning")
         .matches(
-            "Detected 2 delete files with the same path=.*\\.parquet in payload with commitId=.* for table=db\\.tbl at partition=0 and offset=1");
+            "Detected 2 delete files with the same path=.*\\.parquet in payload with payload-commit-id=.* for table=db\\.tbl at partition=0 and offset=1");
   }
 
   private void assertCommitTable(int idx, UUID commitId, long ts) {

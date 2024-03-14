@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.events.CommitCompletePayload;
 import io.tabular.iceberg.connect.events.CommitRequestPayload;
-import io.tabular.iceberg.connect.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.events.CommitTablePayload;
 import io.tabular.iceberg.connect.events.Event;
 import io.tabular.iceberg.connect.events.EventType;
@@ -36,13 +35,8 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
-import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.stream.Stream;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
@@ -53,8 +47,6 @@ import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.iceberg.relocated.com.google.common.collect.Lists;
-import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.util.Tasks;
 import org.apache.iceberg.util.ThreadPools;
 import org.apache.kafka.clients.admin.MemberDescription;
@@ -194,8 +186,8 @@ public class Coordinator extends Channel {
 
     Map<Integer, Long> committedOffsets = lastCommittedOffsetsForTable(table, branch.orElse(null));
 
-    List<Envelope> payloads =
-        deduplicateEnvelopes(envelopeList, commitState.currentCommitId(), tableIdentifier).stream()
+    List<Envelope> filteredEnvelopeList =
+        envelopeList.stream()
             .filter(
                 envelope -> {
                   Long minOffset = committedOffsets.get(envelope.partition());
@@ -203,63 +195,18 @@ public class Coordinator extends Channel {
                 })
             .collect(toList());
 
-    List<DataFile> dataFiles =
-        deduplicateBatch(
-            payloads.stream()
-                .flatMap(
-                    envelope -> {
-                      CommitResponsePayload payload =
-                          (CommitResponsePayload) envelope.event().payload();
+    Deduplicated deduplicated =
+        new Deduplicated(commitState.currentCommitId(), tableIdentifier, filteredEnvelopeList);
 
-                      if (payload.dataFiles() == null) {
-                        return Stream.empty();
-                      } else {
-                        return deduplicatePayload(
-                            payload.dataFiles(),
-                            Coordinator::dataFilePath,
-                            "data",
-                            payload.commitId(),
-                            payload.tableName().toIdentifier(),
-                            envelope.partition(),
-                            envelope.offset())
-                            .stream();
-                      }
-                    })
-                .filter(dataFile -> dataFile.recordCount() > 0)
-                .collect(toList()),
-            Coordinator::dataFilePath,
-            "data",
-            commitState.currentCommitId(),
-            tableIdentifier);
+    List<DataFile> dataFiles =
+        deduplicated.dataFiles().stream()
+            .filter(dataFile -> dataFile.recordCount() > 0)
+            .collect(toList());
 
     List<DeleteFile> deleteFiles =
-        deduplicateBatch(
-            payloads.stream()
-                .flatMap(
-                    envelope -> {
-                      CommitResponsePayload payload =
-                          (CommitResponsePayload) envelope.event().payload();
-
-                      if (payload.deleteFiles() == null) {
-                        return Stream.empty();
-                      } else {
-                        return deduplicatePayload(
-                            payload.deleteFiles(),
-                            Coordinator::deleteFilePath,
-                            "delete",
-                            payload.commitId(),
-                            payload.tableName().toIdentifier(),
-                            envelope.partition(),
-                            envelope.offset())
-                            .stream();
-                      }
-                    })
-                .filter(deleteFile -> deleteFile.recordCount() > 0)
-                .collect(toList()),
-            Coordinator::deleteFilePath,
-            "delete",
-            commitState.currentCommitId(),
-            tableIdentifier);
+        deduplicated.deleteFiles().stream()
+            .filter(deleteFile -> deleteFile.recordCount() > 0)
+            .collect(toList());
 
     if (dataFiles.isEmpty() && deleteFiles.isEmpty()) {
       LOG.info("Nothing to commit to table {}, skipping", tableIdentifier);
@@ -303,127 +250,6 @@ public class Coordinator extends Channel {
           commitState.currentCommitId(),
           vtts);
     }
-  }
-
-  private static class PartitionOffset {
-
-    private final int partition;
-    private final long offset;
-
-    PartitionOffset(int partition, long offset) {
-
-      this.partition = partition;
-      this.offset = offset;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      PartitionOffset that = (PartitionOffset) o;
-      return partition == that.partition && offset == that.offset;
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(partition, offset);
-    }
-
-    @Override
-    public String toString() {
-      return "PartitionOffset{" + "partition=" + partition + ", offset=" + offset + '}';
-    }
-  }
-
-  private List<Envelope> deduplicateEnvelopes(
-      List<Envelope> envelopes, UUID commitId, TableIdentifier tableIdentifier) {
-    return deduplicate(
-        envelopes,
-        envelope -> new PartitionOffset(envelope.partition(), envelope.offset()),
-        (numDuplicatedFiles, duplicatedPartitionOffset) ->
-            String.format(
-                "Detected %d envelopes with the same partition-offset=%s during commitId=%s for table=%s",
-                numDuplicatedFiles,
-                duplicatedPartitionOffset,
-                commitId.toString(),
-                tableIdentifier.toString()));
-  }
-
-  private static String dataFilePath(DataFile dataFile) {
-    return dataFile.path().toString();
-  }
-
-  private static String deleteFilePath(DeleteFile deleteFile) {
-    return deleteFile.path().toString();
-  }
-
-  private <T> List<T> deduplicateBatch(
-      List<T> files,
-      Function<T, String> getPathFn,
-      String fileType,
-      UUID commitId,
-      TableIdentifier tableIdentifier) {
-    return deduplicate(
-        files,
-        getPathFn,
-        (numDuplicatedFiles, duplicatedPath) ->
-            String.format(
-                "Detected %d %s files with the same path=%s across payloads during commitId=%s for table=%s",
-                numDuplicatedFiles,
-                fileType,
-                duplicatedPath,
-                commitId.toString(),
-                tableIdentifier.toString()));
-  }
-
-  private <T> List<T> deduplicatePayload(
-      List<T> files,
-      Function<T, String> getPathFn,
-      String fileType,
-      UUID commitId,
-      TableIdentifier tableIdentifier,
-      int partition,
-      long offset) {
-    return deduplicate(
-        files,
-        getPathFn,
-        (numDuplicatedFiles, duplicatedPath) ->
-            String.format(
-                "Detected %d %s files with the same path=%s in payload with commitId=%s for table=%s at partition=%s and offset=%s",
-                numDuplicatedFiles,
-                fileType,
-                duplicatedPath,
-                commitId.toString(),
-                tableIdentifier.toString(),
-                partition,
-                offset));
-  }
-
-  private <K, T> List<T> deduplicate(
-      List<T> files, Function<T, K> keyExtractor, BiFunction<Integer, K, String> logMessageFn) {
-    Map<K, List<T>> pathToFilesMapping = Maps.newHashMap();
-    files.forEach(
-        f ->
-            pathToFilesMapping
-                .computeIfAbsent(keyExtractor.apply(f), ignored -> Lists.newArrayList())
-                .add(f));
-
-    return pathToFilesMapping.entrySet().stream()
-        .flatMap(
-            entry -> {
-              K maybeDuplicatedKey = entry.getKey();
-              List<T> maybeDuplicatedFiles = entry.getValue();
-              int numDuplicatedFiles = maybeDuplicatedFiles.size();
-              if (numDuplicatedFiles > 1) {
-                LOG.warn(logMessageFn.apply(numDuplicatedFiles, maybeDuplicatedKey));
-              }
-              return Stream.of(maybeDuplicatedFiles.get(0));
-            })
-        .collect(toList());
   }
 
   private Snapshot latestSnapshot(Table table, String branch) {

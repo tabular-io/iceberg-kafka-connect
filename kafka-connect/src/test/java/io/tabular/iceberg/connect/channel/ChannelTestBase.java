@@ -62,7 +62,7 @@ public class ChannelTestBase {
   protected MockProducer<String, byte[]> producer;
   protected MockConsumer<String, byte[]> consumer;
   protected Admin admin;
-  protected MemoryAppender memoryAppender;
+  protected MemoryAppender deduplicatedMemoryAppender;
 
   private InMemoryCatalog initInMemoryCatalog() {
     InMemoryCatalog inMemoryCatalog = new InMemoryCatalog();
@@ -119,16 +119,16 @@ public class ChannelTestBase {
     when(clientFactory.createConsumer(any())).thenReturn(consumer);
     when(clientFactory.createAdmin()).thenReturn(admin);
 
-    memoryAppender = new MemoryAppender();
-    ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Coordinator.class))
-        .addAppender(memoryAppender);
-    memoryAppender.start();
+    deduplicatedMemoryAppender = new MemoryAppender();
+    ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Deduplicated.class))
+        .addAppender(deduplicatedMemoryAppender);
+    deduplicatedMemoryAppender.start();
   }
 
   @AfterEach
   public void after() throws IOException {
     catalog.close();
-    memoryAppender.stop();
+    deduplicatedMemoryAppender.stop();
   }
 
   protected void initConsumer() {
