@@ -19,6 +19,7 @@
 package io.tabular.iceberg.connect.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.events.CommitCompletePayload;
@@ -44,6 +45,7 @@ import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -161,7 +163,9 @@ public class CoordinatorTest extends ChannelTestBase {
     when(config.commitIntervalMs()).thenReturn(0);
     when(config.commitTimeoutMs()).thenReturn(Integer.MAX_VALUE);
 
-    Coordinator coordinator = new Coordinator(catalog, config, ImmutableList.of(), clientFactory);
+    SinkTaskContext context = mock(SinkTaskContext.class);
+    Coordinator coordinator =
+        new Coordinator(catalog, config, ImmutableList.of(), clientFactory, context);
     coordinator.start();
 
     // init consumer after subscribe()
@@ -180,7 +184,7 @@ public class CoordinatorTest extends ChannelTestBase {
 
     Event commitResponse =
         new Event(
-            config.controlGroupId(),
+            config.connectGroupId(),
             EventType.COMMIT_RESPONSE,
             new CommitResponsePayload(
                 StructType.of(),
@@ -193,7 +197,7 @@ public class CoordinatorTest extends ChannelTestBase {
 
     Event commitReady =
         new Event(
-            config.controlGroupId(),
+            config.connectGroupId(),
             EventType.COMMIT_READY,
             new CommitReadyPayload(
                 commitId, ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))));

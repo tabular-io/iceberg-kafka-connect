@@ -19,7 +19,6 @@
 package io.tabular.iceberg.connect.channel;
 
 import static java.util.stream.Collectors.toList;
-import static java.util.stream.Collectors.toMap;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.IcebergWriterFactory;
@@ -38,15 +37,10 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
-import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 
@@ -55,7 +49,6 @@ public class Worker extends Channel {
   private final IcebergSinkConfig config;
   private final IcebergWriterFactory writerFactory;
   private final SinkTaskContext context;
-  private final String controlGroupId;
   private final Map<String, RecordWriter> writers;
   private final Map<TopicPartition, Offset> sourceOffsets;
 
@@ -69,32 +62,14 @@ public class Worker extends Channel {
         "worker",
         IcebergSinkConfig.DEFAULT_CONTROL_GROUP_PREFIX + UUID.randomUUID(),
         config,
-        clientFactory);
+        clientFactory,
+        context);
 
     this.config = config;
     this.writerFactory = writerFactory;
     this.context = context;
-    this.controlGroupId = config.controlGroupId();
     this.writers = Maps.newHashMap();
     this.sourceOffsets = Maps.newHashMap();
-  }
-
-  public void syncCommitOffsets() {
-    Map<TopicPartition, Long> offsets =
-        commitOffsets().entrySet().stream()
-            .collect(toMap(Entry::getKey, entry -> entry.getValue().offset()));
-    context.offset(offsets);
-  }
-
-  public Map<TopicPartition, OffsetAndMetadata> commitOffsets() {
-    try {
-      ListConsumerGroupOffsetsResult response = admin().listConsumerGroupOffsets(controlGroupId);
-      return response.partitionsToOffsetAndMetadata().get().entrySet().stream()
-          .filter(entry -> context.assignment().contains(entry.getKey()))
-          .collect(toMap(Entry::getKey, Entry::getValue));
-    } catch (InterruptedException | ExecutionException e) {
-      throw new ConnectException(e);
-    }
   }
 
   public void process() {
@@ -138,7 +113,7 @@ public class Worker extends Channel {
             .map(
                 writeResult ->
                     new Event(
-                        config.controlGroupId(),
+                        config.connectGroupId(),
                         EventType.COMMIT_RESPONSE,
                         new CommitResponsePayload(
                             writeResult.partitionStruct(),
@@ -150,7 +125,7 @@ public class Worker extends Channel {
 
     Event readyEvent =
         new Event(
-            config.controlGroupId(),
+            config.connectGroupId(),
             EventType.COMMIT_READY,
             new CommitReadyPayload(commitId, assignments));
     events.add(readyEvent);

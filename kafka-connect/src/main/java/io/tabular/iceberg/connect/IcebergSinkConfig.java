@@ -390,16 +390,6 @@ public class IcebergSinkConfig extends AbstractConfig {
     return getString(CONTROL_TOPIC_PROP);
   }
 
-  public String controlGroupId() {
-    String result = getString(CONTROL_GROUP_ID_PROP);
-    if (result != null) {
-      return result;
-    }
-    String connectorName = connectorName();
-    Preconditions.checkNotNull(connectorName, "Connector name cannot be null");
-    return DEFAULT_CONTROL_GROUP_PREFIX + connectorName;
-  }
-
   public String connectGroupId() {
     String result = getString(CONNECT_GROUP_ID_PROP);
     if (result != null) {

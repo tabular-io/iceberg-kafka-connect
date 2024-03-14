@@ -32,12 +32,12 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,10 +46,10 @@ public abstract class Channel {
   private static final Logger LOG = LoggerFactory.getLogger(Channel.class);
 
   private final String controlTopic;
-  private final String controlGroupId;
-  private final String groupId;
+  private final String connectGroupId;
   private final Producer<String, byte[]> producer;
   private final Consumer<String, byte[]> consumer;
+  private final SinkTaskContext context;
   private final Admin admin;
   private final Map<Integer, Long> controlTopicOffsets = Maps.newHashMap();
   private final String producerId;
@@ -58,10 +58,11 @@ public abstract class Channel {
       String name,
       String consumerGroupId,
       IcebergSinkConfig config,
-      KafkaClientFactory clientFactory) {
+      KafkaClientFactory clientFactory,
+      SinkTaskContext context) {
     this.controlTopic = config.controlTopic();
-    this.controlGroupId = config.controlGroupId();
-    this.groupId = config.controlGroupId();
+    this.connectGroupId = config.connectGroupId();
+    this.context = context;
 
     String transactionalId = name + config.transactionalSuffix();
     this.producer = clientFactory.createProducer(transactionalId);
@@ -95,9 +96,8 @@ public abstract class Channel {
       try {
         recordList.forEach(producer::send);
         if (!sourceOffsets.isEmpty()) {
-          // TODO: this doesn't fence zombies
           producer.sendOffsetsToTransaction(
-              offsetsToCommit, new ConsumerGroupMetadata(controlGroupId));
+              offsetsToCommit, KafkaUtils.getConsumerGroupMetadata(context, connectGroupId));
         }
         producer.commitTransaction();
       } catch (Exception e) {
@@ -124,7 +124,7 @@ public abstract class Channel {
 
             Event event = Event.decode(record.value());
 
-            if (event.groupId().equals(groupId)) {
+            if (event.groupId().equals(connectGroupId)) {
               LOG.debug("Received event of type: {}", event.type().name());
               if (receive(new Envelope(event, record.partition(), record.offset()))) {
                 LOG.info("Handled event of type: {}", event.type().name());

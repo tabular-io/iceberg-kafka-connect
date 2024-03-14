@@ -91,7 +91,7 @@ public class IcebergSinkTask extends SinkTask {
       Collection<MemberDescription> members = groupDesc.members();
       if (isLeader(members, partitions)) {
         LOG.info("Task elected leader, starting commit coordinator");
-        Coordinator coordinator = new Coordinator(catalog, config, members, clientFactory);
+        Coordinator coordinator = new Coordinator(catalog, config, members, clientFactory, context);
         coordinatorThread = new CoordinatorThread(coordinator);
         coordinatorThread.start();
       }
@@ -100,7 +100,6 @@ public class IcebergSinkTask extends SinkTask {
     LOG.info("Starting commit worker");
     IcebergWriterFactory writerFactory = new IcebergWriterFactory(catalog, config);
     worker = new Worker(config, clientFactory, writerFactory, context);
-    worker.syncCommitOffsets();
     worker.start();
   }
 
@@ -175,10 +174,8 @@ public class IcebergSinkTask extends SinkTask {
   @Override
   public Map<TopicPartition, OffsetAndMetadata> preCommit(
       Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
-    if (worker == null) {
-      return ImmutableMap.of();
-    }
-    return worker.commitOffsets();
+    // offset commit is handled by the worker
+    return ImmutableMap.of();
   }
 
   @Override
