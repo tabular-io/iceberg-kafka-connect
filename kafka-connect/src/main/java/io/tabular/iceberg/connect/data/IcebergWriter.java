@@ -129,7 +129,6 @@ public class IcebergWriter implements RecordWriter {
     try {
       writeResult = writer.complete();
     } catch (IOException e) {
-      writerResults.clear();
       throw new UncheckedIOException(e);
     }
 
@@ -156,7 +155,6 @@ public class IcebergWriter implements RecordWriter {
     try {
       writer.close();
     } catch (IOException e) {
-      writerResults.clear();
       throw new UncheckedIOException(e);
     }
   }
