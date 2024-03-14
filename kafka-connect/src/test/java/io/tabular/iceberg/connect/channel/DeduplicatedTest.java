@@ -27,6 +27,8 @@ import io.tabular.iceberg.connect.events.TableName;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.IntStream;
+import org.apache.iceberg.ContentFile;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DataFiles;
 import org.apache.iceberg.DeleteFile;
@@ -36,6 +38,7 @@ import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
+import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.types.Types;
 import org.junit.jupiter.api.AfterEach;
@@ -92,11 +95,14 @@ class DeduplicatedTest {
   }
 
   private void assertExpectedFiles(
-      Deduplicated deduplicated,
-      Set<DataFile> expectedDatafiles,
-      Set<DeleteFile> expectedDeleteFiles) {
-    Assertions.assertEquals(expectedDatafiles, Sets.newHashSet(deduplicated.dataFiles()));
-    Assertions.assertEquals(expectedDeleteFiles, Sets.newHashSet(deduplicated.deleteFiles()));
+      List<Envelope> batch, Set<DataFile> expectedDatafiles, Set<DeleteFile> expectedDeleteFiles) {
+    List<DataFile> actualDataFiles =
+        Deduplicated.dataFiles(CURRENT_COMMIT_ID, TABLE_IDENTIFIER, batch);
+    List<DeleteFile> actualDeleteFiles =
+        Deduplicated.deleteFiles(CURRENT_COMMIT_ID, TABLE_IDENTIFIER, batch);
+
+    Assertions.assertEquals(expectedDatafiles, Sets.newHashSet(actualDataFiles));
+    Assertions.assertEquals(expectedDeleteFiles, Sets.newHashSet(actualDeleteFiles));
   }
 
   private void assertNoWarnOrHigherLogs() {
@@ -105,9 +111,8 @@ class DeduplicatedTest {
         .hasSize(0);
   }
 
-  private void assertWarnOrHigherLogsContains(String... expectedMessages) {
-    assertThat(deduplicatedMemoryAppender.getWarnOrHigher())
-        .containsExactlyInAnyOrder(expectedMessages);
+  private void assertWarnOrHigherLogsSize(int expectedSize) {
+    assertThat(deduplicatedMemoryAppender.getWarnOrHigher()).hasSize(expectedSize);
   }
 
   private void assertWarnOrHigherLogsContainsEntryMatching(String expectedMessagesFmt) {
@@ -124,6 +129,35 @@ class DeduplicatedTest {
             Types.StructType.of(), PAYLOAD_COMMIT_ID, TABLE_NAME, dataFiles, deleteFiles));
   }
 
+  private <F> String detectedDuplicateFileAcrossMultipleEvents(
+      int numFiles, String fileType, ContentFile<F> contentFile) {
+    List<String> envelopes = Lists.newArrayList();
+    IntStream.range(1, numFiles).forEach(ignored -> envelopes.add("Envelope\\(.*\\)"));
+    return String.format(
+        "^Detected %d %s files with the same path=%s for table=%s during commit-id=%s in the following \\(deduplicated\\) events=\\[%s]$",
+        numFiles,
+        fileType,
+        contentFile.path(),
+        TABLE_IDENTIFIER,
+        CURRENT_COMMIT_ID,
+        String.join(", ", envelopes));
+  }
+
+  private <F> String detectedDuplicateFileInSameEvent(
+      int numFiles, String fileType, ContentFile<F> contentFile, int partition, long offset) {
+    return String.format(
+        "^Detected %d %s files with the same path=%s in the same event=Envelope\\(partition=%d, offset=%d, event=Event\\(id=.*, group-id=%s, timestamp=.*, commit-id=%s\\)\\) for table=%s during commit-id=%s$",
+        numFiles,
+        fileType,
+        contentFile.path(),
+        partition,
+        offset,
+        GROUP_ID,
+        PAYLOAD_COMMIT_ID,
+        TABLE_IDENTIFIER,
+        CURRENT_COMMIT_ID);
+  }
+
   @Test
   public void testShouldReturnEmptyFiles() {
     Event event = commitResponseEvent(ImmutableList.of(), ImmutableList.of());
@@ -131,9 +165,7 @@ class DeduplicatedTest {
 
     List<Envelope> batch = ImmutableList.of(envelope);
 
-    Deduplicated deduplicated = new Deduplicated(CURRENT_COMMIT_ID, TABLE_IDENTIFIER, batch);
-
-    assertExpectedFiles(deduplicated, ImmutableSet.of(), ImmutableSet.of());
+    assertExpectedFiles(batch, ImmutableSet.of(), ImmutableSet.of());
     assertNoWarnOrHigherLogs();
   }
 
@@ -145,9 +177,7 @@ class DeduplicatedTest {
 
     List<Envelope> batch = ImmutableList.of(envelope);
 
-    Deduplicated deduplicated = new Deduplicated(CURRENT_COMMIT_ID, TABLE_IDENTIFIER, batch);
-
-    assertExpectedFiles(deduplicated, ImmutableSet.of(DATA_FILE_1), ImmutableSet.of(DELETE_FILE_1));
+    assertExpectedFiles(batch, ImmutableSet.of(DATA_FILE_1), ImmutableSet.of(DELETE_FILE_1));
     assertNoWarnOrHigherLogs();
   }
 
@@ -161,10 +191,8 @@ class DeduplicatedTest {
 
     List<Envelope> batch = ImmutableList.of(envelope);
 
-    Deduplicated deduplicated = new Deduplicated(CURRENT_COMMIT_ID, TABLE_IDENTIFIER, batch);
-
     assertExpectedFiles(
-        deduplicated,
+        batch,
         ImmutableSet.of(DATA_FILE_1, DATA_FILE_2),
         ImmutableSet.of(DELETE_FILE_1, DELETE_FILE_2));
     assertNoWarnOrHigherLogs();
@@ -180,10 +208,8 @@ class DeduplicatedTest {
     List<Envelope> batch =
         ImmutableList.of(new Envelope(event1, 0, 100), new Envelope(event2, 0, 101));
 
-    Deduplicated deduplicated = new Deduplicated(CURRENT_COMMIT_ID, TABLE_IDENTIFIER, batch);
-
     assertExpectedFiles(
-        deduplicated,
+        batch,
         ImmutableSet.of(DATA_FILE_1, DATA_FILE_2),
         ImmutableSet.of(DELETE_FILE_1, DELETE_FILE_2));
     assertNoWarnOrHigherLogs();
@@ -199,17 +225,20 @@ class DeduplicatedTest {
 
     List<Envelope> batch = ImmutableList.of(duplicatedEnvelope, duplicatedEnvelope);
 
-    Deduplicated deduplicated = new Deduplicated(CURRENT_COMMIT_ID, TABLE_IDENTIFIER, batch);
-
     assertExpectedFiles(
-        deduplicated,
+        batch,
         ImmutableSet.of(DATA_FILE_1, DATA_FILE_2),
         ImmutableSet.of(DELETE_FILE_1, DELETE_FILE_2));
 
-    assertWarnOrHigherLogsContains(
-        String.format(
-            "Detected 2 envelopes with the same partition-offset=0-100 during commitId=%s for table=%s",
-            CURRENT_COMMIT_ID, TABLE_IDENTIFIER));
+    assertWarnOrHigherLogsSize(4);
+    assertWarnOrHigherLogsContainsEntryMatching(
+        detectedDuplicateFileAcrossMultipleEvents(2, "data", DATA_FILE_1));
+    assertWarnOrHigherLogsContainsEntryMatching(
+        detectedDuplicateFileAcrossMultipleEvents(2, "data", DATA_FILE_2));
+    assertWarnOrHigherLogsContainsEntryMatching(
+        detectedDuplicateFileAcrossMultipleEvents(2, "delete", DELETE_FILE_1));
+    assertWarnOrHigherLogsContainsEntryMatching(
+        detectedDuplicateFileAcrossMultipleEvents(2, "delete", DELETE_FILE_2));
   }
 
   @Test
@@ -222,21 +251,16 @@ class DeduplicatedTest {
 
     List<Envelope> batch = ImmutableList.of(envelope);
 
-    Deduplicated deduplicated = new Deduplicated(CURRENT_COMMIT_ID, TABLE_IDENTIFIER, batch);
-
     assertExpectedFiles(
-        deduplicated,
+        batch,
         ImmutableSet.of(DATA_FILE_1, DATA_FILE_2),
         ImmutableSet.of(DELETE_FILE_1, DELETE_FILE_2));
 
+    assertWarnOrHigherLogsSize(2);
     assertWarnOrHigherLogsContainsEntryMatching(
-        String.format(
-            "Detected 2 data files with the same path=data-1.parquet in payload with payload-commit-id=%s for table=%s at partition=0 and offset=100 with event-id=.* and group-id=%s and event-type=%s and event-timestamp=.*",
-            PAYLOAD_COMMIT_ID, TABLE_IDENTIFIER, GROUP_ID, COMMIT_RESPONSE));
+        detectedDuplicateFileInSameEvent(2, "data", DATA_FILE_1, 0, 100));
     assertWarnOrHigherLogsContainsEntryMatching(
-        String.format(
-            "Detected 2 delete files with the same path=delete-1.parquet in payload with payload-commit-id=%s for table=%s at partition=0 and offset=100 with event-id=.* and group-id=%s and event-type=%s and event-timestamp=.*",
-            PAYLOAD_COMMIT_ID, TABLE_IDENTIFIER, GROUP_ID, COMMIT_RESPONSE));
+        detectedDuplicateFileInSameEvent(2, "delete", DELETE_FILE_1, 0, 100));
   }
 
   @Test
@@ -251,20 +275,16 @@ class DeduplicatedTest {
     List<Envelope> batch =
         ImmutableList.of(new Envelope(event1, 0, 100), new Envelope(event2, 0, 101));
 
-    Deduplicated deduplicated = new Deduplicated(CURRENT_COMMIT_ID, TABLE_IDENTIFIER, batch);
-
     assertExpectedFiles(
-        deduplicated,
+        batch,
         ImmutableSet.of(DATA_FILE_1, DATA_FILE_2),
         ImmutableSet.of(DELETE_FILE_1, DELETE_FILE_2));
 
-    assertWarnOrHigherLogsContains(
-        String.format(
-            "Detected 2 data files with the same path=data-1.parquet across payloads during commitId=%s for table=%s",
-            CURRENT_COMMIT_ID, TABLE_IDENTIFIER),
-        String.format(
-            "Detected 2 delete files with the same path=delete-1.parquet across payloads during commitId=%s for table=%s",
-            CURRENT_COMMIT_ID, TABLE_IDENTIFIER));
+    assertWarnOrHigherLogsSize(2);
+    assertWarnOrHigherLogsContainsEntryMatching(
+        detectedDuplicateFileAcrossMultipleEvents(2, "data", DATA_FILE_1));
+    assertWarnOrHigherLogsContainsEntryMatching(
+        detectedDuplicateFileAcrossMultipleEvents(2, "delete", DELETE_FILE_1));
   }
 
   @Test
@@ -287,43 +307,28 @@ class DeduplicatedTest {
             new Envelope(event1, 0, 100),
             new Envelope(event3, 0, 102));
 
-    Deduplicated deduplicated = new Deduplicated(CURRENT_COMMIT_ID, TABLE_IDENTIFIER, batch);
-
     assertExpectedFiles(
-        deduplicated,
+        batch,
         ImmutableSet.of(DATA_FILE_1, DATA_FILE_2),
         ImmutableSet.of(DELETE_FILE_1, DELETE_FILE_2));
 
-    assertThat(deduplicatedMemoryAppender.getWarnOrHigher())
-        .containsAll(
-            ImmutableList.of(
-                String.format(
-                    "Detected 2 envelopes with the same partition-offset=0-100 during commitId=%s for table=%s",
-                    CURRENT_COMMIT_ID, TABLE_IDENTIFIER),
-                String.format(
-                    "Detected 2 data files with the same path=data-2.parquet across payloads during commitId=%s for table=%s",
-                    CURRENT_COMMIT_ID, TABLE_IDENTIFIER),
-                String.format(
-                    "Detected 3 data files with the same path=data-1.parquet across payloads during commitId=%s for table=%s",
-                    CURRENT_COMMIT_ID, TABLE_IDENTIFIER),
-                String.format(
-                    "Detected 2 delete files with the same path=delete-2.parquet across payloads during commitId=%s for table=%s",
-                    CURRENT_COMMIT_ID, TABLE_IDENTIFIER),
-                String.format(
-                    "Detected 3 delete files with the same path=delete-1.parquet across payloads during commitId=%s for table=%s",
-                    CURRENT_COMMIT_ID, TABLE_IDENTIFIER)));
+    assertWarnOrHigherLogsSize(6);
     assertWarnOrHigherLogsContainsEntryMatching(
-        String.format(
-            "Detected 2 data files with the same path=data-2.parquet in payload with payload-commit-id=%s for table=%s at partition=0 and offset=102 with event-id=.* and group-id=%s and event-type=%s and event-timestamp=.*",
-            PAYLOAD_COMMIT_ID, TABLE_IDENTIFIER, GROUP_ID, COMMIT_RESPONSE));
+        detectedDuplicateFileAcrossMultipleEvents(4, "data", DATA_FILE_1));
     assertWarnOrHigherLogsContainsEntryMatching(
-        String.format(
-            "Detected 2 delete files with the same path=delete-2.parquet in payload with payload-commit-id=%s for table=%s at partition=0 and offset=102 with event-id=.* and group-id=%s and event-type=%s and event-timestamp=.*",
-            PAYLOAD_COMMIT_ID, TABLE_IDENTIFIER, GROUP_ID, COMMIT_RESPONSE));
+        detectedDuplicateFileAcrossMultipleEvents(2, "data", DATA_FILE_2));
+    assertWarnOrHigherLogsContainsEntryMatching(
+        detectedDuplicateFileAcrossMultipleEvents(4, "delete", DELETE_FILE_1));
+    assertWarnOrHigherLogsContainsEntryMatching(
+        detectedDuplicateFileAcrossMultipleEvents(2, "delete", DELETE_FILE_2));
+    assertWarnOrHigherLogsContainsEntryMatching(
+        detectedDuplicateFileInSameEvent(2, "data", DATA_FILE_2, 0, 102));
+    assertWarnOrHigherLogsContainsEntryMatching(
+        detectedDuplicateFileInSameEvent(2, "data", DATA_FILE_2, 0, 102));
 
     // call a second time to make sure there are no mutability bugs
     assertExpectedFiles(
-        deduplicated,
+        batch,
         ImmutableSet.of(DATA_FILE_1, DATA_FILE_2),
         ImmutableSet.of(DELETE_FILE_1, DELETE_FILE_2));
   }

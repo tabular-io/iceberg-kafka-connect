@@ -22,10 +22,8 @@ import static java.util.stream.Collectors.toList;
 
 import io.tabular.iceberg.connect.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.events.Event;
-import io.tabular.iceberg.connect.events.EventType;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -33,222 +31,206 @@ import java.util.stream.Stream;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.catalog.TableIdentifier;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * This class both de-duplicates a batch of envelopes and adds logging to help disambiguate between
+ * different ways that duplicates could manifest. Duplicates could occur in one of three general
+ * ways:
+ *
+ * <ul>
+ *   <li>same file appears in 2 envelopes e.g. if the Coordinator read the same message twice from
+ *       Kafka
+ *       <ul>
+ *         <li>In this case, you should see a log message similar to "Detected 2 data files with the
+ *             same path=data.parquet for table=.* during commit-id=.* in the following
+ *             (deduplicated) events=[Envelope(offset=1)]",
+ *       </ul>
+ *   <li>same file in 2 different envelopes e.g. if a Worker sent the same message twice to Kafka
+ *       <ul>
+ *         <li>In this case, you should see a log message similar to "Detected 2 data files with the
+ *             same path=data.parquet for table=.* during commit-id=.* in the following
+ *             (deduplicated) events=[Envelope(offset=1), Envelope(offset=2)]",
+ *       </ul>
+ *   <li>same file in a single envelope twice e.g. if a Worker included the same file twice in a
+ *       single message in Kafka
+ *       <ul>
+ *         <li>In this case, you should see a log message similar to "Detected 2 data files with the
+ *             same path=data.parquet in the same event=Envelope(offset=1)"
+ *       </ul>
+ * </ul>
+ */
 class Deduplicated {
   private static final Logger LOG = LoggerFactory.getLogger(Deduplicated.class);
-  private final UUID currentCommitId;
-  private final TableIdentifier tableIdentifier;
-  private final List<Envelope> deduplicatedEnvelopes;
 
-  private static final String DATA_FILE_TYPE = "data";
-  private static final String DELETE_FILE_TYPE = "delete";
-
-  Deduplicated(UUID currentCommitId, TableIdentifier tableIdentifier, List<Envelope> batch) {
-    this.currentCommitId = currentCommitId;
-    this.tableIdentifier = tableIdentifier;
-    this.deduplicatedEnvelopes = deduplicateEnvelopes(ImmutableList.copyOf(batch));
-  }
+  private Deduplicated() {}
 
   /**
    * Returns the deduplicated data files from the batch of envelopes. Does not guarantee anything
    * about the ordering of the files that are returned.
    */
-  public List<DataFile> dataFiles() {
-    List<DataFile> dedupedInsidePayloads =
-        deduplicatedEnvelopes.stream()
-            .flatMap(
-                envelope -> {
-                  Event event = envelope.event();
-                  CommitResponsePayload payload = (CommitResponsePayload) event.payload();
-                  List<DataFile> dataFiles = payload.dataFiles();
-                  if (dataFiles == null) {
-                    return Stream.empty();
-                  } else {
-                    return deduplicateFilesInPayload(
-                        dataFiles,
-                        Deduplicated::dataFilePath,
-                        DATA_FILE_TYPE,
-                        payload.commitId(),
-                        envelope.partition(),
-                        envelope.offset(),
-                        event.id(),
-                        event.groupId(),
-                        event.type(),
-                        event.timestamp())
-                        .stream();
-                  }
-                })
-            .collect(toList());
-
-    List<DataFile> dedupedInsideAndAcrossPayloads =
-        deduplicateFiles(dedupedInsidePayloads, Deduplicated::dataFilePath, DATA_FILE_TYPE);
-
-    return ImmutableList.copyOf(dedupedInsideAndAcrossPayloads);
+  public static List<DataFile> dataFiles(
+      UUID currentCommitId, TableIdentifier tableIdentifier, List<Envelope> envelopes) {
+    return deduplicatedFiles(
+        currentCommitId,
+        tableIdentifier,
+        envelopes,
+        "data",
+        CommitResponsePayload::dataFiles,
+        dataFile -> dataFile.path().toString());
   }
 
   /**
    * Returns the deduplicated delete files from the batch of envelopes. Does not guarantee anything
    * about the ordering of the files that are returned.
    */
-  public List<DeleteFile> deleteFiles() {
-    List<DeleteFile> dedupedInsidePayloads =
-        deduplicatedEnvelopes.stream()
+  public static List<DeleteFile> deleteFiles(
+      UUID currentCommitId, TableIdentifier tableIdentifier, List<Envelope> envelopes) {
+    return deduplicatedFiles(
+        currentCommitId,
+        tableIdentifier,
+        envelopes,
+        "delete",
+        CommitResponsePayload::deleteFiles,
+        deleteFile -> deleteFile.path().toString());
+  }
+
+  private static <F> List<F> deduplicatedFiles(
+      UUID currentCommitId,
+      TableIdentifier tableIdentifier,
+      List<Envelope> envelopes,
+      String fileType,
+      Function<CommitResponsePayload, List<F>> extractFilesFromPayload,
+      Function<F, String> extractPathFromFile) {
+    List<FileAndEnvelope<F>> filesAndEnvelopes =
+        envelopes.stream()
             .flatMap(
                 envelope -> {
-                  Event event = envelope.event();
                   CommitResponsePayload payload =
                       (CommitResponsePayload) envelope.event().payload();
-                  List<DeleteFile> deleteFiles = payload.deleteFiles();
-                  if (deleteFiles == null) {
+                  List<F> files = extractFilesFromPayload.apply(payload);
+                  if (files == null) {
                     return Stream.empty();
                   } else {
-                    return deduplicateFilesInPayload(
-                        deleteFiles,
-                        Deduplicated::deleteFilePath,
-                        DELETE_FILE_TYPE,
-                        payload.commitId(),
-                        envelope.partition(),
-                        envelope.offset(),
-                        event.id(),
-                        event.groupId(),
-                        event.type(),
-                        event.timestamp())
-                        .stream();
+                    return deduplicate(
+                            files,
+                            extractPathFromFile,
+                            (path, duplicateFiles) ->
+                                detectedDuplicateFilesInSameEventMessage(
+                                    path,
+                                    duplicateFiles,
+                                    fileType,
+                                    envelope,
+                                    tableIdentifier,
+                                    currentCommitId))
+                        .stream()
+                        .map(file -> new FileAndEnvelope<>(file, envelope));
                   }
                 })
             .collect(toList());
 
-    List<DeleteFile> dedupedInsideAndAcrossPayloads =
-        deduplicateFiles(dedupedInsidePayloads, Deduplicated::deleteFilePath, DELETE_FILE_TYPE);
+    List<FileAndEnvelope<F>> result =
+        deduplicate(
+            filesAndEnvelopes,
+            fileAndEnvelope -> extractPathFromFile.apply(fileAndEnvelope.getFile()),
+            (path, duplicateFilesAndEnvelopes) ->
+                detectedDuplicateFilesAcrossMultipleEventsMessage(
+                    path, duplicateFilesAndEnvelopes, fileType, tableIdentifier, currentCommitId));
 
-    return ImmutableList.copyOf(dedupedInsideAndAcrossPayloads);
+    return result.stream().map(FileAndEnvelope::getFile).collect(toList());
   }
 
-  private static class PartitionOffset {
+  private static class FileAndEnvelope<T> {
+    private final T file;
+    private final Envelope envelope;
 
-    private final int partition;
-    private final long offset;
-
-    PartitionOffset(int partition, long offset) {
-      this.partition = partition;
-      this.offset = offset;
+    FileAndEnvelope(T file, Envelope envelope) {
+      this.file = file;
+      this.envelope = envelope;
     }
 
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      PartitionOffset that = (PartitionOffset) o;
-      return partition == that.partition && offset == that.offset;
+    public T getFile() {
+      return file;
     }
 
-    @Override
-    public int hashCode() {
-      return Objects.hash(partition, offset);
-    }
-
-    @Override
-    public String toString() {
-      return "PartitionOffset{" + "partition=" + partition + ", offset=" + offset + '}';
+    public Envelope getEnvelope() {
+      return envelope;
     }
   }
 
-  private List<Envelope> deduplicateEnvelopes(List<Envelope> envelopes) {
-    return deduplicate(
-        envelopes,
-        envelope -> new PartitionOffset(envelope.partition(), envelope.offset()),
-        (numDuplicatedFiles, duplicatedPartitionOffset) ->
-            String.format(
-                "Detected %d envelopes with the same partition-offset=%d-%d during commitId=%s for table=%s",
-                numDuplicatedFiles,
-                duplicatedPartitionOffset.partition,
-                duplicatedPartitionOffset.offset,
-                currentCommitId.toString(),
-                tableIdentifier.toString()));
-  }
+  private static <T> List<T> deduplicate(
+      List<T> elements,
+      Function<T, String> keyExtractor,
+      BiFunction<String, List<T>, String> logMessageFn) {
+    Map<String, List<T>> keyToDuplicatesMapping = Maps.newHashMap();
+    elements.forEach(
+        element ->
+            keyToDuplicatesMapping
+                .computeIfAbsent(keyExtractor.apply(element), ignored -> Lists.newArrayList())
+                .add(element));
 
-  private static String dataFilePath(DataFile dataFile) {
-    return dataFile.path().toString();
-  }
-
-  private static String deleteFilePath(DeleteFile deleteFile) {
-    return deleteFile.path().toString();
-  }
-
-  private <T> List<T> deduplicateFilesInPayload(
-      List<T> files,
-      Function<T, String> getPathFn,
-      String fileType,
-      UUID payloadCommitId,
-      int partition,
-      long offset,
-      UUID eventId,
-      String groupId,
-      EventType eventType,
-      Long eventTimestamp) {
-    return deduplicate(
-        files,
-        getPathFn,
-        (numDuplicatedFiles, duplicatedPath) ->
-            String.format(
-                "Detected %d %s files with the same path=%s in payload with payload-commit-id=%s for table=%s at partition=%s and offset=%s with event-id=%s and group-id=%s and event-type=%s and event-timestamp=%s",
-                numDuplicatedFiles,
-                fileType,
-                duplicatedPath,
-                payloadCommitId.toString(),
-                tableIdentifier.toString(),
-                partition,
-                offset,
-                eventId,
-                groupId,
-                eventType,
-                eventTimestamp));
-  }
-
-  private <T> List<T> deduplicateFiles(
-      List<T> files, Function<T, String> getPathFn, String fileType) {
-    return deduplicate(
-        files,
-        getPathFn,
-        (numDuplicatedFiles, duplicatedPath) ->
-            String.format(
-                "Detected %d %s files with the same path=%s across payloads during commitId=%s for table=%s",
-                numDuplicatedFiles,
-                fileType,
-                duplicatedPath,
-                currentCommitId.toString(),
-                tableIdentifier.toString()));
-  }
-
-  private static <K, T> List<T> deduplicate(
-      List<T> files, Function<T, K> keyExtractor, BiFunction<Integer, K, String> logMessageFn) {
-    Map<K, List<T>> pathToFilesMapping = Maps.newHashMap();
-    files.forEach(
-        f ->
-            pathToFilesMapping
-                .computeIfAbsent(keyExtractor.apply(f), ignored -> Lists.newArrayList())
-                .add(f));
-
-    return pathToFilesMapping.entrySet().stream()
+    return keyToDuplicatesMapping.entrySet().stream()
         .flatMap(
             entry -> {
-              K maybeDuplicatedKey = entry.getKey();
-              List<T> maybeDuplicatedFiles = entry.getValue();
-              int numDuplicatedFiles = maybeDuplicatedFiles.size();
-              if (numDuplicatedFiles > 1) {
-                LOG.warn(logMessageFn.apply(numDuplicatedFiles, maybeDuplicatedKey));
+              String key = entry.getKey();
+              List<T> values = entry.getValue();
+              if (values.size() > 1) {
+                LOG.warn(logMessageFn.apply(key, values));
               }
-              return Stream.of(maybeDuplicatedFiles.get(0));
+              return Stream.of(values.get(0));
             })
         .collect(toList());
+  }
+
+  private static <F> String detectedDuplicateFilesInSameEventMessage(
+      String path,
+      List<F> duplicateFiles,
+      String fileType,
+      Envelope envelope,
+      TableIdentifier tableIdentifier,
+      UUID currentCommitId) {
+    return String.format(
+        "Detected %d %s files with the same path=%s in the same event=%s for table=%s during commit-id=%s",
+        duplicateFiles.size(),
+        fileType,
+        path,
+        envelopeToString(envelope),
+        tableIdentifier,
+        currentCommitId);
+  }
+
+  private static <F> String detectedDuplicateFilesAcrossMultipleEventsMessage(
+      String path,
+      List<FileAndEnvelope<F>> duplicateFilesAndEnvelopes,
+      String fileType,
+      TableIdentifier tableIdentifier,
+      UUID currentCommitId) {
+    return String.format(
+        "Detected %d %s files with the same path=%s for table=%s during commit-id=%s in the following (deduplicated) events=%s",
+        duplicateFilesAndEnvelopes.size(),
+        fileType,
+        path,
+        tableIdentifier,
+        currentCommitId,
+        duplicateFilesAndEnvelopes.stream()
+            .map(fileAndEnvelope -> envelopeToString(fileAndEnvelope.getEnvelope()))
+            .distinct()
+            .collect(toList()));
+  }
+
+  private static String envelopeToString(Envelope envelope) {
+    Event event = envelope.event();
+    CommitResponsePayload payload = ((CommitResponsePayload) event.payload());
+    return String.format(
+        "Envelope(partition=%d, offset=%d, event=Event(id=%s, group-id=%s, timestamp=%s, commit-id=%s))",
+        envelope.partition(),
+        envelope.offset(),
+        event.id(),
+        event.groupId(),
+        event.timestamp(),
+        payload.commitId());
   }
 }

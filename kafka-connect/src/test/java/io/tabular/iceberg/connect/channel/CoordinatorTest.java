@@ -199,7 +199,7 @@ public class CoordinatorTest extends ChannelTestBase {
     assertThat(warnOrHigherLogMessages.get(0))
         .as("Expected duplicates detected message warning")
         .matches(
-            "Detected 2 data files with the same path=.*\\.parquet across payloads during commitId=.* for table=db\\.tbl");
+            "Detected 2 data files with the same path=.*\\.parquet for table=.* during commit-id=.* in the following \\(deduplicated\\) events=\\[Envelope\\(.*\\), Envelope\\(.*\\)\\]$");
   }
 
   @Test
@@ -248,7 +248,7 @@ public class CoordinatorTest extends ChannelTestBase {
     assertThat(warnOrHigherLogMessages.get(0))
         .as("Expected duplicates detected message warning")
         .matches(
-            "Detected 2 delete files with the same path=.*\\.parquet across payloads during commitId=.* for table=db\\.tbl");
+            "Detected 2 delete files with the same path=.*\\.parquet for table=.* during commit-id=.* in the following \\(deduplicated\\) events=\\[Envelope\\(.*\\), Envelope\\(.*\\)\\]$");
   }
 
   @Test
@@ -292,7 +292,7 @@ public class CoordinatorTest extends ChannelTestBase {
     assertThat(warnOrHigherLogMessages.get(0))
         .as("Expected duplicates detected message warning")
         .matches(
-            "Detected 2 data files with the same path=.*\\.parquet in payload with payload-commit-id=.* for table=db\\.tbl at partition=0 and offset=1 with event-id=.* and group-id=.* and event-type=.* and event-timestamp=.*");
+            "Detected 2 data files with the same path=.*\\.parquet in the same event=Envelope\\(.*\\) for table=.* during commit-id=.*$");
   }
 
   @Test
@@ -336,7 +336,7 @@ public class CoordinatorTest extends ChannelTestBase {
     assertThat(warnOrHigherLogMessages.get(0))
         .as("Expected duplicates detected message warning")
         .matches(
-            "Detected 2 delete files with the same path=.*\\.parquet in payload with payload-commit-id=.* for table=db\\.tbl at partition=0 and offset=1 with event-id=.* and group-id=.* and event-type=.* and event-timestamp=.*");
+            "Detected 2 delete files with the same path=.*\\.parquet in the same event=Envelope\\(.*\\) for table=.* during commit-id=.*$");
   }
 
   private void assertCommitTable(int idx, UUID commitId, long ts) {

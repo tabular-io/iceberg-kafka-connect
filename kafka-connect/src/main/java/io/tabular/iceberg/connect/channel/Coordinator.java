@@ -195,16 +195,16 @@ public class Coordinator extends Channel {
                 })
             .collect(toList());
 
-    Deduplicated deduplicated =
-        new Deduplicated(commitState.currentCommitId(), tableIdentifier, filteredEnvelopeList);
-
     List<DataFile> dataFiles =
-        deduplicated.dataFiles().stream()
+        Deduplicated.dataFiles(commitState.currentCommitId(), tableIdentifier, filteredEnvelopeList)
+            .stream()
             .filter(dataFile -> dataFile.recordCount() > 0)
             .collect(toList());
 
     List<DeleteFile> deleteFiles =
-        deduplicated.deleteFiles().stream()
+        Deduplicated.deleteFiles(
+                commitState.currentCommitId(), tableIdentifier, filteredEnvelopeList)
+            .stream()
             .filter(deleteFile -> deleteFile.recordCount() > 0)
             .collect(toList());
 
