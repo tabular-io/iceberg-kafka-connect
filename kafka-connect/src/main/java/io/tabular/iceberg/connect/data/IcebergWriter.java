@@ -129,6 +129,7 @@ public class IcebergWriter implements RecordWriter {
     try {
       writeResult = writer.complete();
     } catch (IOException e) {
+      writerResults.clear();
       throw new UncheckedIOException(e);
     }
 
@@ -141,7 +142,7 @@ public class IcebergWriter implements RecordWriter {
   }
 
   @Override
-  public List<WriterResult> complete() {
+  public synchronized List<WriterResult> complete() {
     flush();
 
     List<WriterResult> result = Lists.newArrayList(writerResults);
@@ -155,6 +156,7 @@ public class IcebergWriter implements RecordWriter {
     try {
       writer.close();
     } catch (IOException e) {
+      writerResults.clear();
       throw new UncheckedIOException(e);
     }
   }
