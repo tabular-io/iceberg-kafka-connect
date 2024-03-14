@@ -18,11 +18,11 @@
  */
 package io.tabular.iceberg.connect.channel;
 
+import static io.tabular.iceberg.connect.events.EventType.COMMIT_RESPONSE;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tabular.iceberg.connect.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.events.Event;
-import io.tabular.iceberg.connect.events.EventType;
 import io.tabular.iceberg.connect.events.TableName;
 import java.util.List;
 import java.util.Set;
@@ -54,7 +54,7 @@ class DeduplicatedTest {
       UUID.fromString("4142add7-7c92-4bbe-b864-21ce8ac4bf53");
   private static final TableIdentifier TABLE_IDENTIFIER = TableIdentifier.of("db", "tbl");
   private static final TableName TABLE_NAME = TableName.of(TABLE_IDENTIFIER);
-  private static final String CONTROL_GROUP_ID = "cg-connector";
+  private static final String GROUP_ID = "some-group";
   private static final DataFile DATA_FILE_1 = createDataFile("1");
   private static final DataFile DATA_FILE_2 = createDataFile("2");
   private static final DeleteFile DELETE_FILE_1 = createDeleteFile("1");
@@ -110,10 +110,16 @@ class DeduplicatedTest {
         .containsExactlyInAnyOrder(expectedMessages);
   }
 
+  private void assertWarnOrHigherLogsContainsEntryMatching(String expectedMessagesFmt) {
+    Assertions.assertTrue(
+        deduplicatedMemoryAppender.getWarnOrHigher().stream()
+            .anyMatch(x -> x.matches(expectedMessagesFmt)));
+  }
+
   private Event commitResponseEvent(List<DataFile> dataFiles, List<DeleteFile> deleteFiles) {
     return new Event(
-        CONTROL_GROUP_ID,
-        EventType.COMMIT_RESPONSE,
+        GROUP_ID,
+        COMMIT_RESPONSE,
         new CommitResponsePayload(
             Types.StructType.of(), PAYLOAD_COMMIT_ID, TABLE_NAME, dataFiles, deleteFiles));
   }
@@ -223,13 +229,14 @@ class DeduplicatedTest {
         ImmutableSet.of(DATA_FILE_1, DATA_FILE_2),
         ImmutableSet.of(DELETE_FILE_1, DELETE_FILE_2));
 
-    assertWarnOrHigherLogsContains(
+    assertWarnOrHigherLogsContainsEntryMatching(
         String.format(
-            "Detected 2 data files with the same path=data-1.parquet in payload with payload-commit-id=%s for table=%s at partition=0 and offset=100",
-            PAYLOAD_COMMIT_ID, TABLE_IDENTIFIER),
+            "Detected 2 data files with the same path=data-1.parquet in payload with payload-commit-id=%s for table=%s at partition=0 and offset=100 with event-id=.* and group-id=%s and event-type=%s and event-timestamp=.*",
+            PAYLOAD_COMMIT_ID, TABLE_IDENTIFIER, GROUP_ID, COMMIT_RESPONSE));
+    assertWarnOrHigherLogsContainsEntryMatching(
         String.format(
-            "Detected 2 delete files with the same path=delete-1.parquet in payload with payload-commit-id=%s for table=%s at partition=0 and offset=100",
-            PAYLOAD_COMMIT_ID, TABLE_IDENTIFIER));
+            "Detected 2 delete files with the same path=delete-1.parquet in payload with payload-commit-id=%s for table=%s at partition=0 and offset=100 with event-id=.* and group-id=%s and event-type=%s and event-timestamp=.*",
+            PAYLOAD_COMMIT_ID, TABLE_IDENTIFIER, GROUP_ID, COMMIT_RESPONSE));
   }
 
   @Test
@@ -287,28 +294,32 @@ class DeduplicatedTest {
         ImmutableSet.of(DATA_FILE_1, DATA_FILE_2),
         ImmutableSet.of(DELETE_FILE_1, DELETE_FILE_2));
 
-    assertWarnOrHigherLogsContains(
+    assertThat(deduplicatedMemoryAppender.getWarnOrHigher())
+        .containsAll(
+            ImmutableList.of(
+                String.format(
+                    "Detected 2 envelopes with the same partition-offset=0-100 during commitId=%s for table=%s",
+                    CURRENT_COMMIT_ID, TABLE_IDENTIFIER),
+                String.format(
+                    "Detected 2 data files with the same path=data-2.parquet across payloads during commitId=%s for table=%s",
+                    CURRENT_COMMIT_ID, TABLE_IDENTIFIER),
+                String.format(
+                    "Detected 3 data files with the same path=data-1.parquet across payloads during commitId=%s for table=%s",
+                    CURRENT_COMMIT_ID, TABLE_IDENTIFIER),
+                String.format(
+                    "Detected 2 delete files with the same path=delete-2.parquet across payloads during commitId=%s for table=%s",
+                    CURRENT_COMMIT_ID, TABLE_IDENTIFIER),
+                String.format(
+                    "Detected 3 delete files with the same path=delete-1.parquet across payloads during commitId=%s for table=%s",
+                    CURRENT_COMMIT_ID, TABLE_IDENTIFIER)));
+    assertWarnOrHigherLogsContainsEntryMatching(
         String.format(
-            "Detected 2 envelopes with the same partition-offset=0-100 during commitId=%s for table=%s",
-            CURRENT_COMMIT_ID, TABLE_IDENTIFIER),
+            "Detected 2 data files with the same path=data-2.parquet in payload with payload-commit-id=%s for table=%s at partition=0 and offset=102 with event-id=.* and group-id=%s and event-type=%s and event-timestamp=.*",
+            PAYLOAD_COMMIT_ID, TABLE_IDENTIFIER, GROUP_ID, COMMIT_RESPONSE));
+    assertWarnOrHigherLogsContainsEntryMatching(
         String.format(
-            "Detected 2 data files with the same path=data-2.parquet in payload with payload-commit-id=%s for table=%s at partition=0 and offset=102",
-            PAYLOAD_COMMIT_ID, TABLE_IDENTIFIER),
-        String.format(
-            "Detected 2 data files with the same path=data-2.parquet across payloads during commitId=%s for table=%s",
-            CURRENT_COMMIT_ID, TABLE_IDENTIFIER),
-        String.format(
-            "Detected 3 data files with the same path=data-1.parquet across payloads during commitId=%s for table=%s",
-            CURRENT_COMMIT_ID, TABLE_IDENTIFIER),
-        String.format(
-            "Detected 2 delete files with the same path=delete-2.parquet in payload with payload-commit-id=%s for table=%s at partition=0 and offset=102",
-            PAYLOAD_COMMIT_ID, TABLE_IDENTIFIER),
-        String.format(
-            "Detected 2 delete files with the same path=delete-2.parquet across payloads during commitId=%s for table=%s",
-            CURRENT_COMMIT_ID, TABLE_IDENTIFIER),
-        String.format(
-            "Detected 3 delete files with the same path=delete-1.parquet across payloads during commitId=%s for table=%s",
-            CURRENT_COMMIT_ID, TABLE_IDENTIFIER));
+            "Detected 2 delete files with the same path=delete-2.parquet in payload with payload-commit-id=%s for table=%s at partition=0 and offset=102 with event-id=.* and group-id=%s and event-type=%s and event-timestamp=.*",
+            PAYLOAD_COMMIT_ID, TABLE_IDENTIFIER, GROUP_ID, COMMIT_RESPONSE));
 
     // call a second time to make sure there are no mutability bugs
     assertExpectedFiles(

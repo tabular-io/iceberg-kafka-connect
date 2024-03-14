@@ -21,6 +21,8 @@ package io.tabular.iceberg.connect.channel;
 import static java.util.stream.Collectors.toList;
 
 import io.tabular.iceberg.connect.events.CommitResponsePayload;
+import io.tabular.iceberg.connect.events.Event;
+import io.tabular.iceberg.connect.events.EventType;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -61,8 +63,8 @@ class Deduplicated {
         deduplicatedEnvelopes.stream()
             .flatMap(
                 envelope -> {
-                  CommitResponsePayload payload =
-                      (CommitResponsePayload) envelope.event().payload();
+                  Event event = envelope.event();
+                  CommitResponsePayload payload = (CommitResponsePayload) event.payload();
                   List<DataFile> dataFiles = payload.dataFiles();
                   if (dataFiles == null) {
                     return Stream.empty();
@@ -73,7 +75,11 @@ class Deduplicated {
                         DATA_FILE_TYPE,
                         payload.commitId(),
                         envelope.partition(),
-                        envelope.offset())
+                        envelope.offset(),
+                        event.id(),
+                        event.groupId(),
+                        event.type(),
+                        event.timestamp())
                         .stream();
                   }
                 })
@@ -94,6 +100,7 @@ class Deduplicated {
         deduplicatedEnvelopes.stream()
             .flatMap(
                 envelope -> {
+                  Event event = envelope.event();
                   CommitResponsePayload payload =
                       (CommitResponsePayload) envelope.event().payload();
                   List<DeleteFile> deleteFiles = payload.deleteFiles();
@@ -106,7 +113,11 @@ class Deduplicated {
                         DELETE_FILE_TYPE,
                         payload.commitId(),
                         envelope.partition(),
-                        envelope.offset())
+                        envelope.offset(),
+                        event.id(),
+                        event.groupId(),
+                        event.type(),
+                        event.timestamp())
                         .stream();
                   }
                 })
@@ -179,20 +190,28 @@ class Deduplicated {
       String fileType,
       UUID payloadCommitId,
       int partition,
-      long offset) {
+      long offset,
+      UUID eventId,
+      String groupId,
+      EventType eventType,
+      Long eventTimestamp) {
     return deduplicate(
         files,
         getPathFn,
         (numDuplicatedFiles, duplicatedPath) ->
             String.format(
-                "Detected %d %s files with the same path=%s in payload with payload-commit-id=%s for table=%s at partition=%s and offset=%s",
+                "Detected %d %s files with the same path=%s in payload with payload-commit-id=%s for table=%s at partition=%s and offset=%s with event-id=%s and group-id=%s and event-type=%s and event-timestamp=%s",
                 numDuplicatedFiles,
                 fileType,
                 duplicatedPath,
                 payloadCommitId.toString(),
                 tableIdentifier.toString(),
                 partition,
-                offset));
+                offset,
+                eventId,
+                groupId,
+                eventType,
+                eventTimestamp));
   }
 
   private <T> List<T> deduplicateFiles(
