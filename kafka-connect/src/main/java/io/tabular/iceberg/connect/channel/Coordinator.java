@@ -193,29 +193,37 @@ public class Coordinator extends Channel {
 
     Map<Integer, Long> committedOffsets = lastCommittedOffsetsForTable(table, branch.orElse(null));
 
-    List<CommitResponsePayload> payloads =
+    List<Envelope> payloads =
         envelopeList.stream()
             .filter(
                 envelope -> {
                   Long minOffset = committedOffsets.get(envelope.partition());
                   return minOffset == null || envelope.offset() >= minOffset;
                 })
-            .map(envelope -> (CommitResponsePayload) envelope.event().payload())
             .collect(toList());
 
     List<DataFile> dataFiles =
         deduplicateBatch(
             payloads.stream()
-                .filter(payload -> payload.dataFiles() != null)
                 .flatMap(
-                    payload ->
-                        deduplicatePayload(
+                    envelope -> {
+                      CommitResponsePayload payload =
+                          (CommitResponsePayload) envelope.event().payload();
+
+                      if (payload.dataFiles() == null) {
+                        return Stream.empty();
+                      } else {
+                        return deduplicatePayload(
                             payload.dataFiles(),
                             Coordinator::dataFilePath,
                             "data",
                             payload.commitId(),
-                            payload.tableName().toIdentifier())
-                            .stream())
+                            payload.tableName().toIdentifier(),
+                            envelope.partition(),
+                            envelope.offset())
+                            .stream();
+                      }
+                    })
                 .filter(dataFile -> dataFile.recordCount() > 0)
                 .collect(toList()),
             Coordinator::dataFilePath,
@@ -226,16 +234,25 @@ public class Coordinator extends Channel {
     List<DeleteFile> deleteFiles =
         deduplicateBatch(
             payloads.stream()
-                .filter(payload -> payload.deleteFiles() != null)
                 .flatMap(
-                    payload ->
-                        deduplicatePayload(
+                    envelope -> {
+                      CommitResponsePayload payload =
+                          (CommitResponsePayload) envelope.event().payload();
+
+                      if (payload.deleteFiles() == null) {
+                        return Stream.empty();
+                      } else {
+                        return deduplicatePayload(
                             payload.deleteFiles(),
                             Coordinator::deleteFilePath,
                             "delete",
                             payload.commitId(),
-                            payload.tableName().toIdentifier())
-                            .stream())
+                            payload.tableName().toIdentifier(),
+                            envelope.partition(),
+                            envelope.offset())
+                            .stream();
+                      }
+                    })
                 .filter(deleteFile -> deleteFile.recordCount() > 0)
                 .collect(toList()),
             Coordinator::deleteFilePath,
@@ -319,18 +336,22 @@ public class Coordinator extends Channel {
       Function<T, String> getPathFn,
       String fileType,
       UUID commitId,
-      TableIdentifier tableIdentifier) {
+      TableIdentifier tableIdentifier,
+      int partition,
+      long offset) {
     return deduplicate(
         files,
         getPathFn,
         (numDuplicatedFiles, duplicatedPath) ->
             String.format(
-                "Detected %d %s files with the same path=%s in payload with commitId=%s for table=%s",
+                "Detected %d %s files with the same path=%s in payload with commitId=%s for table=%s at partition=%s and offset=%s",
                 numDuplicatedFiles,
                 fileType,
                 duplicatedPath,
                 commitId.toString(),
-                tableIdentifier.toString()));
+                tableIdentifier.toString(),
+                partition,
+                offset));
   }
 
   private <T> List<T> deduplicate(

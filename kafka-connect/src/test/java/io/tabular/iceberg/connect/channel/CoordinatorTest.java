@@ -295,7 +295,7 @@ public class CoordinatorTest extends ChannelTestBase {
     assertThat(warnOrHigherLogMessages.get(0))
         .as("Expected duplicates detected message warning")
         .matches(
-            "Detected 2 data files with the same path=.*\\.parquet in payload with commitId=.* for table=db\\.tbl");
+            "Detected 2 data files with the same path=.*\\.parquet in payload with commitId=.* for table=db\\.tbl at partition=0 and offset=1");
   }
 
   @Test
@@ -339,7 +339,7 @@ public class CoordinatorTest extends ChannelTestBase {
     assertThat(warnOrHigherLogMessages.get(0))
         .as("Expected duplicates detected message warning")
         .matches(
-            "Detected 2 delete files with the same path=.*\\.parquet in payload with commitId=.* for table=db\\.tbl");
+            "Detected 2 delete files with the same path=.*\\.parquet in payload with commitId=.* for table=db\\.tbl at partition=0 and offset=1");
   }
 
   private void assertCommitTable(int idx, UUID commitId, long ts) {
