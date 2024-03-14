@@ -92,8 +92,8 @@ class Deduplicated {
   }
 
   /**
-   * Returns the deduplicated delete files from the batch of envelopes. Does not guarantee
-   * anything about the ordering of the files that are returned.
+   * Returns the deduplicated delete files from the batch of envelopes. Does not guarantee anything
+   * about the ordering of the files that are returned.
    */
   public List<DeleteFile> deleteFiles() {
     List<DeleteFile> dedupedInsidePayloads =
