@@ -159,6 +159,17 @@ class DeduplicatedTest {
   }
 
   @Test
+  public void testNullFilesShouldReturnEmptyFiles() {
+    Event event = commitResponseEvent(null, null);
+    Envelope envelope = new Envelope(event, 0, 100);
+
+    List<Envelope> batch = ImmutableList.of(envelope);
+
+    assertExpectedFiles(batch, ImmutableSet.of(), ImmutableSet.of());
+    assertNoWarnOrHigherLogs();
+  }
+
+  @Test
   public void testShouldReturnEmptyFiles() {
     Event event = commitResponseEvent(ImmutableList.of(), ImmutableList.of());
     Envelope envelope = new Envelope(event, 0, 100);
