@@ -36,6 +36,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -194,7 +195,7 @@ public class Coordinator extends Channel {
     Map<Integer, Long> committedOffsets = lastCommittedOffsetsForTable(table, branch.orElse(null));
 
     List<Envelope> payloads =
-        envelopeList.stream()
+        deduplicateEnvelopes(envelopeList, commitState.currentCommitId(), tableIdentifier).stream()
             .filter(
                 envelope -> {
                   Long minOffset = committedOffsets.get(envelope.partition());
@@ -304,6 +305,54 @@ public class Coordinator extends Channel {
     }
   }
 
+  private static class PartitionOffset {
+
+    private final int partition;
+    private final long offset;
+
+    PartitionOffset(int partition, long offset) {
+
+      this.partition = partition;
+      this.offset = offset;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      PartitionOffset that = (PartitionOffset) o;
+      return partition == that.partition && offset == that.offset;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(partition, offset);
+    }
+
+    @Override
+    public String toString() {
+      return "PartitionOffset{" + "partition=" + partition + ", offset=" + offset + '}';
+    }
+  }
+
+  private List<Envelope> deduplicateEnvelopes(
+      List<Envelope> envelopes, UUID commitId, TableIdentifier tableIdentifier) {
+    return deduplicate(
+        envelopes,
+        envelope -> new PartitionOffset(envelope.partition(), envelope.offset()),
+        (numDuplicatedFiles, duplicatedPartitionOffset) ->
+            String.format(
+                "Detected %d envelopes with the same partition-offset=%s during commitId=%s for table=%s",
+                numDuplicatedFiles,
+                duplicatedPartitionOffset,
+                commitId.toString(),
+                tableIdentifier.toString()));
+  }
+
   private static String dataFilePath(DataFile dataFile) {
     return dataFile.path().toString();
   }
@@ -354,25 +403,23 @@ public class Coordinator extends Channel {
                 offset));
   }
 
-  private <T> List<T> deduplicate(
-      List<T> files,
-      Function<T, String> getPathFn,
-      BiFunction<Integer, String, String> logMessageFn) {
-    Map<String, List<T>> pathToFilesMapping = Maps.newHashMap();
+  private <K, T> List<T> deduplicate(
+      List<T> files, Function<T, K> keyExtractor, BiFunction<Integer, K, String> logMessageFn) {
+    Map<K, List<T>> pathToFilesMapping = Maps.newHashMap();
     files.forEach(
         f ->
             pathToFilesMapping
-                .computeIfAbsent(getPathFn.apply(f), ignored -> Lists.newArrayList())
+                .computeIfAbsent(keyExtractor.apply(f), ignored -> Lists.newArrayList())
                 .add(f));
 
     return pathToFilesMapping.entrySet().stream()
         .flatMap(
             entry -> {
-              String maybeDuplicatedPath = entry.getKey();
+              K maybeDuplicatedKey = entry.getKey();
               List<T> maybeDuplicatedFiles = entry.getValue();
               int numDuplicatedFiles = maybeDuplicatedFiles.size();
               if (numDuplicatedFiles > 1) {
-                LOG.warn(logMessageFn.apply(numDuplicatedFiles, maybeDuplicatedPath));
+                LOG.warn(logMessageFn.apply(numDuplicatedFiles, maybeDuplicatedKey));
               }
               return Stream.of(maybeDuplicatedFiles.get(0));
             })
