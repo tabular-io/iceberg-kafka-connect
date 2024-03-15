@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.events.CommitCompletePayload;
 import io.tabular.iceberg.connect.events.CommitRequestPayload;
-import io.tabular.iceberg.connect.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.events.CommitTablePayload;
 import io.tabular.iceberg.connect.events.Event;
 import io.tabular.iceberg.connect.events.EventType;
@@ -98,6 +97,7 @@ public class Coordinator extends Channel {
               EventType.COMMIT_REQUEST,
               new CommitRequestPayload(commitState.currentCommitId()));
       send(event);
+      LOG.info("Started new commit with commit-id={}", commitState.currentCommitId().toString());
     }
 
     consumeAvailable(POLL_DURATION);
@@ -187,27 +187,25 @@ public class Coordinator extends Channel {
 
     Map<Integer, Long> committedOffsets = lastCommittedOffsetsForTable(table, branch.orElse(null));
 
-    List<CommitResponsePayload> payloads =
+    List<Envelope> filteredEnvelopeList =
         envelopeList.stream()
             .filter(
                 envelope -> {
                   Long minOffset = committedOffsets.get(envelope.partition());
                   return minOffset == null || envelope.offset() >= minOffset;
                 })
-            .map(envelope -> (CommitResponsePayload) envelope.event().payload())
             .collect(toList());
 
     List<DataFile> dataFiles =
-        payloads.stream()
-            .filter(payload -> payload.dataFiles() != null)
-            .flatMap(payload -> payload.dataFiles().stream())
+        Deduplicated.dataFiles(commitState.currentCommitId(), tableIdentifier, filteredEnvelopeList)
+            .stream()
             .filter(dataFile -> dataFile.recordCount() > 0)
             .collect(toList());
 
     List<DeleteFile> deleteFiles =
-        payloads.stream()
-            .filter(payload -> payload.deleteFiles() != null)
-            .flatMap(payload -> payload.deleteFiles().stream())
+        Deduplicated.deleteFiles(
+                commitState.currentCommitId(), tableIdentifier, filteredEnvelopeList)
+            .stream()
             .filter(deleteFile -> deleteFile.recordCount() > 0)
             .collect(toList());
 

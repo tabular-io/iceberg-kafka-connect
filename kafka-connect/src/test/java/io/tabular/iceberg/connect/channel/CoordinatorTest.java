@@ -34,6 +34,7 @@ import io.tabular.iceberg.connect.events.TopicPartitionOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DataFiles;
 import org.apache.iceberg.DataOperations;
@@ -137,6 +138,90 @@ public class CoordinatorTest extends ChannelTestBase {
     Assertions.assertEquals(0, snapshots.size());
   }
 
+  @Test
+  public void testShouldDeduplicateDataFilesBeforeAppending() {
+    long ts = System.currentTimeMillis();
+    DataFile dataFile = EventTestUtil.createDataFile();
+
+    UUID commitId =
+        coordinatorTest(
+            currentCommitId -> {
+              Event commitResponse =
+                  new Event(
+                      config.controlGroupId(),
+                      EventType.COMMIT_RESPONSE,
+                      new CommitResponsePayload(
+                          StructType.of(),
+                          currentCommitId,
+                          new TableName(ImmutableList.of("db"), "tbl"),
+                          ImmutableList.of(dataFile, dataFile), // duplicated data files
+                          ImmutableList.of()));
+
+              return ImmutableList.of(
+                  commitResponse,
+                  commitResponse, // duplicate commit response
+                  new Event(
+                      config.controlGroupId(),
+                      EventType.COMMIT_READY,
+                      new CommitReadyPayload(
+                          currentCommitId,
+                          ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts)))));
+            });
+
+    assertCommitTable(1, commitId, ts);
+    assertCommitComplete(2, commitId, ts);
+
+    List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
+    Assertions.assertEquals(1, snapshots.size());
+
+    Snapshot snapshot = snapshots.get(0);
+    Assertions.assertEquals(DataOperations.APPEND, snapshot.operation());
+    Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
+    Assertions.assertEquals(0, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
+  }
+
+  @Test
+  public void testShouldDeduplicateDeleteFilesBeforeAppending() {
+    long ts = System.currentTimeMillis();
+    DeleteFile deleteFile = EventTestUtil.createDeleteFile();
+
+    UUID commitId =
+        coordinatorTest(
+            currentCommitId -> {
+              Event duplicateCommitResponse =
+                  new Event(
+                      config.controlGroupId(),
+                      EventType.COMMIT_RESPONSE,
+                      new CommitResponsePayload(
+                          StructType.of(),
+                          currentCommitId,
+                          new TableName(ImmutableList.of("db"), "tbl"),
+                          ImmutableList.of(),
+                          ImmutableList.of(deleteFile, deleteFile))); // duplicate delete files
+
+              return ImmutableList.of(
+                  duplicateCommitResponse,
+                  duplicateCommitResponse, // duplicate commit response
+                  new Event(
+                      config.controlGroupId(),
+                      EventType.COMMIT_READY,
+                      new CommitReadyPayload(
+                          currentCommitId,
+                          ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts)))));
+            });
+
+    assertCommitTable(1, commitId, ts);
+    assertCommitComplete(2, commitId, ts);
+
+    List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
+    Assertions.assertEquals(1, snapshots.size());
+
+    Snapshot snapshot = snapshots.get(0);
+    Assertions.assertEquals(DataOperations.OVERWRITE, snapshot.operation());
+    Assertions.assertEquals(0, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
+    Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
+  }
+
   private void assertCommitTable(int idx, UUID commitId, long ts) {
     byte[] bytes = producer.history().get(idx).value();
     Event commitTable = Event.decode(bytes);
@@ -158,6 +243,32 @@ public class CoordinatorTest extends ChannelTestBase {
   }
 
   private UUID coordinatorTest(List<DataFile> dataFiles, List<DeleteFile> deleteFiles, long ts) {
+    return coordinatorTest(
+        currentCommitId -> {
+          Event commitResponse =
+              new Event(
+                  config.controlGroupId(),
+                  EventType.COMMIT_RESPONSE,
+                  new CommitResponsePayload(
+                      StructType.of(),
+                      currentCommitId,
+                      new TableName(ImmutableList.of("db"), "tbl"),
+                      dataFiles,
+                      deleteFiles));
+
+          Event commitReady =
+              new Event(
+                  config.controlGroupId(),
+                  EventType.COMMIT_READY,
+                  new CommitReadyPayload(
+                      currentCommitId,
+                      ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))));
+
+          return ImmutableList.of(commitResponse, commitReady);
+        });
+  }
+
+  private UUID coordinatorTest(Function<UUID, List<Event>> eventsFn) {
     when(config.commitIntervalMs()).thenReturn(0);
     when(config.commitTimeoutMs()).thenReturn(Integer.MAX_VALUE);
 
@@ -178,27 +289,12 @@ public class CoordinatorTest extends ChannelTestBase {
 
     UUID commitId = ((CommitRequestPayload) commitRequest.payload()).commitId();
 
-    Event commitResponse =
-        new Event(
-            config.controlGroupId(),
-            EventType.COMMIT_RESPONSE,
-            new CommitResponsePayload(
-                StructType.of(),
-                commitId,
-                new TableName(ImmutableList.of("db"), "tbl"),
-                dataFiles,
-                deleteFiles));
-    bytes = Event.encode(commitResponse);
-    consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, 1, "key", bytes));
-
-    Event commitReady =
-        new Event(
-            config.controlGroupId(),
-            EventType.COMMIT_READY,
-            new CommitReadyPayload(
-                commitId, ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))));
-    bytes = Event.encode(commitReady);
-    consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, 2, "key", bytes));
+    int currentOffset = 1;
+    for (Event event : eventsFn.apply(commitId)) {
+      bytes = Event.encode(event);
+      consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, currentOffset, "key", bytes));
+      currentOffset += 1;
+    }
 
     when(config.commitIntervalMs()).thenReturn(0);
 
