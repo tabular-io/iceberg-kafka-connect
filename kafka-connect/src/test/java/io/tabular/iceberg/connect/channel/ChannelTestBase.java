@@ -49,7 +49,6 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.slf4j.LoggerFactory;
 
 public class ChannelTestBase {
   protected static final String SRC_TOPIC_NAME = "src-topic";
@@ -62,7 +61,6 @@ public class ChannelTestBase {
   protected MockProducer<String, byte[]> producer;
   protected MockConsumer<String, byte[]> consumer;
   protected Admin admin;
-  protected MemoryAppender deduplicatedMemoryAppender;
 
   private InMemoryCatalog initInMemoryCatalog() {
     InMemoryCatalog inMemoryCatalog = new InMemoryCatalog();
@@ -118,17 +116,11 @@ public class ChannelTestBase {
     when(clientFactory.createProducer(any())).thenReturn(producer);
     when(clientFactory.createConsumer(any())).thenReturn(consumer);
     when(clientFactory.createAdmin()).thenReturn(admin);
-
-    deduplicatedMemoryAppender = new MemoryAppender();
-    ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Deduplicated.class))
-        .addAppender(deduplicatedMemoryAppender);
-    deduplicatedMemoryAppender.start();
   }
 
   @AfterEach
   public void after() throws IOException {
     catalog.close();
-    deduplicatedMemoryAppender.stop();
   }
 
   protected void initConsumer() {

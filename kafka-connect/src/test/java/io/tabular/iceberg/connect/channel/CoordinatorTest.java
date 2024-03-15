@@ -75,10 +75,6 @@ public class CoordinatorTest extends ChannelTestBase {
     Assertions.assertEquals(commitId.toString(), summary.get(COMMIT_ID_SNAPSHOT_PROP));
     Assertions.assertEquals("{\"0\":3}", summary.get(OFFSETS_SNAPSHOT_PROP));
     Assertions.assertEquals(Long.toString(ts), summary.get(VTTS_SNAPSHOT_PROP));
-
-    assertThat(deduplicatedMemoryAppender.getWarnOrHigher())
-        .as("Expected no warn or higher log messages")
-        .hasSize(0);
   }
 
   @Test
@@ -106,10 +102,6 @@ public class CoordinatorTest extends ChannelTestBase {
     Assertions.assertEquals(commitId.toString(), summary.get(COMMIT_ID_SNAPSHOT_PROP));
     Assertions.assertEquals("{\"0\":3}", summary.get(OFFSETS_SNAPSHOT_PROP));
     Assertions.assertEquals(Long.toString(ts), summary.get(VTTS_SNAPSHOT_PROP));
-
-    assertThat(deduplicatedMemoryAppender.getWarnOrHigher())
-        .as("Expected no warn or higher log messages")
-        .hasSize(0);
   }
 
   @Test
@@ -122,10 +114,6 @@ public class CoordinatorTest extends ChannelTestBase {
 
     List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
     Assertions.assertEquals(0, snapshots.size());
-
-    assertThat(deduplicatedMemoryAppender.getWarnOrHigher())
-        .as("Expected no warn or higher log messages")
-        .hasSize(0);
   }
 
   @Test
@@ -148,20 +136,17 @@ public class CoordinatorTest extends ChannelTestBase {
 
     List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
     Assertions.assertEquals(0, snapshots.size());
-
-    List<String> warnOrHigherLogMessages = deduplicatedMemoryAppender.getWarnOrHigher();
-    assertThat(warnOrHigherLogMessages).as("Expected 0 log messages").hasSize(0);
   }
 
   @Test
-  public void testShouldDeduplicateDataFilesAcrossBatchBeforeAppending() {
+  public void testShouldDeduplicateDataFilesBeforeAppending() {
     long ts = System.currentTimeMillis();
     DataFile dataFile = EventTestUtil.createDataFile();
 
     UUID commitId =
         coordinatorTest(
             currentCommitId -> {
-              Event duplicateCommitResponse =
+              Event commitResponse =
                   new Event(
                       config.controlGroupId(),
                       EventType.COMMIT_RESPONSE,
@@ -169,12 +154,12 @@ public class CoordinatorTest extends ChannelTestBase {
                           StructType.of(),
                           currentCommitId,
                           new TableName(ImmutableList.of("db"), "tbl"),
-                          ImmutableList.of(dataFile),
+                          ImmutableList.of(dataFile, dataFile), // duplicated data files
                           ImmutableList.of()));
 
               return ImmutableList.of(
-                  duplicateCommitResponse,
-                  duplicateCommitResponse,
+                  commitResponse,
+                  commitResponse, // duplicate commit response
                   new Event(
                       config.controlGroupId(),
                       EventType.COMMIT_READY,
@@ -193,17 +178,10 @@ public class CoordinatorTest extends ChannelTestBase {
     Assertions.assertEquals(DataOperations.APPEND, snapshot.operation());
     Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
     Assertions.assertEquals(0, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
-
-    List<String> warnOrHigherLogMessages = deduplicatedMemoryAppender.getWarnOrHigher();
-    assertThat(warnOrHigherLogMessages).as("Expected 1 log message").hasSize(1);
-    assertThat(warnOrHigherLogMessages.get(0))
-        .as("Expected duplicates detected message warning")
-        .matches(
-            "Detected 2 data files with the same path=.*\\.parquet for table=.* during commit-id=.* in the following \\(deduplicated\\) events=\\[Envelope\\(.*\\), Envelope\\(.*\\)\\]$");
   }
 
   @Test
-  public void testShouldDeduplicateDeleteFilesAcrossBatchBeforeAppending() {
+  public void testShouldDeduplicateDeleteFilesBeforeAppending() {
     long ts = System.currentTimeMillis();
     DeleteFile deleteFile = EventTestUtil.createDeleteFile();
 
@@ -219,11 +197,11 @@ public class CoordinatorTest extends ChannelTestBase {
                           currentCommitId,
                           new TableName(ImmutableList.of("db"), "tbl"),
                           ImmutableList.of(),
-                          ImmutableList.of(deleteFile)));
+                          ImmutableList.of(deleteFile, deleteFile))); // duplicate delete files
 
               return ImmutableList.of(
                   duplicateCommitResponse,
-                  duplicateCommitResponse,
+                  duplicateCommitResponse, // duplicate commit response
                   new Event(
                       config.controlGroupId(),
                       EventType.COMMIT_READY,
@@ -242,101 +220,6 @@ public class CoordinatorTest extends ChannelTestBase {
     Assertions.assertEquals(DataOperations.OVERWRITE, snapshot.operation());
     Assertions.assertEquals(0, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
     Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
-
-    List<String> warnOrHigherLogMessages = deduplicatedMemoryAppender.getWarnOrHigher();
-    assertThat(warnOrHigherLogMessages).as("Expected 1 log message").hasSize(1);
-    assertThat(warnOrHigherLogMessages.get(0))
-        .as("Expected duplicates detected message warning")
-        .matches(
-            "Detected 2 delete files with the same path=.*\\.parquet for table=.* during commit-id=.* in the following \\(deduplicated\\) events=\\[Envelope\\(.*\\), Envelope\\(.*\\)\\]$");
-  }
-
-  @Test
-  public void testShouldDeduplicateDataFilesInPayloadBeforeAppending() {
-    long ts = System.currentTimeMillis();
-    DataFile duplicateDataFile = EventTestUtil.createDataFile();
-
-    UUID commitId =
-        coordinatorTest(
-            currentCommitId ->
-                ImmutableList.of(
-                    new Event(
-                        config.controlGroupId(),
-                        EventType.COMMIT_RESPONSE,
-                        new CommitResponsePayload(
-                            StructType.of(),
-                            currentCommitId,
-                            new TableName(ImmutableList.of("db"), "tbl"),
-                            ImmutableList.of(duplicateDataFile, duplicateDataFile),
-                            ImmutableList.of())),
-                    new Event(
-                        config.controlGroupId(),
-                        EventType.COMMIT_READY,
-                        new CommitReadyPayload(
-                            currentCommitId,
-                            ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))))));
-
-    assertCommitTable(1, commitId, ts);
-    assertCommitComplete(2, commitId, ts);
-
-    List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
-    Assertions.assertEquals(1, snapshots.size());
-
-    Snapshot snapshot = snapshots.get(0);
-    Assertions.assertEquals(DataOperations.APPEND, snapshot.operation());
-    Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
-    Assertions.assertEquals(0, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
-
-    List<String> warnOrHigherLogMessages = deduplicatedMemoryAppender.getWarnOrHigher();
-    assertThat(warnOrHigherLogMessages).as("Expected 1 log message").hasSize(1);
-    assertThat(warnOrHigherLogMessages.get(0))
-        .as("Expected duplicates detected message warning")
-        .matches(
-            "Detected 2 data files with the same path=.*\\.parquet in the same event=Envelope\\(.*\\) for table=.* during commit-id=.*$");
-  }
-
-  @Test
-  public void testShouldDeduplicateDeleteFilesInPayloadBeforeAppending() {
-    long ts = System.currentTimeMillis();
-    DeleteFile duplicateDeleteFile = EventTestUtil.createDeleteFile();
-
-    UUID commitId =
-        coordinatorTest(
-            currentCommitId ->
-                ImmutableList.of(
-                    new Event(
-                        config.controlGroupId(),
-                        EventType.COMMIT_RESPONSE,
-                        new CommitResponsePayload(
-                            StructType.of(),
-                            currentCommitId,
-                            new TableName(ImmutableList.of("db"), "tbl"),
-                            ImmutableList.of(),
-                            ImmutableList.of(duplicateDeleteFile, duplicateDeleteFile))),
-                    new Event(
-                        config.controlGroupId(),
-                        EventType.COMMIT_READY,
-                        new CommitReadyPayload(
-                            currentCommitId,
-                            ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))))));
-
-    assertCommitTable(1, commitId, ts);
-    assertCommitComplete(2, commitId, ts);
-
-    List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
-    Assertions.assertEquals(1, snapshots.size());
-
-    Snapshot snapshot = snapshots.get(0);
-    Assertions.assertEquals(DataOperations.OVERWRITE, snapshot.operation());
-    Assertions.assertEquals(0, ImmutableList.copyOf(snapshot.addedDataFiles(table.io())).size());
-    Assertions.assertEquals(1, ImmutableList.copyOf(snapshot.addedDeleteFiles(table.io())).size());
-
-    List<String> warnOrHigherLogMessages = deduplicatedMemoryAppender.getWarnOrHigher();
-    assertThat(warnOrHigherLogMessages).as("Expected 1 log message").hasSize(1);
-    assertThat(warnOrHigherLogMessages.get(0))
-        .as("Expected duplicates detected message warning")
-        .matches(
-            "Detected 2 delete files with the same path=.*\\.parquet in the same event=Envelope\\(.*\\) for table=.* during commit-id=.*$");
   }
 
   private void assertCommitTable(int idx, UUID commitId, long ts) {
@@ -360,53 +243,29 @@ public class CoordinatorTest extends ChannelTestBase {
   }
 
   private UUID coordinatorTest(List<DataFile> dataFiles, List<DeleteFile> deleteFiles, long ts) {
-    when(config.commitIntervalMs()).thenReturn(0);
-    when(config.commitTimeoutMs()).thenReturn(Integer.MAX_VALUE);
+    return coordinatorTest(
+        currentCommitId -> {
+          Event commitResponse =
+              new Event(
+                  config.controlGroupId(),
+                  EventType.COMMIT_RESPONSE,
+                  new CommitResponsePayload(
+                      StructType.of(),
+                      currentCommitId,
+                      new TableName(ImmutableList.of("db"), "tbl"),
+                      dataFiles,
+                      deleteFiles));
 
-    Coordinator coordinator = new Coordinator(catalog, config, ImmutableList.of(), clientFactory);
-    coordinator.start();
+          Event commitReady =
+              new Event(
+                  config.controlGroupId(),
+                  EventType.COMMIT_READY,
+                  new CommitReadyPayload(
+                      currentCommitId,
+                      ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))));
 
-    // init consumer after subscribe()
-    initConsumer();
-
-    coordinator.process();
-
-    assertThat(producer.transactionCommitted()).isTrue();
-    assertThat(producer.history()).hasSize(1);
-
-    byte[] bytes = producer.history().get(0).value();
-    Event commitRequest = Event.decode(bytes);
-    assertThat(commitRequest.type()).isEqualTo(EventType.COMMIT_REQUEST);
-
-    UUID commitId = ((CommitRequestPayload) commitRequest.payload()).commitId();
-
-    Event commitResponse =
-        new Event(
-            config.controlGroupId(),
-            EventType.COMMIT_RESPONSE,
-            new CommitResponsePayload(
-                StructType.of(),
-                commitId,
-                new TableName(ImmutableList.of("db"), "tbl"),
-                dataFiles,
-                deleteFiles));
-    bytes = Event.encode(commitResponse);
-    consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, 1, "key", bytes));
-
-    Event commitReady =
-        new Event(
-            config.controlGroupId(),
-            EventType.COMMIT_READY,
-            new CommitReadyPayload(
-                commitId, ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))));
-    bytes = Event.encode(commitReady);
-    consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, 2, "key", bytes));
-
-    when(config.commitIntervalMs()).thenReturn(0);
-
-    coordinator.process();
-
-    return commitId;
+          return ImmutableList.of(commitResponse, commitReady);
+        });
   }
 
   private UUID coordinatorTest(Function<UUID, List<Event>> eventsFn) {
