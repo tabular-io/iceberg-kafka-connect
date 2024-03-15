@@ -97,6 +97,7 @@ public class Coordinator extends Channel {
               EventType.COMMIT_REQUEST,
               new CommitRequestPayload(commitState.currentCommitId()));
       send(event);
+      LOG.info("Started new commit with commit-id={}", commitState.currentCommitId().toString());
     }
 
     consumeAvailable(POLL_DURATION);
