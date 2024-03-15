@@ -27,7 +27,6 @@ import io.tabular.iceberg.connect.events.TableName;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.IntStream;
 import org.apache.iceberg.ContentFile;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DataFiles;
@@ -38,7 +37,6 @@ import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
-import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.types.Types;
 import org.junit.jupiter.api.AfterEach;
@@ -66,6 +64,8 @@ class DeduplicatedTest {
   @BeforeEach
   public void before() {
     deduplicatedMemoryAppender = new MemoryAppender();
+    deduplicatedMemoryAppender.setContext(
+        (ch.qos.logback.classic.LoggerContext) LoggerFactory.getILoggerFactory());
     ((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(Deduplicated.class))
         .addAppender(deduplicatedMemoryAppender);
     deduplicatedMemoryAppender.start();
@@ -131,22 +131,22 @@ class DeduplicatedTest {
 
   private <F> String detectedDuplicateFileAcrossMultipleEvents(
       int numFiles, String fileType, ContentFile<F> contentFile) {
-    List<String> envelopes = Lists.newArrayList();
-    IntStream.range(1, numFiles).forEach(ignored -> envelopes.add("Envelope\\(.*\\)"));
+    String simpleEnvelopePattern =
+        "[0-9]+x\\(SimpleEnvelope\\{partition=[0-9]+, offset=[0-9]+, eventId=.*, eventGroupId='.*', eventTimestamp=[0-9]+, payloadCommitId=.*\\}\\)";
     return String.format(
-        "^Detected %d %s files with the same path=%s for table=%s during commit-id=%s in the following \\(deduplicated\\) events=\\[%s]$",
+        "^Deduplicated %d %s files with the same path=%s for table=%s during commit-id=%s from the following events=\\[(%s)+]$",
         numFiles,
         fileType,
         contentFile.path(),
         TABLE_IDENTIFIER,
         CURRENT_COMMIT_ID,
-        String.join(", ", envelopes));
+        simpleEnvelopePattern);
   }
 
   private <F> String detectedDuplicateFileInSameEvent(
       int numFiles, String fileType, ContentFile<F> contentFile, int partition, long offset) {
     return String.format(
-        "^Detected %d %s files with the same path=%s in the same event=Envelope\\(partition=%d, offset=%d, event=Event\\(id=.*, group-id=%s, timestamp=.*, commit-id=%s\\)\\) for table=%s during commit-id=%s$",
+        "^Deduplicated %d %s files with the same path=%s in the same event=SimpleEnvelope\\{partition=%d, offset=%d, eventId=.*, eventGroupId='%s', eventTimestamp=[0-9]+, payloadCommitId=%s\\} for table=%s during commit-id=%s$",
         numFiles,
         fileType,
         contentFile.path(),
