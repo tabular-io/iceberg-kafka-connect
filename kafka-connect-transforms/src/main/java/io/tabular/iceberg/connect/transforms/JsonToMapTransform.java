@@ -4,9 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.node.*;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.iceberg.relocated.com.google.common.collect.Lists;
-import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -17,20 +14,15 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
-import java.util.List;
-import java.util.Map.Entry;
-
 import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
 
 public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transformation<R> {
 
-    private static final String JSON_LEVEL = "transforms.json.level";
+    public static final String JSON_LEVEL = "transforms.json.level";
 
     private static final ObjectReader mapper = new ObjectMapper().reader();
 
-    private int JSON_LEVEL_VALUE;
+    private int JSON_LEVEL_VALUE = 1;
 
     public static final ConfigDef CONFIG_DEF =
             new ConfigDef()
@@ -39,28 +31,12 @@ public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transform
                             ConfigDef.Type.INT,
                             1,
                             ConfigDef.Importance.MEDIUM,
-                            "Positive value at which level in the json to convert to Map<String, String>");
+                            "Positive value after which level in the json to convert to Map<String, String>");
 
 
-    private static final Schema ALL_JSON_SCHEMA = SchemaBuilder.struct().field("value", Schema.STRING_SCHEMA).build();
+    private static final String ALL_JSON_SCHEMA_FIELD = "payload";
+    private static final Schema ALL_JSON_SCHEMA = SchemaBuilder.struct().field(ALL_JSON_SCHEMA_FIELD, Schema.STRING_SCHEMA).build();
 
-    public static final Map<Class<? extends JsonNode>, Schema> JSON_NODE_TO_SCHEMA = getJsonNodeToSchema();
-
-    private static Map<Class<? extends JsonNode>, Schema> getJsonNodeToSchema() {
-        final Map<Class<? extends JsonNode>, Schema> map = Maps.newHashMap();
-        map.put(BinaryNode.class, Schema.OPTIONAL_BYTES_SCHEMA);
-        map.put(BooleanNode.class, Schema.OPTIONAL_BOOLEAN_SCHEMA);
-        map.put(TextNode.class, Schema.OPTIONAL_STRING_SCHEMA);
-        map.put(IntNode.class, Schema.OPTIONAL_INT32_SCHEMA);
-        map.put(LongNode.class, Schema.OPTIONAL_INT64_SCHEMA);
-        map.put(FloatNode.class, Schema.OPTIONAL_FLOAT32_SCHEMA);
-        map.put(DoubleNode.class, Schema.OPTIONAL_FLOAT64_SCHEMA);
-        map.put(ArrayNode.class, Schema.OPTIONAL_STRING_SCHEMA);
-        map.put(ObjectNode.class, Schema.OPTIONAL_STRING_SCHEMA);
-        map.put(BigIntegerNode.class, Schema.OPTIONAL_STRING_SCHEMA);
-        map.put(DecimalNode.class, Schema.OPTIONAL_STRING_SCHEMA);
-        return ImmutableMap.copyOf(map);
-    }
 
     @Override
     public R apply(R record) {
@@ -87,7 +63,7 @@ public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transform
         }
 
         if (!(obj instanceof ObjectNode)) {
-            throw new RuntimeException(String.format("Expected Json Object for record.value: %s", collectRecordDetails(record)));
+            throw new RuntimeException(String.format("Expected json object for record.value: %s", collectRecordDetails(record)));
         }
 
         if (JSON_LEVEL_VALUE == 0) {
@@ -95,18 +71,19 @@ public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transform
             return singleField(record);
         }
 
-        return record;
+        return structRecord(record, (ObjectNode) obj);
     }
 
     private R singleField(R record) {
-        return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(), ALL_JSON_SCHEMA, record.value(), record.timestamp(), record.headers());
+        Struct struct = new Struct(ALL_JSON_SCHEMA).put(ALL_JSON_SCHEMA_FIELD, record.value());
+        return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(), ALL_JSON_SCHEMA, struct, record.timestamp(), record.headers());
     }
 
     private R structRecord(R record, ObjectNode contents) {
         SchemaBuilder builder = SchemaBuilder.struct();
-        contents.fields().forEachRemaining(entry -> addFieldSchemaBuilder(entry, builder));
+        contents.fields().forEachRemaining(entry -> JsonToMapUtils.addFieldSchemaBuilder(entry, builder));
         Schema schema = builder.build();
-        Struct value = addToStruct(contents, schema, new Struct(schema));
+        Struct value = JsonToMapUtils.addToStruct(contents, schema, new Struct(schema));
         return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(), schema, value, record.timestamp(), record.headers());
     }
 
@@ -119,102 +96,7 @@ public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transform
         }
     }
 
-    private void addFieldSchemaBuilder(Entry<String, JsonNode> kv, SchemaBuilder builder) {
-        String key = kv.getKey();
-        JsonNode value = kv.getValue();
-        if (!value.isNull() || !value.isMissingNode()) {
-            if (value.isArray()) {
-                // array time, need to confirm all records are of the same type.
-                ArrayNode array = (ArrayNode) value;
-                if (!array.isEmpty()) {
-                    Class<? extends JsonNode> arrayType = determineArrayNodeType(array);
-                    if (arrayType != null) {
-                        if (JsonNodeType.NULL.equals(arrayType) || JsonNodeType.MISSING.equals(arrayType)) {
-                            builder.field(key, SchemaBuilder.array(JSON_NODE_TO_SCHEMA.get(arrayType)).optional().build());
-                        } else {
-                            builder.field(key, SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).optional().build());
-                        }
-                    }
-                }
-            } else {
-                builder.field(key, JSON_NODE_TO_SCHEMA.get(value.getClass()));
-            }
-        }
-    }
 
-    // handle the empty object cast?
-    private Class<? extends JsonNode> determineArrayNodeType(ArrayNode array) {
-        final List<Class<? extends JsonNode>> arrayType = Lists.newArrayList();
-        arrayType.add(null);
-        final boolean[] allTypesConsistent = {true};
-        // breaks on number.
-        array.elements().forEachRemaining(node -> {
-            Class<? extends JsonNode> type = node.getClass();
-            if (arrayType.get(0) == null) {
-                arrayType.set(0,type);
-            }
-            if (type != arrayType.get(0)) {
-                allTypesConsistent[0] = false;
-            }
-        });
-
-        if (!allTypesConsistent[0]) {
-            return null;
-        }
-        return arrayType.get(0);
-    }
-
-    private Struct addToStruct(ObjectNode node, Schema schema, Struct struct) {
-        schema.fields().forEach(field -> {
-            JsonNode element = node.get(field.name());
-            // adding primitives other than the weird array of primitive case
-            Schema.Type targetType = field.schema().type();
-            if (Objects.requireNonNull(targetType) == Schema.Type.ARRAY) {
-                Schema.Type arrayType = field.schema().valueSchema().type();
-                List<Object> elements = Lists.newArrayList();
-                element.elements().forEachRemaining(arrayEntry -> elements.add(primitiveBasedOnSchema(arrayEntry, arrayType, field.name())));
-                struct.put(field.name(), elements);
-            } else {
-                struct.put(field.name(), primitiveBasedOnSchema(element, targetType, field.name()));
-            }
-        });
-        return struct;
-    }
-
-    private Object primitiveBasedOnSchema(JsonNode node, Schema.Type type, String fieldName) {
-        Object obj;
-        switch (type) {
-            case STRING:
-                obj = node.toString();
-                break;
-            case BOOLEAN:
-                obj = node.booleanValue();
-                break;
-            case INT32:
-                obj = node.intValue();
-                break;
-            case INT64:
-                obj = node.longValue();
-                break;
-            case FLOAT32:
-                obj = node.floatValue();
-                break;
-            case FLOAT64:
-                obj = node.doubleValue();
-                break;
-            case BYTES:
-                // not sure here if you dig out
-                try {
-                    obj = node.binaryValue();
-                } catch (Exception e) {
-                    throw new RuntimeException(String.format("parsing binary value threw exception for %s", fieldName), e);
-                }
-                break;
-            default:
-                throw new RuntimeException(String.format("Unexpected type %s for field %s", type, fieldName));
-        }
-        return obj;
-    }
 
     @Override
     public ConfigDef config() {
