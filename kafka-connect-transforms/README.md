@@ -53,7 +53,7 @@ _(Experimental)_
 
 The `JsonToMapTransform` SMT parses Json object payloads.  It is intended for use when the incoming data is too 
 inconsistent for the `iceberg-connector` to infer `Struct` schemas from (e.g. the object keys are too variable 
-and this leads to an explosion of schema evoltions and columns).  This will get the data into Iceberg where it can 
+and this leads to an explosion of schema evolutions and columns).  This will get the data into Iceberg where it can 
 be further processed by query engines into a more manageable form.  
 
 It will parse string values into `SinkRecords` with a Schema and a Struct.  It assumes the messages are json objects 
