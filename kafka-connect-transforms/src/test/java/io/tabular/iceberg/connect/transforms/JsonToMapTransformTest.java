@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.Map;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.record.TimestampType;
@@ -31,8 +32,6 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
-import java.util.Map;
 
 public class JsonToMapTransformTest extends FileLoads {
 
@@ -55,7 +54,6 @@ public class JsonToMapTransformTest extends FileLoads {
   @DisplayName("should return null records as-is")
   public void nullRecords() {
     try (JsonToMapTransform<SinkRecord> smt = new JsonToMapTransform<>()) {
-      smt.configure(ImmutableMap.of(JsonToMapTransform.JSON_LEVEL, "0"));
       SinkRecord record =
           new SinkRecord(
               topic,
@@ -74,7 +72,7 @@ public class JsonToMapTransformTest extends FileLoads {
 
   @Test
   @DisplayName("should throw exception if the value is not a json object")
-  public void shouldThrowExceptionNonJsonObjects() throws Exception {
+  public void shouldThrowExceptionNonJsonObjects() {
     try (JsonToMapTransform<SinkRecord> smt = new JsonToMapTransform<>()) {
       SinkRecord record =
           new SinkRecord(
@@ -115,7 +113,7 @@ public class JsonToMapTransformTest extends FileLoads {
       "should contain a single value of Map<String,String> if configured to convert root node")
   public void singleValueOnRootNode() {
     try (JsonToMapTransform<SinkRecord> smt = new JsonToMapTransform<>()) {
-      smt.configure(ImmutableMap.of(JsonToMapTransform.JSON_LEVEL, "0"));
+      smt.configure(ImmutableMap.of(JsonToMapTransform.JSON_LEVEL, "true"));
       SinkRecord record =
           new SinkRecord(
               topic,
@@ -128,7 +126,12 @@ public class JsonToMapTransformTest extends FileLoads {
               timestamp,
               TimestampType.CREATE_TIME);
       SinkRecord result = smt.apply(record);
-      Schema expectedSchema = SchemaBuilder.struct().field("payload", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).optional().build()).build();
+      Schema expectedSchema =
+          SchemaBuilder.struct()
+              .field(
+                  "payload",
+                  SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).optional().build())
+              .build();
       assertInstanceOf(Struct.class, result.value());
       Struct resultStruct = (Struct) result.value();
 

@@ -23,10 +23,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Map;
-
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -37,24 +35,28 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transformation<R> {
 
-  public static final String JSON_LEVEL = "transforms.json.level";
+  public static final String JSON_LEVEL = "transforms.json.root";
 
   private static final ObjectReader mapper = new ObjectMapper().reader();
 
-  private int jsonLevel = 1;
+  private boolean startAtRoot = false;
 
   public static final ConfigDef CONFIG_DEF =
       new ConfigDef()
           .define(
               JSON_LEVEL,
-              ConfigDef.Type.INT,
-              1,
+              ConfigDef.Type.BOOLEAN,
+              false,
               ConfigDef.Importance.MEDIUM,
-              "Positive value after which level in the json to convert to Map<String, String>");
+              "Boolean value to start at root.  False is one level in from the root");
 
   private static final String ALL_JSON_SCHEMA_FIELD = "payload";
   private static final Schema JSON_MAP_SCHEMA =
-      SchemaBuilder.struct().field(ALL_JSON_SCHEMA_FIELD, SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).optional().build()).build();
+      SchemaBuilder.struct()
+          .field(
+              ALL_JSON_SCHEMA_FIELD,
+              SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).optional().build())
+          .build();
 
   @Override
   public R apply(R record) {
@@ -88,20 +90,22 @@ public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transform
           String.format("Expected json object for record.value: %s", collectRecordDetails(record)));
     }
 
-    if (jsonLevel == 0) {
+    if (startAtRoot) {
       return singleField(record, (ObjectNode) obj);
     }
     return structRecord(record, (ObjectNode) obj);
   }
 
   private R singleField(R record, ObjectNode obj) {
-    Struct struct = new Struct(JSON_MAP_SCHEMA).put(ALL_JSON_SCHEMA_FIELD, JsonToMapUtils.populateMap(obj, Maps.newHashMap()));
+    Struct struct =
+        new Struct(JSON_MAP_SCHEMA)
+            .put(ALL_JSON_SCHEMA_FIELD, JsonToMapUtils.populateMap(obj, Maps.newHashMap()));
     return record.newRecord(
         record.topic(),
         record.kafkaPartition(),
         record.keySchema(),
         record.key(),
-            JSON_MAP_SCHEMA,
+        JSON_MAP_SCHEMA,
         struct,
         record.timestamp(),
         record.headers());
@@ -159,9 +163,6 @@ public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transform
   @Override
   public void configure(Map<String, ?> configs) {
     SimpleConfig config = new SimpleConfig(CONFIG_DEF, configs);
-    jsonLevel = config.getInt(JSON_LEVEL);
-    if (jsonLevel < 0) {
-      throw new ConfigException(String.format("%s must be >= 0", JSON_LEVEL));
-    }
+    startAtRoot = config.getBoolean(JSON_LEVEL);
   }
 }
