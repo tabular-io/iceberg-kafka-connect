@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -30,6 +31,8 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import java.util.Map;
 
 public class JsonToMapTransformTest extends FileLoads {
 
@@ -125,11 +128,14 @@ public class JsonToMapTransformTest extends FileLoads {
               timestamp,
               TimestampType.CREATE_TIME);
       SinkRecord result = smt.apply(record);
-      Schema expectedSchema = SchemaBuilder.struct().field("payload", Schema.STRING_SCHEMA).build();
-      Struct expecedStruct = new Struct(expectedSchema).put("payload", "{\"key\":1,\"a\":\"a\"}");
+      Schema expectedSchema = SchemaBuilder.struct().field("payload", SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).optional().build()).build();
       assertInstanceOf(Struct.class, result.value());
       Struct resultStruct = (Struct) result.value();
-      assertThat(resultStruct.get("payload")).isEqualTo("{\"key\":1,\"a\":\"a\"}");
+
+      Map<String, String> expectedValue = Maps.newHashMap();
+      expectedValue.put("key", "1");
+      expectedValue.put("a", "a");
+      assertThat(resultStruct.get("payload")).isEqualTo(expectedValue);
       assertThat(result.valueSchema()).isEqualTo(expectedSchema);
     }
   }

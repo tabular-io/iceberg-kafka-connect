@@ -18,7 +18,7 @@
   "array_array_inconsistent": [[1], [2.0]],
   "array_different_types": ["one", 1],
   "nested_obj": {
-    "one": 1
+    "key": {"nested_key": 1}
   },
   "bytes": "SGVsbG8=",
   "bigInt": 354736184430273859332531123456

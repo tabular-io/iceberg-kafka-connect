@@ -32,6 +32,8 @@ import com.fasterxml.jackson.databind.node.MissingNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +51,7 @@ public class JsonToMapUtils {
   }
 
   private static final Map<Class<? extends JsonNode>, Schema> JSON_NODE_TO_SCHEMA =
-      getJsonNodeToSchema();
+          getJsonNodeToSchema();
 
   private static Map<Class<? extends JsonNode>, Schema> getJsonNodeToSchema() {
     final Map<Class<? extends JsonNode>, Schema> map = Maps.newHashMap();
@@ -61,7 +63,7 @@ public class JsonToMapUtils {
     map.put(FloatNode.class, Schema.OPTIONAL_FLOAT32_SCHEMA);
     map.put(DoubleNode.class, Schema.OPTIONAL_FLOAT64_SCHEMA);
     map.put(ArrayNode.class, Schema.OPTIONAL_STRING_SCHEMA);
-    map.put(ObjectNode.class, Schema.OPTIONAL_STRING_SCHEMA);
+    map.put(ObjectNode.class, SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).optional().build());
     map.put(BigIntegerNode.class, Schema.OPTIONAL_STRING_SCHEMA);
     map.put(DecimalNode.class, Schema.OPTIONAL_STRING_SCHEMA);
     return ImmutableMap.copyOf(map);
@@ -74,7 +76,7 @@ public class JsonToMapUtils {
   }
 
   public static SchemaBuilder addFieldSchemaBuilder(
-      Map.Entry<String, JsonNode> kv, SchemaBuilder builder) {
+          Map.Entry<String, JsonNode> kv, SchemaBuilder builder) {
     String key = kv.getKey();
     JsonNode value = kv.getValue();
     addToSchema(key, schemaFromNode(value), builder);
@@ -85,75 +87,79 @@ public class JsonToMapUtils {
   public static Schema schemaFromNode(JsonNode node) {
     if (!node.isNull() && !node.isMissingNode()) {
       if (node.isArray()) {
-        ArrayNode array = (ArrayNode) node;
-        // can't create a schema for an empty array since the inner type is not known.
-        if (!array.isEmpty()) {
-          Class<? extends JsonNode> arrayType = arrayNodeType(array);
-          if (arrayType != null) {
-            if (arrayType != NullNode.class && arrayType != MissingNode.class) {
-              if (arrayType == ObjectNode.class) {
-                // arrays of objects become strings
-                int objectCount = 0;
-                int emptyObjectCount = 0;
-                for (Iterator<JsonNode> it = array.elements(); it.hasNext(); ) {
-                  JsonNode element = it.next();
-                  objectCount += 1;
-                  if (!element.elements().hasNext()) {
-                    emptyObjectCount += 1;
-                  }
-                }
-                if (objectCount == emptyObjectCount) {
-                  return null;
-                } else {
-                  return SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).optional().build();
-                }
-              } else if (arrayType == ArrayNode.class) {
-                // nested array case
-                // need to protect against arrays of empty arrays, arrays of empty objects, arrays
-                // inconsistent types, etc.
-                List<Schema> nestedSchemas = Lists.newArrayList();
-                boolean[] hasValidSchema = {true};
-                node.elements()
-                    .forEachRemaining(
-                        nodeElement -> {
-                          Schema nestedElementSchema = schemaFromNode(nodeElement);
-                          if (nestedElementSchema == null) {
-                            hasValidSchema[0] = false;
-                          }
-                          nestedSchemas.add(nestedElementSchema);
-                        });
-                if (!nestedSchemas.isEmpty() && hasValidSchema[0]) {
-                  boolean allMatch =
-                      nestedSchemas.stream()
-                          .allMatch(schema -> schema.equals(nestedSchemas.get(0)));
-                  if (allMatch) {
-                    return SchemaBuilder.array(nestedSchemas.get(0)).optional().build();
-                  } else {
-                    return SchemaBuilder.array(
-                            SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).optional().build())
-                        .optional()
-                        .build();
-                  }
-                } else {
-                  return null;
-                }
-              } else {
-
-                // if we are a consistent primitive
-                return SchemaBuilder.array(JSON_NODE_TO_SCHEMA.get(arrayType)).optional().build();
-              }
-            }
-          } else {
-            // if types of the array are inconsistent, convert to a string
-            return SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).optional().build();
-          }
-        }
+        return arraySchema((ArrayNode) node);
       } else if (node.isObject()) {
         if (node.elements().hasNext()) {
           return JSON_NODE_TO_SCHEMA.get(node.getClass());
         }
       } else {
         return JSON_NODE_TO_SCHEMA.get(node.getClass());
+      }
+    }
+    return null;
+  }
+
+  private static Schema arraySchema(ArrayNode array) {
+    // can't create a schema for an empty array since the inner type is not known.
+    if (!array.isEmpty()) {
+      Class<? extends JsonNode> arrayType = arrayNodeType(array);
+      if (arrayType != null) {
+        if (arrayType != NullNode.class && arrayType != MissingNode.class) {
+          if (arrayType == ObjectNode.class) {
+            // arrays of objects become strings (and mixed arrays containing one object)
+            // need to protect against arrays of empty objects
+            int objectCount = 0;
+            int emptyObjectCount = 0;
+            for (Iterator<JsonNode> it = array.elements(); it.hasNext(); ) {
+              JsonNode element = it.next();
+              objectCount += 1;
+              if (!element.elements().hasNext()) {
+                emptyObjectCount += 1;
+              }
+            }
+            if (objectCount == emptyObjectCount) {
+              return null;
+            } else {
+              return SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).optional().build();
+            }
+          } else if (arrayType == ArrayNode.class) {
+            // nested array case
+            // need to protect against arrays of empty arrays, arrays of empty objects, arrays
+            // inconsistent types, etc.
+            List<Schema> nestedSchemas = Lists.newArrayList();
+            boolean[] hasValidSchema = {true};
+            array.elements()
+                    .forEachRemaining(
+                            nodeElement -> {
+                              Schema nestedElementSchema = schemaFromNode(nodeElement);
+                              if (nestedElementSchema == null) {
+                                hasValidSchema[0] = false;
+                              }
+                              nestedSchemas.add(nestedElementSchema);
+                            });
+            if (!nestedSchemas.isEmpty() && hasValidSchema[0]) {
+              boolean allMatch =
+                      nestedSchemas.stream()
+                              .allMatch(schema -> schema.equals(nestedSchemas.get(0)));
+              if (allMatch) {
+                return SchemaBuilder.array(nestedSchemas.get(0)).optional().build();
+              } else {
+                return SchemaBuilder.array(
+                                SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).optional().build())
+                        .optional()
+                        .build();
+              }
+            } else {
+              return null;
+            }
+          } else {
+            // we are a consistent primitive
+            return SchemaBuilder.array(JSON_NODE_TO_SCHEMA.get(arrayType)).optional().build();
+          }
+        }
+      } else {
+        // if types of the array are inconsistent, convert to a string
+        return SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).optional().build();
       }
     }
     return null;
@@ -166,17 +172,17 @@ public class JsonToMapUtils {
     final boolean[] allTypesConsistent = {true};
     // breaks on number.
     array
-        .elements()
-        .forEachRemaining(
-            node -> {
-              Class<? extends JsonNode> type = node.getClass();
-              if (arrayType.get(0) == null) {
-                arrayType.set(0, type);
-              }
-              if (type != arrayType.get(0)) {
-                allTypesConsistent[0] = false;
-              }
-            });
+            .elements()
+            .forEachRemaining(
+                    node -> {
+                      Class<? extends JsonNode> type = node.getClass();
+                      if (arrayType.get(0) == null) {
+                        arrayType.set(0, type);
+                      }
+                      if (type != arrayType.get(0)) {
+                        allTypesConsistent[0] = false;
+                      }
+                    });
 
     if (!allTypesConsistent[0]) {
       return null;
@@ -187,20 +193,22 @@ public class JsonToMapUtils {
 
   public static Struct addToStruct(ObjectNode node, Schema schema, Struct struct) {
     schema
-        .fields()
-        .forEach(
-            field -> {
-              JsonNode element = node.get(field.name());
-              Schema.Type targetType = field.schema().type();
-              if (targetType == Schema.Type.ARRAY) {
-                struct.put(
-                    field.name(),
-                    populateArray(
-                        element, field.schema().valueSchema(), field.name(), Lists.newArrayList()));
-              } else {
-                struct.put(field.name(), extractSimpleValue(element, targetType, field.name()));
-              }
-            });
+            .fields()
+            .forEach(
+                    field -> {
+                      JsonNode element = node.get(field.name());
+                      Schema.Type targetType = field.schema().type();
+                      if (targetType == Schema.Type.ARRAY) {
+                        struct.put(
+                                field.name(),
+                                populateArray(
+                                        element, field.schema().valueSchema(), field.name(), Lists.newArrayList()));
+                      } else if (targetType == Schema.Type.MAP) {
+                        struct.put(field.name(), populateMap(element, Maps.newHashMap()));
+                      } else {
+                        struct.put(field.name(), extractSimpleValue(element, targetType, field.name()));
+                      }
+                    });
     return struct;
   }
 
@@ -208,11 +216,7 @@ public class JsonToMapUtils {
     Object obj;
     switch (type) {
       case STRING:
-        if (node.isTextual()) {
-          obj = node.textValue();
-        } else {
-          obj = node.toString();
-        }
+        obj = nodeToText(node);
         break;
       case BOOLEAN:
         obj = node.booleanValue();
@@ -234,18 +238,18 @@ public class JsonToMapUtils {
           obj = node.binaryValue();
         } catch (Exception e) {
           throw new RuntimeException(
-              String.format("parsing binary value threw exception for %s", fieldName), e);
+                  String.format("parsing binary value threw exception for %s", fieldName), e);
         }
         break;
       default:
         throw new RuntimeException(
-            String.format("Unexpected type %s for field %s", type, fieldName));
+                String.format("Unexpected type %s for field %s", type, fieldName));
     }
     return obj;
   }
 
   private static List<Object> populateArray(
-      JsonNode node, Schema schema, String fieldName, List<Object> acc) {
+          JsonNode node, Schema schema, String fieldName, List<Object> acc) {
     if (schema.type() == Schema.Type.ARRAY) {
       for (Iterator<JsonNode> it = node.elements(); it.hasNext(); ) {
         JsonNode arrayNode = it.next();
@@ -254,9 +258,27 @@ public class JsonToMapUtils {
       }
     } else {
       node.elements()
-          .forEachRemaining(
-              arrayEntry -> acc.add(extractSimpleValue(arrayEntry, schema.type(), fieldName)));
+              .forEachRemaining(
+                      arrayEntry -> acc.add(extractSimpleValue(arrayEntry, schema.type(), fieldName)));
     }
     return acc;
+  }
+
+  public static HashMap<String, String> populateMap(
+          JsonNode node, HashMap<String, String> map
+  ) {
+    for (Iterator<Map.Entry<String, JsonNode>> it = node.fields(); it.hasNext(); ) {
+      Map.Entry<String, JsonNode> element = it.next();
+      map.put(element.getKey(), nodeToText(element.getValue()));
+    }
+    return map;
+  }
+
+  private static String nodeToText(JsonNode node) {
+    if (node.isTextual()) {
+      return node.textValue();
+    } else {
+      return node.toString();
+    }
   }
 }

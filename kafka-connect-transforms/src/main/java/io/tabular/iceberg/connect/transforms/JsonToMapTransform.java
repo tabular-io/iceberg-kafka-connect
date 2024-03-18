@@ -23,6 +23,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Map;
+
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -51,8 +53,8 @@ public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transform
               "Positive value after which level in the json to convert to Map<String, String>");
 
   private static final String ALL_JSON_SCHEMA_FIELD = "payload";
-  private static final Schema ALL_JSON_SCHEMA =
-      SchemaBuilder.struct().field(ALL_JSON_SCHEMA_FIELD, Schema.STRING_SCHEMA).build();
+  private static final Schema JSON_MAP_SCHEMA =
+      SchemaBuilder.struct().field(ALL_JSON_SCHEMA_FIELD, SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).optional().build()).build();
 
   @Override
   public R apply(R record) {
@@ -87,21 +89,19 @@ public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transform
     }
 
     if (jsonLevel == 0) {
-      // return the json as a single field, after validating it's actually json
-      return singleField(record);
+      return singleField(record, (ObjectNode) obj);
     }
-
     return structRecord(record, (ObjectNode) obj);
   }
 
-  private R singleField(R record) {
-    Struct struct = new Struct(ALL_JSON_SCHEMA).put(ALL_JSON_SCHEMA_FIELD, record.value());
+  private R singleField(R record, ObjectNode obj) {
+    Struct struct = new Struct(JSON_MAP_SCHEMA).put(ALL_JSON_SCHEMA_FIELD, JsonToMapUtils.populateMap(obj, Maps.newHashMap()));
     return record.newRecord(
         record.topic(),
         record.kafkaPartition(),
         record.keySchema(),
         record.key(),
-        ALL_JSON_SCHEMA,
+            JSON_MAP_SCHEMA,
         struct,
         record.timestamp(),
         record.headers());

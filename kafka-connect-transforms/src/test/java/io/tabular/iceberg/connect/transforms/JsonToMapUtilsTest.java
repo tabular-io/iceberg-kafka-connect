@@ -33,7 +33,10 @@ import com.fasterxml.jackson.databind.node.MissingNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Base64;
+import java.util.Map;
+
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -109,8 +112,6 @@ class JsonToMapUtilsTest extends FileLoads {
 
     assertThat(JsonToMapUtils.extractSimpleValue(arrayObjects, Schema.Type.STRING, ""))
         .isEqualTo("[{\"key\":1}]");
-    assertThat(JsonToMapUtils.extractSimpleValue(nestedObjNode, Schema.Type.STRING, ""))
-        .isEqualTo("{\"one\":1}");
     assertThat(JsonToMapUtils.extractSimpleValue(arrayDifferentTypes, Schema.Type.STRING, ""))
         .isEqualTo("[\"one\",1]");
     assertThat(JsonToMapUtils.extractSimpleValue(bigInt, Schema.Type.STRING, ""))
@@ -151,12 +152,6 @@ class JsonToMapUtilsTest extends FileLoads {
   }
 
   @Test
-  @DisplayName("schemaFromNode returns String schema for ObjectNodes")
-  public void schemaFromNodeStringsFromObjectNodes() {
-    assertThat(JsonToMapUtils.schemaFromNode(objNode)).isEqualTo(Schema.OPTIONAL_STRING_SCHEMA);
-  }
-
-  @Test
   @DisplayName("schemaFromNode returns null for empty ObjectNodes")
   public void schemaFromNodeNullEmptyObjectNodes() {
     JsonNode node = objNode.get("empty_obj");
@@ -181,6 +176,13 @@ class JsonToMapUtilsTest extends FileLoads {
     assertInstanceOf(DoubleNode.class, doubleNode);
     assertThat(JsonToMapUtils.schemaFromNode(intNode)).isEqualTo(Schema.OPTIONAL_INT32_SCHEMA);
     assertThat(JsonToMapUtils.schemaFromNode(doubleNode)).isEqualTo(Schema.OPTIONAL_FLOAT64_SCHEMA);
+  }
+  @Test
+  @DisplayName("schemaFromNode returns Map<String, String> for ObjectNodes")
+  public void schmefromNodeObjectNodesAsMaps() {
+    JsonNode node = objNode.get("nested_obj");
+    assertInstanceOf(ObjectNode.class, node);
+    assertThat(JsonToMapUtils.schemaFromNode(node)).isEqualTo(SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).optional().build());
   }
 
   @Test
@@ -312,7 +314,10 @@ class JsonToMapUtilsTest extends FileLoads {
     assertThat(result.get("array_array_inconsistent"))
         .isEqualTo(Lists.newArrayList(Lists.newArrayList("1"), Lists.newArrayList("2.0")));
     assertThat(result.get("array_different_types")).isEqualTo(Lists.newArrayList("one", "1"));
-    assertThat(result.get("nested_obj")).isEqualTo("{\"one\":1}");
+
+    Map<String, String> expectedNestedObject  = Maps.newHashMap();
+    expectedNestedObject.put("key", "{\"nested_key\":1}");
+    assertThat(result.get("nested_obj")).isEqualTo(expectedNestedObject);
 
     // assert empty fields don't show up on the struct
     assertThrows(RuntimeException.class, () -> result.get("null"));
