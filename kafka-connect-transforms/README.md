@@ -93,7 +93,7 @@ SinkRecord.schema:
   
 Sinkrecord.value (Struct): 
   "payload"  : Map(
-    "key" L "1",
+    "key" : "1",
     "array" : "[1,"two",3]"
     "empty_obj": "{}"
     "nested_obj": "{"some_key":["one","two"]}}"
