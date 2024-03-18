@@ -48,7 +48,7 @@ public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transform
               ConfigDef.Type.BOOLEAN,
               false,
               ConfigDef.Importance.MEDIUM,
-              "Boolean value to start at root.  False is one level in from the root");
+              "Boolean value to start at root. False is one level in from the root");
 
   private static final String ALL_JSON_SCHEMA_FIELD = "payload";
   private static final Schema JSON_MAP_SCHEMA =
