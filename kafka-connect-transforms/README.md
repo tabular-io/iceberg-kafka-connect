@@ -91,8 +91,13 @@ Will become the following if `transform.json.root` is true:
 SinkRecord.schema: 
   "payload" : (Optional) Map<String, String>
   
-Sinkrecord.value: 
-  "payload" (Map<String, String>) : "{"key":1,"array":[1,"two",3],"empty_obj":{},"nested_obj":{"some_key":["one","two"]}}
+Sinkrecord.value (Struct): 
+  "payload"  : Map(
+    "key" L "1",
+    "array" : "[1,"two",3]"
+    "empty_obj": "{}"
+    "nested_obj": "{"some_key":["one","two"]}}"
+   )
 ```
 
 Will become the following if `transform.json.root` is false
@@ -103,7 +108,7 @@ SinkRecord.schema:
   "array": (Optional) Array<String>,
   "nested_object": (Optional) Map<string, String>
   
-SinkRecord.value:
+SinkRecord.value (Struct):
  "key" 1, 
  "array" ["1", "two", "3"] 
  "nested_object" Map ("some_key" : "["one", "two"]") 
