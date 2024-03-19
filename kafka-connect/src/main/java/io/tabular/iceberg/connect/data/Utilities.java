@@ -39,7 +39,6 @@ import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
-import org.apache.iceberg.common.DynClasses;
 import org.apache.iceberg.common.DynMethods;
 import org.apache.iceberg.common.DynMethods.BoundMethod;
 import org.apache.iceberg.data.GenericAppenderFactory;
@@ -73,10 +72,16 @@ public class Utilities {
   // use reflection here to avoid requiring Hadoop as a dependency
   private static Object loadHadoopConfig(IcebergSinkConfig config) {
     Class<?> configClass =
-        DynClasses.builder().impl("org.apache.hadoop.hdfs.HdfsConfiguration").orNull().build();
+        AlternateDynClasses.builder()
+            .impl("org.apache.hadoop.hdfs.HdfsConfiguration")
+            .orNull()
+            .build();
     if (configClass == null) {
       configClass =
-          DynClasses.builder().impl("org.apache.hadoop.conf.Configuration").orNull().build();
+          AlternateDynClasses.builder()
+              .impl("org.apache.hadoop.conf.Configuration")
+              .orNull()
+              .build();
     }
 
     if (configClass == null) {
