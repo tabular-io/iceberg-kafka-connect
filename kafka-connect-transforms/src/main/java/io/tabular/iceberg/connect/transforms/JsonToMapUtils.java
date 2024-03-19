@@ -74,8 +74,6 @@ class JsonToMapUtils {
     map.put(IntNode.class, Schema.OPTIONAL_INT32_SCHEMA);
     map.put(LongNode.class, Schema.OPTIONAL_INT64_SCHEMA);
     map.put(FloatNode.class, Schema.OPTIONAL_FLOAT32_SCHEMA);
-
-    // if it's bigger than double I don't have great options.
     map.put(DoubleNode.class, Schema.OPTIONAL_FLOAT64_SCHEMA);
     map.put(ArrayNode.class, Schema.OPTIONAL_STRING_SCHEMA);
     map.put(
