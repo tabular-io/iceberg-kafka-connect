@@ -127,18 +127,18 @@ public class JsonToMapUtils {
             // need to protect against arrays of empty arrays, arrays of empty objects, arrays
             // inconsistent types, etc.
             List<Schema> nestedSchemas = Lists.newArrayList();
-            boolean[] hasValidSchema = {true};
-            array
-                .elements()
-                .forEachRemaining(
-                    nodeElement -> {
-                      Schema nestedElementSchema = schemaFromNode(nodeElement);
-                      if (nestedElementSchema == null) {
-                        hasValidSchema[0] = false;
-                      }
-                      nestedSchemas.add(nestedElementSchema);
-                    });
-            if (!nestedSchemas.isEmpty() && hasValidSchema[0]) {
+            boolean hasValidSchema = true;
+
+            for (Iterator<JsonNode> it = array.elements(); it.hasNext(); ) {
+              JsonNode nodeElement = it.next();
+              Schema nestedElementSchema = schemaFromNode(nodeElement);
+              if (nestedElementSchema == null) {
+                hasValidSchema = false;
+              }
+              nestedSchemas.add(nestedElementSchema);
+            }
+
+            if (!nestedSchemas.isEmpty() && hasValidSchema) {
               boolean allMatch =
                   nestedSchemas.stream().allMatch(schema -> schema.equals(nestedSchemas.get(0)));
               if (allMatch) {
@@ -169,22 +169,20 @@ public class JsonToMapUtils {
   public static Class<? extends JsonNode> arrayNodeType(ArrayNode array) {
     final List<Class<? extends JsonNode>> arrayType = Lists.newArrayList();
     arrayType.add(null);
-    final boolean[] allTypesConsistent = {true};
+    boolean allTypesConsistent = true;
     // breaks on number.
-    array
-        .elements()
-        .forEachRemaining(
-            node -> {
-              Class<? extends JsonNode> type = node.getClass();
-              if (arrayType.get(0) == null) {
-                arrayType.set(0, type);
-              }
-              if (type != arrayType.get(0)) {
-                allTypesConsistent[0] = false;
-              }
-            });
+    for (Iterator<JsonNode> it = array.elements(); it.hasNext(); ) {
+      JsonNode nodeElement = it.next();
+      Class<? extends JsonNode> type = nodeElement.getClass();
+      if (arrayType.get(0) == null) {
+        arrayType.set(0, type);
+      }
+      if (type != arrayType.get(0)) {
+        allTypesConsistent = false;
+      }
+    }
 
-    if (!allTypesConsistent[0]) {
+    if (!allTypesConsistent) {
       return null;
     }
 
@@ -251,11 +249,12 @@ public class JsonToMapUtils {
   private static List<Object> populateArray(
       JsonNode node, Schema schema, String fieldName, List<Object> acc) {
     if (schema.type() == Schema.Type.ARRAY) {
-      for (Iterator<JsonNode> it = node.elements(); it.hasNext(); ) {
-        JsonNode arrayNode = it.next();
-        List<Object> nestedList = Lists.newArrayList();
-        acc.add(populateArray(arrayNode, schema.valueSchema(), fieldName, nestedList));
-      }
+      node.elements()
+          .forEachRemaining(
+              arrayNode -> {
+                List<Object> nestedList = Lists.newArrayList();
+                acc.add(populateArray(arrayNode, schema.valueSchema(), fieldName, nestedList));
+              });
     } else {
       node.elements()
           .forEachRemaining(
