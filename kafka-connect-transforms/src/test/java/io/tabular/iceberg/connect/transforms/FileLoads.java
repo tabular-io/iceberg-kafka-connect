@@ -26,8 +26,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 
 public abstract class FileLoads {
-  protected final String getFile(String fileName) throws IOException, URISyntaxException {
-    URL jsonResource = getClass().getClassLoader().getResource(fileName);
+  protected static final String getFile(String fileName) throws IOException, URISyntaxException {
+    URL jsonResource = FileLoads.class.getClassLoader().getResource(fileName);
     return new String(Files.readAllBytes(Paths.get(jsonResource.toURI())), StandardCharsets.UTF_8);
   }
 }

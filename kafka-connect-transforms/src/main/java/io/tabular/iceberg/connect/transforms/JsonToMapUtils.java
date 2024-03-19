@@ -32,6 +32,7 @@ import com.fasterxml.jackson.databind.node.MissingNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import java.math.BigDecimal;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +43,21 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 
-public class JsonToMapUtils {
+class JsonToMapUtils {
+
+  private static final String DECIMAL_LOGICAL_NAME = "org.apache.kafka.connect.data.Decimal";
+  private static final String SCALE_FIELD = "scale";
+
+  private static SchemaBuilder decimalBuilder(int scale) {
+    return SchemaBuilder.bytes()
+        .name(DECIMAL_LOGICAL_NAME)
+        .parameter(SCALE_FIELD, Integer.toString(scale))
+        .version(1);
+  }
+
+  public static Schema decimalSchema(int scale) {
+    return decimalBuilder(scale).optional().build();
+  }
 
   private JsonToMapUtils() {
     throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
@@ -59,12 +74,14 @@ public class JsonToMapUtils {
     map.put(IntNode.class, Schema.OPTIONAL_INT32_SCHEMA);
     map.put(LongNode.class, Schema.OPTIONAL_INT64_SCHEMA);
     map.put(FloatNode.class, Schema.OPTIONAL_FLOAT32_SCHEMA);
+
+    // if it's bigger than double I don't have great options.
     map.put(DoubleNode.class, Schema.OPTIONAL_FLOAT64_SCHEMA);
     map.put(ArrayNode.class, Schema.OPTIONAL_STRING_SCHEMA);
     map.put(
         ObjectNode.class,
         SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).optional().build());
-    map.put(BigIntegerNode.class, Schema.OPTIONAL_STRING_SCHEMA);
+    map.put(BigIntegerNode.class, decimalSchema(0));
     map.put(DecimalNode.class, Schema.OPTIONAL_STRING_SCHEMA);
     return ImmutableMap.copyOf(map);
   }
@@ -232,16 +249,28 @@ public class JsonToMapUtils {
         obj = node.doubleValue();
         break;
       case BYTES:
-        try {
-          obj = node.binaryValue();
-        } catch (Exception e) {
-          throw new RuntimeException(
-              String.format("parsing binary value threw exception for %s", fieldName), e);
-        }
+        obj = extractBytes(node, fieldName);
         break;
       default:
         throw new RuntimeException(
             String.format("Unexpected type %s for field %s", type, fieldName));
+    }
+    return obj;
+  }
+
+  private static Object extractBytes(JsonNode node, String fieldName) {
+    Object obj;
+    try {
+      if (node.isBigInteger()) {
+        obj = new BigDecimal(node.bigIntegerValue());
+      } else if (node.isBigDecimal()) {
+        obj = node.decimalValue();
+      } else {
+        obj = node.binaryValue();
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(
+          String.format("parsing binary value threw exception for %s", fieldName), e);
     }
     return obj;
   }

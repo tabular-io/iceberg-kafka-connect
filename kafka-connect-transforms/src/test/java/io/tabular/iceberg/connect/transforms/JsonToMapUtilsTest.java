@@ -32,6 +32,8 @@ import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.MissingNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Base64;
 import java.util.Map;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
@@ -159,11 +161,12 @@ class JsonToMapUtilsTest extends FileLoads {
   }
 
   @Test
-  @DisplayName("schemaFromNode returns String schema for BigInteger nodes")
+  @DisplayName(
+      "schemaFromNode returns bytes with logical name decimal with scale 0 for BigInteger nodes")
   public void schemaFromNodeStringForBigInteger() {
     JsonNode node = objNode.get("bigInt");
     assertInstanceOf(BigIntegerNode.class, node);
-    assertThat(JsonToMapUtils.schemaFromNode(node)).isEqualTo(Schema.OPTIONAL_STRING_SCHEMA);
+    assertThat(JsonToMapUtils.schemaFromNode(node)).isEqualTo(JsonToMapUtils.decimalSchema(0));
   }
 
   @Test
@@ -301,8 +304,8 @@ class JsonToMapUtilsTest extends FileLoads {
     assertThat(result.get("double")).isEqualTo(0.3);
     // we don't actually convert to bytes when parsing the json
     assertThat(result.get("bytes")).isEqualTo("SGVsbG8=");
-    // no way to represent BigInteger in a SinkRecord w/o custom annotations
-    assertThat(result.get("bigInt")).isEqualTo("354736184430273859332531123456");
+    BigDecimal bigIntExpected = new BigDecimal(new BigInteger("354736184430273859332531123456"));
+    assertThat(result.get("bigInt")).isEqualTo(bigIntExpected);
     assertThat(result.get("nested_object_contains_empty"))
         .isEqualTo(Lists.newArrayList("{}", "{\"one\":1}"));
     assertThat(result.get("array_int")).isEqualTo(Lists.newArrayList(1, 1));

@@ -9,6 +9,7 @@
   "empty_obj": {},
   "empty_arr": [],
   "empty_arr_arr": [[], []],
+  "empty_string": "",
   "array_empty_object": [{}, {}],
   "nested_object_contains_empty": [{}, {"one":  1}],
   "array_int": [1, 1],
@@ -21,5 +22,6 @@
     "key": {"nested_key": 1}
   },
   "bytes": "SGVsbG8=",
-  "bigInt": 354736184430273859332531123456
+  "bigInt": 354736184430273859332531123456,
+  "bigDecimal": 13.3333333333333333333333333344444444455555555
 }
