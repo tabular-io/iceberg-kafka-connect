@@ -249,7 +249,7 @@ public class Utilities {
   }
 
   /**
-   * Dynamically load hive/hadoop configs to avoid packaging them with the distribution Gradle
+   * Dynamically load hive/hadoop configs to avoid packaging them with the distribution. Gradle
    * strips hadoop from the classpath which will cause a NoClassDefFoundError to be thrown when
    * using the version without Hive, so intercept that exception to maintain the underlying
    * DynClass.builder.impl(...).orNull() behavior.
