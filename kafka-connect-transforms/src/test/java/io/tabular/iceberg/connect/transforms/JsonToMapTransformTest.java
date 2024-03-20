@@ -161,7 +161,7 @@ public class JsonToMapTransformTest extends FileLoads {
       SinkRecord result = smt.apply(record);
       assertInstanceOf(Struct.class, result.value());
       Struct resultStruct = (Struct) result.value();
-      assertThat(resultStruct.schema().fields().size()).isEqualTo(18);
+      assertThat(resultStruct.schema().fields().size()).isEqualTo(19);
       assertThat(resultStruct.get("string")).isEqualTo("string");
     }
   }

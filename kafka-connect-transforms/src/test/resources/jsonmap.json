@@ -15,7 +15,7 @@
   "array_int": [1, 1],
   "array_array_int": [[1,1], [2,2]],
   "array_objects": [{"key": 1}],
-  "array_array_objects":[[{"key":  1}], [{"key":  2}]],
+  "array_array_objects":[[{"key":  1}], [{"key":  2, "other": {"ugly": [1,2]}}]],
   "array_array_inconsistent": [[1], [2.0]],
   "array_different_types": ["one", 1],
   "nested_obj": {

@@ -48,6 +48,21 @@ class JsonToMapUtils {
   private static final String DECIMAL_LOGICAL_NAME = "org.apache.kafka.connect.data.Decimal";
   private static final String SCALE_FIELD = "scale";
 
+  public static final Schema ARRAY_OPTIONAL_STRING =
+      SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).optional().build();
+  public static final Schema ARRAY_MAP_OPTIONAL_STRING =
+      SchemaBuilder.array(
+              SchemaBuilder.map(Schema.OPTIONAL_STRING_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA)
+                  .optional()
+                  .build())
+          .optional()
+          .build();
+
+  public static final Schema ARRAY_ARRAY_OPTIONAL_STRING =
+      SchemaBuilder.array(SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).optional().build())
+          .optional()
+          .build();
+
   private static SchemaBuilder decimalBuilder(int scale) {
     return SchemaBuilder.bytes()
         .name(DECIMAL_LOGICAL_NAME)
@@ -121,22 +136,7 @@ class JsonToMapUtils {
       if (arrayType != null) {
         if (arrayType != NullNode.class && arrayType != MissingNode.class) {
           if (arrayType == ObjectNode.class) {
-            // arrays of objects become strings (and mixed arrays containing one object)
-            // need to protect against arrays of empty objects
-            int objectCount = 0;
-            int emptyObjectCount = 0;
-            for (Iterator<JsonNode> it = array.elements(); it.hasNext(); ) {
-              JsonNode element = it.next();
-              objectCount += 1;
-              if (!element.elements().hasNext()) {
-                emptyObjectCount += 1;
-              }
-            }
-            if (objectCount == emptyObjectCount) {
-              return null;
-            } else {
-              return SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).optional().build();
-            }
+            return ARRAY_MAP_OPTIONAL_STRING;
           } else if (arrayType == ArrayNode.class) {
             // nested array case
             // need to protect against arrays of empty arrays, arrays of empty objects, arrays
@@ -159,10 +159,7 @@ class JsonToMapUtils {
               if (allMatch) {
                 return SchemaBuilder.array(nestedSchemas.get(0)).optional().build();
               } else {
-                return SchemaBuilder.array(
-                        SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).optional().build())
-                    .optional()
-                    .build();
+                return ARRAY_ARRAY_OPTIONAL_STRING;
               }
             } else {
               return null;
@@ -174,7 +171,7 @@ class JsonToMapUtils {
         }
       } else {
         // if types of the array are inconsistent, convert to a string
-        return SchemaBuilder.array(Schema.OPTIONAL_STRING_SCHEMA).optional().build();
+        return ARRAY_OPTIONAL_STRING;
       }
     }
     return null;
@@ -185,7 +182,6 @@ class JsonToMapUtils {
     final List<Class<? extends JsonNode>> arrayType = Lists.newArrayList();
     arrayType.add(null);
     boolean allTypesConsistent = true;
-    // breaks on number.
     for (Iterator<JsonNode> it = array.elements(); it.hasNext(); ) {
       JsonNode nodeElement = it.next();
       Class<? extends JsonNode> type = nodeElement.getClass();
@@ -219,13 +215,13 @@ class JsonToMapUtils {
               } else if (targetType == Schema.Type.MAP) {
                 struct.put(field.name(), populateMap(element, Maps.newHashMap()));
               } else {
-                struct.put(field.name(), extractSimpleValue(element, targetType, field.name()));
+                struct.put(field.name(), extractValue(element, targetType, field.name()));
               }
             });
     return struct;
   }
 
-  public static Object extractSimpleValue(JsonNode node, Schema.Type type, String fieldName) {
+  public static Object extractValue(JsonNode node, Schema.Type type, String fieldName) {
     Object obj;
     switch (type) {
       case STRING:
@@ -245,6 +241,12 @@ class JsonToMapUtils {
         break;
       case FLOAT64:
         obj = node.doubleValue();
+        break;
+      case MAP:
+        ObjectNode mapNode = (ObjectNode) node;
+        Map<String, String> map = Maps.newHashMap();
+        populateMap(mapNode, map);
+        obj = map;
         break;
       case BYTES:
         obj = extractBytes(node, fieldName);
@@ -285,7 +287,7 @@ class JsonToMapUtils {
     } else {
       node.elements()
           .forEachRemaining(
-              arrayEntry -> acc.add(extractSimpleValue(arrayEntry, schema.type(), fieldName)));
+              arrayEntry -> acc.add(extractValue(arrayEntry, schema.type(), fieldName)));
     }
     return acc;
   }
