@@ -10,7 +10,7 @@ jackson-ver = "2.14.2"
 junit-ver = "5.10.0"
 kafka-ver = "3.5.1"
 slf4j-ver = "1.7.36"
-testcontainers-ver = "1.17.6"
+testcontainers-ver = "1.19.7"
 
 
 [libraries]

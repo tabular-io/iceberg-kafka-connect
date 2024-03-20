@@ -16,25 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect;
+package io.tabular.iceberg.connect.internal.data;
 
-import static io.tabular.iceberg.connect.IcebergSinkConfig.INTERNAL_TASK_ID;
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.List;
-import java.util.Map;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.kafka.connect.sink.SinkConnector;
-import org.junit.jupiter.api.Test;
-
-public class IcebergSinkConnectorTest {
-
-  @Test
-  public void testTaskConfigs() {
-    SinkConnector connector = new IcebergSinkConnector();
-    connector.start(ImmutableMap.of());
-    List<Map<String, String>> configs = connector.taskConfigs(3);
-    assertThat(configs).hasSize(3);
-    configs.forEach(map -> assertThat(map).containsKey(INTERNAL_TASK_ID));
-  }
+public enum Operation {
+  INSERT,
+  UPDATE,
+  DELETE
 }

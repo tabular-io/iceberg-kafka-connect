@@ -48,7 +48,8 @@ public class IntegrationTestBase {
   protected final TestContext context = TestContext.INSTANCE;
   protected S3Client s3;
   protected Catalog catalog;
-  protected Admin admin;
+  protected Admin sourceAdmin;
+  protected Admin controlAdmin;
 
   private KafkaProducer<String, String> producer;
 
@@ -62,7 +63,8 @@ public class IntegrationTestBase {
     s3 = context.initLocalS3Client();
     catalog = context.initLocalCatalog();
     producer = context.initLocalProducer();
-    admin = context.initLocalAdmin();
+    sourceAdmin = context.initLocalSourceAdmin();
+    controlAdmin = context.initLocalControlAdmin();
 
     this.connectorName = "test_connector-" + UUID.randomUUID();
     this.testTopic = "test-topic-" + UUID.randomUUID();
@@ -78,7 +80,8 @@ public class IntegrationTestBase {
       throw new RuntimeException(e);
     }
     producer.close();
-    admin.close();
+    sourceAdmin.close();
+    controlAdmin.close();
     s3.close();
   }
 
@@ -112,7 +115,7 @@ public class IntegrationTestBase {
 
   protected void createTopic(String topicName, int partitions) {
     try {
-      admin
+      sourceAdmin
           .createTopics(ImmutableList.of(new NewTopic(topicName, partitions, (short) 1)))
           .all()
           .get(10, TimeUnit.SECONDS);
@@ -123,7 +126,7 @@ public class IntegrationTestBase {
 
   protected void deleteTopic(String topicName) {
     try {
-      admin.deleteTopics(ImmutableList.of(topicName)).all().get(10, TimeUnit.SECONDS);
+      sourceAdmin.deleteTopics(ImmutableList.of(topicName)).all().get(10, TimeUnit.SECONDS);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
       throw new RuntimeException(e);
     }
@@ -132,6 +135,11 @@ public class IntegrationTestBase {
   protected void send(String topicName, TestEvent event, boolean useSchema) {
     String eventStr = event.serialize(useSchema);
     producer.send(new ProducerRecord<>(topicName, Long.toString(event.id()), eventStr));
+  }
+
+  protected void send(String topicName, int partition, TestEvent event, boolean useSchema) {
+    String eventStr = event.serialize(useSchema);
+    producer.send(new ProducerRecord<>(topicName, partition, Long.toString(event.id()), eventStr));
   }
 
   protected void flush() {

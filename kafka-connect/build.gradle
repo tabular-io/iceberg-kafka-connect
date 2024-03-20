@@ -16,6 +16,9 @@ dependencies {
   testImplementation libs.mockito
   testImplementation libs.assertj
 
+  testImplementation libs.testcontainers
+  testImplementation libs.testcontainers.kafka
+
   testImplementation 'ch.qos.logback:logback-classic:1.5.3'
 }
 

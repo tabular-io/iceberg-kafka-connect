@@ -16,25 +16,38 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect;
+package io.tabular.iceberg.connect.internal.data;
 
-import static io.tabular.iceberg.connect.IcebergSinkConfig.INTERNAL_TASK_ID;
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Objects;
 
-import java.util.List;
-import java.util.Map;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.kafka.connect.sink.SinkConnector;
-import org.junit.jupiter.api.Test;
+public class Offset implements Comparable<Offset> {
 
-public class IcebergSinkConnectorTest {
+  public static final Offset NULL_OFFSET = new Offset(null, null);
 
-  @Test
-  public void testTaskConfigs() {
-    SinkConnector connector = new IcebergSinkConnector();
-    connector.start(ImmutableMap.of());
-    List<Map<String, String>> configs = connector.taskConfigs(3);
-    assertThat(configs).hasSize(3);
-    configs.forEach(map -> assertThat(map).containsKey(INTERNAL_TASK_ID));
+  private final Long offset;
+  private final Long timestamp;
+
+  public Offset(Long offset, Long timestamp) {
+    this.offset = offset;
+    this.timestamp = timestamp;
+  }
+
+  public Long offset() {
+    return offset;
+  }
+
+  public Long timestamp() {
+    return timestamp;
+  }
+
+  @Override
+  public int compareTo(Offset other) {
+    if (Objects.equals(this.offset, other.offset)) {
+      return 0;
+    }
+    if (this.offset == null || (other.offset != null && other.offset > this.offset)) {
+      return -1;
+    }
+    return 1;
   }
 }

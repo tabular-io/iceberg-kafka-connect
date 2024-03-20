@@ -16,25 +16,19 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect;
+package io.tabular.iceberg.connect.internal.kafka;
 
-import static io.tabular.iceberg.connect.IcebergSinkConfig.INTERNAL_TASK_ID;
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.List;
 import java.util.Map;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.kafka.connect.sink.SinkConnector;
-import org.junit.jupiter.api.Test;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
+import org.apache.kafka.clients.admin.Admin;
 
-public class IcebergSinkConnectorTest {
+// TODO: move to top level package maybe to fix visibility issues
+// Maybe have a generic Factory interface that takes a IcebergSinkConfig and returns a T?
+public class AdminFactory implements Factory<Admin> {
 
-  @Test
-  public void testTaskConfigs() {
-    SinkConnector connector = new IcebergSinkConnector();
-    connector.start(ImmutableMap.of());
-    List<Map<String, String>> configs = connector.taskConfigs(3);
-    assertThat(configs).hasSize(3);
-    configs.forEach(map -> assertThat(map).containsKey(INTERNAL_TASK_ID));
+  @Override
+  public Admin create(Map<String, String> kafkaProps) {
+    Map<String, Object> copy = Maps.newHashMap(kafkaProps);
+    return Admin.create(copy);
   }
 }

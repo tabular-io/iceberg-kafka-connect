@@ -54,8 +54,9 @@ public class TestContext {
 
   public static final TestContext INSTANCE = new TestContext();
 
-  private final Network network;
-  private final KafkaContainer kafka;
+  final Network network;
+  private final KafkaContainer sourceKafka;
+  private final KafkaContainer controlKafka;
   private final KafkaConnectContainer kafkaConnect;
   private final GenericContainer catalog;
   private final GenericContainer minio;
@@ -64,7 +65,7 @@ public class TestContext {
   private static final String KC_PLUGIN_DIR = "/test/kafka-connect";
 
   private static final String MINIO_IMAGE = "minio/minio";
-  private static final String KAFKA_IMAGE = "confluentinc/cp-kafka:7.5.1";
+  static final String KAFKA_IMAGE = "confluentinc/cp-kafka:7.5.1";
   private static final String CONNECT_IMAGE = "confluentinc/cp-kafka-connect:7.5.1";
   private static final String REST_CATALOG_IMAGE = "tabulario/iceberg-rest:0.6.0";
 
@@ -96,18 +97,19 @@ public class TestContext {
             .withEnv("CATALOG_S3_PATH__STYLE__ACCESS", "true")
             .withEnv("AWS_REGION", AWS_REGION);
 
-    kafka = new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE)).withNetwork(network);
+    sourceKafka = new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE)).withNetwork(network);
+    controlKafka = new KafkaContainer(DockerImageName.parse(KAFKA_IMAGE)).withNetwork(network);
 
     kafkaConnect =
         new KafkaConnectContainer(DockerImageName.parse(CONNECT_IMAGE))
             .withNetwork(network)
-            .dependsOn(catalog, kafka)
+            .dependsOn(catalog, sourceKafka)
             .withFileSystemBind(LOCAL_INSTALL_DIR, KC_PLUGIN_DIR)
             .withEnv("CONNECT_PLUGIN_PATH", KC_PLUGIN_DIR)
-            .withEnv("CONNECT_BOOTSTRAP_SERVERS", kafka.getNetworkAliases().get(0) + ":9092")
+            .withEnv("CONNECT_BOOTSTRAP_SERVERS", sourceKafka.getNetworkAliases().get(0) + ":9092")
             .withEnv("CONNECT_OFFSET_FLUSH_INTERVAL_MS", "500");
 
-    Startables.deepStart(Stream.of(minio, catalog, kafka, kafkaConnect)).join();
+    Startables.deepStart(Stream.of(minio, catalog, sourceKafka, controlKafka, kafkaConnect)).join();
 
     try (S3Client s3 = initLocalS3Client()) {
       s3.createBucket(req -> req.bucket(BUCKET));
@@ -118,7 +120,8 @@ public class TestContext {
 
   private void shutdown() {
     kafkaConnect.close();
-    kafka.close();
+    controlKafka.close();
+    sourceKafka.close();
     catalog.close();
     minio.close();
     network.close();
@@ -132,8 +135,16 @@ public class TestContext {
     return catalog.getMappedPort(CATALOG_PORT);
   }
 
-  private String getLocalBootstrapServers() {
-    return kafka.getBootstrapServers();
+  private String getLocalSourceBootstrapServers() {
+    return sourceKafka.getBootstrapServers();
+  }
+
+  private String getLocalControlBootstrapServers() {
+    return controlKafka.getBootstrapServers();
+  }
+
+  public String getRemoteControlBootstrapServers() {
+    return controlKafka.getNetworkAliases().get(0) + ":9092";
   }
 
   public void startConnector(KafkaConnectContainer.Config config) {
@@ -198,15 +209,22 @@ public class TestContext {
     return new KafkaProducer<>(
         ImmutableMap.of(
             ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,
-            getLocalBootstrapServers(),
+            getLocalSourceBootstrapServers(),
             ProducerConfig.CLIENT_ID_CONFIG,
             UUID.randomUUID().toString()),
         new StringSerializer(),
         new StringSerializer());
   }
 
-  public Admin initLocalAdmin() {
+  public Admin initLocalSourceAdmin() {
     return Admin.create(
-        ImmutableMap.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, getLocalBootstrapServers()));
+        ImmutableMap.of(
+            AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, getLocalSourceBootstrapServers()));
+  }
+
+  public Admin initLocalControlAdmin() {
+    return Admin.create(
+        ImmutableMap.of(
+            AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, getLocalControlBootstrapServers()));
   }
 }

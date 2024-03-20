@@ -51,8 +51,8 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   private static final Logger LOG = LoggerFactory.getLogger(IcebergSinkConfig.class.getName());
 
-  public static final String INTERNAL_TRANSACTIONAL_SUFFIX_PROP =
-      "iceberg.coordinator.transactional.suffix";
+  // TODO: breaking change technically
+  public static final String INTERNAL_TASK_ID = "kafka.connect.task.id";
   private static final String ROUTE_REGEX = "route-regex";
   private static final String ID_COLUMNS = "id-columns";
   private static final String PARTITION_BY = "partition-by";
@@ -60,7 +60,8 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   private static final String CATALOG_PROP_PREFIX = "iceberg.catalog.";
   private static final String HADOOP_PROP_PREFIX = "iceberg.hadoop.";
-  private static final String KAFKA_PROP_PREFIX = "iceberg.kafka.";
+  private static final String SOURCE_KAFKA_PROP_PREFIX = "iceberg.kafka.";
+  private static final String CONTROL_KAFKA_PROP_PREFIX = "iceberg.control.kafka.";
   private static final String TABLE_PROP_PREFIX = "iceberg.table.";
   private static final String AUTO_CREATE_PROP_PREFIX = "iceberg.tables.auto-create-props.";
   private static final String WRITE_PROP_PREFIX = "iceberg.table.write-props.";
@@ -243,7 +244,9 @@ public class IcebergSinkConfig extends AbstractConfig {
   private final Map<String, String> originalProps;
   private final Map<String, String> catalogProps;
   private final Map<String, String> hadoopProps;
-  private final Map<String, String> kafkaProps;
+  private final Map<String, String> sourceClusterKafkaProps;
+  private final Map<String, String> controlClusterKafkaProps;
+  private final boolean controlClusterMode;
   private final Map<String, String> autoCreateProps;
   private final Map<String, String> writeProps;
   private final Map<String, TableSinkConfig> tableConfigMap = Maps.newHashMap();
@@ -256,8 +259,23 @@ public class IcebergSinkConfig extends AbstractConfig {
     this.catalogProps = PropertyUtil.propertiesWithPrefix(originalProps, CATALOG_PROP_PREFIX);
     this.hadoopProps = PropertyUtil.propertiesWithPrefix(originalProps, HADOOP_PROP_PREFIX);
 
-    this.kafkaProps = Maps.newHashMap(loadWorkerProps());
-    kafkaProps.putAll(PropertyUtil.propertiesWithPrefix(originalProps, KAFKA_PROP_PREFIX));
+    this.sourceClusterKafkaProps = Maps.newHashMap(loadWorkerProps());
+    sourceClusterKafkaProps.putAll(
+        PropertyUtil.propertiesWithPrefix(originalProps, SOURCE_KAFKA_PROP_PREFIX));
+
+    Map<String, String> maybeControlClusterKafkaProps =
+        PropertyUtil.propertiesWithPrefix(originalProps, CONTROL_KAFKA_PROP_PREFIX);
+    if (maybeControlClusterKafkaProps.isEmpty()) {
+      this.controlClusterKafkaProps = sourceClusterKafkaProps;
+      this.controlClusterMode = false;
+    } else {
+      // TODO: maybe only if it contains BOOTSTRAP_SERVERS different from source cluster? To be
+      // explicit/strict?
+      //  or actually reach out to servers and see if you get a different cluster-id?
+      this.controlClusterKafkaProps = Maps.newHashMap(loadWorkerProps());
+      controlClusterKafkaProps.putAll(maybeControlClusterKafkaProps);
+      this.controlClusterMode = true;
+    }
 
     this.autoCreateProps =
         PropertyUtil.propertiesWithPrefix(originalProps, AUTO_CREATE_PROP_PREFIX);
@@ -296,9 +314,9 @@ public class IcebergSinkConfig extends AbstractConfig {
     return originalProps.get(NAME_PROP);
   }
 
-  public String transactionalSuffix() {
+  public Integer taskId() {
     // this is for internal use and is not part of the config definition...
-    return originalProps.get(INTERNAL_TRANSACTIONAL_SUFFIX_PROP);
+    return Integer.valueOf(originalProps.get(INTERNAL_TASK_ID));
   }
 
   public Map<String, String> catalogProps() {
@@ -309,8 +327,16 @@ public class IcebergSinkConfig extends AbstractConfig {
     return hadoopProps;
   }
 
-  public Map<String, String> kafkaProps() {
-    return kafkaProps;
+  public Map<String, String> sourceClusterKafkaProps() {
+    return ImmutableMap.copyOf(sourceClusterKafkaProps);
+  }
+
+  public Map<String, String> controlClusterKafkaProps() {
+    return ImmutableMap.copyOf(controlClusterKafkaProps);
+  }
+
+  public boolean controlClusterMode() {
+    return controlClusterMode;
   }
 
   public Map<String, String> autoCreateProps() {
@@ -470,8 +496,7 @@ public class IcebergSinkConfig extends AbstractConfig {
       }
     }
     LOG.info(
-        "Worker properties not loaded, using only {}* properties for Kafka clients",
-        KAFKA_PROP_PREFIX);
+        "Worker properties not loaded, using only connector config properties for Kafka clients");
     return ImmutableMap.of();
   }
 }

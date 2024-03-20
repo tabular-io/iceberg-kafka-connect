@@ -16,25 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect;
-
-import static io.tabular.iceberg.connect.IcebergSinkConfig.INTERNAL_TASK_ID;
-import static org.assertj.core.api.Assertions.assertThat;
+package io.tabular.iceberg.connect.internal.coordinator;
 
 import java.util.List;
-import java.util.Map;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.kafka.connect.sink.SinkConnector;
-import org.junit.jupiter.api.Test;
+import java.util.stream.Collectors;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 
-public class IcebergSinkConnectorTest {
+class MemoryAppender
+    extends ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> {
+  public List<ch.qos.logback.classic.spi.ILoggingEvent> getLoggedEvents() {
+    return ImmutableList.copyOf(this.list);
+  }
 
-  @Test
-  public void testTaskConfigs() {
-    SinkConnector connector = new IcebergSinkConnector();
-    connector.start(ImmutableMap.of());
-    List<Map<String, String>> configs = connector.taskConfigs(3);
-    assertThat(configs).hasSize(3);
-    configs.forEach(map -> assertThat(map).containsKey(INTERNAL_TASK_ID));
+  public List<String> getWarnOrHigher() {
+    return getLoggedEvents().stream()
+        .filter(e -> e.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
+        .map(e -> e.getMessage())
+        .collect(Collectors.toList());
   }
 }

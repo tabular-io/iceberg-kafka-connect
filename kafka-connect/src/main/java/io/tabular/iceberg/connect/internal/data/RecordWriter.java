@@ -16,25 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect;
-
-import static io.tabular.iceberg.connect.IcebergSinkConfig.INTERNAL_TASK_ID;
-import static org.assertj.core.api.Assertions.assertThat;
+package io.tabular.iceberg.connect.internal.data;
 
 import java.util.List;
-import java.util.Map;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.kafka.connect.sink.SinkConnector;
-import org.junit.jupiter.api.Test;
+import org.apache.kafka.connect.sink.SinkRecord;
 
-public class IcebergSinkConnectorTest {
+// TODO: why does this extend Cloneable?
+// TODO: why public?
+public interface RecordWriter extends Cloneable {
 
-  @Test
-  public void testTaskConfigs() {
-    SinkConnector connector = new IcebergSinkConnector();
-    connector.start(ImmutableMap.of());
-    List<Map<String, String>> configs = connector.taskConfigs(3);
-    assertThat(configs).hasSize(3);
-    configs.forEach(map -> assertThat(map).containsKey(INTERNAL_TASK_ID));
-  }
+  void write(SinkRecord record);
+
+  List<WriterResult> complete();
+
+  void close();
 }

@@ -16,25 +16,29 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect;
+package io.tabular.iceberg.connect.internal.data;
 
-import static io.tabular.iceberg.connect.IcebergSinkConfig.INTERNAL_TASK_ID;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.List;
-import java.util.Map;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.kafka.connect.sink.SinkConnector;
 import org.junit.jupiter.api.Test;
 
-public class IcebergSinkConnectorTest {
+public class OffsetTest {
 
   @Test
-  public void testTaskConfigs() {
-    SinkConnector connector = new IcebergSinkConnector();
-    connector.start(ImmutableMap.of());
-    List<Map<String, String>> configs = connector.taskConfigs(3);
-    assertThat(configs).hasSize(3);
-    configs.forEach(map -> assertThat(map).containsKey(INTERNAL_TASK_ID));
+  public void testOffsetEquals() {
+    assertThat(new Offset(null, null).compareTo(new Offset(null, null))).isEqualTo(0);
+    assertThat(new Offset(1L, null).compareTo(new Offset(1L, null))).isEqualTo(0);
+  }
+
+  @Test
+  public void testOffsetLessThan() {
+    assertThat(new Offset(null, null).compareTo(new Offset(1L, null))).isEqualTo(-1);
+    assertThat(new Offset(1L, null).compareTo(new Offset(2L, null))).isEqualTo(-1);
+  }
+
+  @Test
+  public void testOffsetGreaterThan() {
+    assertThat(new Offset(1L, null).compareTo(new Offset(null, null))).isEqualTo(1);
+    assertThat(new Offset(2L, null).compareTo(new Offset(1L, null))).isEqualTo(1);
   }
 }
