@@ -39,6 +39,7 @@ import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
+import org.apache.iceberg.common.DynClasses;
 import org.apache.iceberg.common.DynMethods;
 import org.apache.iceberg.common.DynMethods.BoundMethod;
 import org.apache.iceberg.data.GenericAppenderFactory;
@@ -71,17 +72,9 @@ public class Utilities {
 
   // use reflection here to avoid requiring Hadoop as a dependency
   private static Object loadHadoopConfig(IcebergSinkConfig config) {
-    Class<?> configClass =
-        AlternateDynClasses.builder()
-            .impl("org.apache.hadoop.hdfs.HdfsConfiguration")
-            .orNull()
-            .build();
+    Class<?> configClass = dynamicallyLoad("org.apache.hadoop.hdfs.HdfsConfiguration");
     if (configClass == null) {
-      configClass =
-          AlternateDynClasses.builder()
-              .impl("org.apache.hadoop.conf.Configuration")
-              .orNull()
-              .build();
+      configClass = dynamicallyLoad("org.apache.hadoop.conf.Configuration");
     }
 
     if (configClass == null) {
@@ -253,6 +246,22 @@ public class Utilities {
       }
     }
     return writer;
+  }
+
+  /**
+   * Dynamically load hive/hadoop configs to avoid packaging them with the distribution Gradle
+   * strips hadoop from the classpath which will cause a NoClassDefFoundError to be thrown when
+   * using the version without Hive, so intercept that exception to maintain the underlying
+   * DynClass.builder.impl(...).orNull() behavior.
+   */
+  private static Class<?> dynamicallyLoad(String className) {
+    Class<?> configClass;
+    try {
+      configClass = DynClasses.builder().impl(className).orNull().build();
+    } catch (NoClassDefFoundError e) {
+      configClass = null;
+    }
+    return configClass;
   }
 
   private Utilities() {}
