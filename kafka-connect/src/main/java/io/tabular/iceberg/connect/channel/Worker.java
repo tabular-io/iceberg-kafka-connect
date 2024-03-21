@@ -112,6 +112,7 @@ public class Worker extends Channel {
         writers.values().stream().flatMap(writer -> writer.complete().stream()).collect(toList());
     Map<TopicPartition, Offset> offsets = Maps.newHashMap(sourceOffsets);
 
+    writers.values().forEach(RecordWriter::close);
     writers.clear();
     sourceOffsets.clear();
 
