@@ -66,6 +66,13 @@ public class WorkerTest extends ChannelTestBase {
     workerTest(value);
   }
 
+  @Test
+  public void testTopicToTableMapRoute() {
+    when(config.topicToTableMap()).thenReturn(ImmutableMap.of(SRC_TOPIC_NAME, TABLE_NAME));
+    Map<String, Object> value = ImmutableMap.of(SRC_TOPIC_NAME, TABLE_NAME);
+    workerTest(value);
+  }
+
   private void workerTest(Map<String, Object> value) {
     SinkTaskContext context = mock(SinkTaskContext.class);
     when(context.assignment()).thenReturn(ImmutableSet.of(new TopicPartition(SRC_TOPIC_NAME, 0)));
