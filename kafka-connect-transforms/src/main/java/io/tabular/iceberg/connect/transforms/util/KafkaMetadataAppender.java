@@ -32,10 +32,10 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 public abstract class KafkaMetadataAppender {
 
-  public static final String INCLUDE_KAFKA_METADATA = "transforms.kafka_metadata.include_metadata";
-  public static final String EXTERNAL_KAFKA_METADATA = "transforms.kafka_metadata.external_field";
-  public static final String KEY_METADATA_FIELD_NAME = "transforms.kafka_metadata.metadata_field";
-  public static final String KEY_METADATA_IS_NESTED = "transforms.kafka_metadata.nested";
+  public static final String INCLUDE_KAFKA_METADATA = "kafka_metadata.include";
+  public static final String EXTERNAL_KAFKA_METADATA = "kafka_metadata.external_field";
+  public static final String KEY_METADATA_FIELD_NAME = "kafka.metadata.field_name";
+  public static final String KEY_METADATA_IS_NESTED = "kafka_metadata.nested";
   public static final String DEFAULT_METADATA_FIELD_NAME = "_kafka_metadata";
 
   public static final ConfigDef CONFIG_DEF =

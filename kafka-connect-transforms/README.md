@@ -31,12 +31,12 @@ The `KafkaMetadata` injects `topic`, `partition`, `offset`, `record timestamp`.
 
 ## Configuration
 
-| Property                                   | Description (default value)                                                       |
-|--------------------------------------------|-----------------------------------------------------------------------------------|
-| transforms.kafka_metadata.include_metadata | (true) includes kafka metadata.  False becomes a no-op                            | 
-| transforms.kafka_metadata.metadata_field   | (_kafka_metadata) prefix for fields                                               | 
-| transforms.kafka_metadata.nested           | (false) if true, nests data on a struct else adds to top level as prefixed fields |
-| transforms.kafka_metadata.external_field   | (none) appends a constant `key,value` to the metadata (e.g. cluster name)         | 
+| Property                      | Description (default value)                                                       |
+|-------------------------------|-----------------------------------------------------------------------------------|
+| kafka_metadata.include        | (true) includes kafka metadata.  False becomes a no-op                            | 
+| kafka_metadata.field_name     | (_kafka_metadata) prefix for fields                                               | 
+| kafka_metadata.nested         | (false) if true, nests data on a struct else adds to top level as prefixed fields |
+| kafka_metadata.external_field | (none) appends a constant `key,value` to the metadata (e.g. cluster name)         | 
 
 If `nested` is on: 
 
@@ -55,14 +55,14 @@ It will promote the `data` element fields to top level and add the following met
 ## Configuration
 
 The DMS transform can also append Kafka Metadata without an additional record copy as per the `KafkaMetadataTransform` with the following
-configuration: 
+configuration:
 
-| Property                                   | Description (default value)                                                       |
-|--------------------------------------------|-----------------------------------------------------------------------------------|
-| transforms.kafka_metadata.include_metadata | (false) includes kafka metadata.  False will not append data to DMS transform     | 
-| transforms.kafka_metadata.metadata_field   | (_kafka_metadata) prefix for fields                                               | 
-| transforms.kafka_metadata.nested           | (false) if true, nests data on a struct else adds to top level as prefixed fields |
-| transforms.kafka_metadata.external_field   | (none) appends a constant `key,value` to the metadata (e.g. cluster name)         | 
+| Property                      | Description (default value)                                                       |
+|-------------------------------|-----------------------------------------------------------------------------------|
+| kafka_metadata.include        | (true) includes kafka metadata.  False becomes a no-op                            |
+| kafka_metadata.field_name     | (_kafka_metadata) prefix for fields                                               |
+| kafka_metadata.nested         | (false) if true, nests data on a struct else adds to top level as prefixed fields |
+| kafka_metadata.external_field | (none) appends a constant `key,value` to the metadata (e.g. cluster name)         |
 
 
 # DebeziumTransform
@@ -81,9 +81,9 @@ It will promote the `before` or `after` element fields to top level and add the 
 The Debezium transform can also append Kafka Metadata without an additional record copy as per the `KafkaMetadataTransform` with the following
 configuration:
 
-| Property                                   | Description (default value)                                                       |
-|--------------------------------------------|-----------------------------------------------------------------------------------|
-| transforms.kafka_metadata.include_metadata | (false) includes kafka metadata.  False will not append data to DMS transform     | 
-| transforms.kafka_metadata.metadata_field   | (_kafka_metadata) prefix for fields                                               | 
-| transforms.kafka_metadata.nested           | (false) if true, nests data on a struct else adds to top level as prefixed fields |
-| transforms.kafka_metadata.external_field   | (none) appends a constant `key,value` to the metadata (e.g. cluster name)         | 
+| Property                      | Description (default value)                                                       |
+|-------------------------------|-----------------------------------------------------------------------------------|
+| kafka_metadata.include        | (true) includes kafka metadata.  False becomes a no-op                            |
+| kafka_metadata.field_name     | (_kafka_metadata) prefix for fields                                               |
+| kafka_metadata.nested         | (false) if true, nests data on a struct else adds to top level as prefixed fields |
+| kafka_metadata.external_field | (none) appends a constant `key,value` to the metadata (e.g. cluster name)         | 
