@@ -57,8 +57,10 @@ and this leads to an explosion of schema evolutions and columns).  This will get
 be further processed by query engines into a more manageable form.  
 
 It will parse string values into `SinkRecords` with a Schema and a Struct.  It assumes the messages are json objects 
-themselves and will throw exceptions if the records are primitives.  You must use `StringDeserializer` as the 
+themselves and will throw exceptions if the records are primitives.  You must use `StringConverter` as the 
 `ValueConverter`, not `org.apache.kafka.connect.json.JsonConverter`.
+
+Keys are not transformed. 
 
 ## Configuration
 
