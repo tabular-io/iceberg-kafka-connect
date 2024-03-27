@@ -51,7 +51,7 @@ It will promote the `before` or `after` element fields to top level and add the 
 # MongoDebeziumTransformer
 _(Experimental)_ 
 
-The `MongoDebeziumTransform`SMT transforms a Mongo Debezium formatted message with `before`/afte`r BSON '
+The `MongoDebeziumTransform`SMT transforms a Mongo Debezium formatted message with `before`/`after` BSON
 strings into `before`/`after` typed Structs that the `DebeziumTransform` SMT expects. 
 
 It does not (yet) support renaming columns if mongodb column is not supported by your underlying 
@@ -61,7 +61,7 @@ catalog type.
 
 | Property            | Description                                      |
 |---------------------|--------------------------------------------------|
-| cdc.mongo.array_handling_mode  | `array` or `document` to set array handling mode |
+| array_handling_mode  | `array` or `document` to set array handling mode |
 
 Value array (the default) will encode arrays as the array datatype. It is user’s responsibility to ensure that 
 all elements for a given array instance are of the same type. This option is a restricting one but offers 

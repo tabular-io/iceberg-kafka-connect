@@ -48,7 +48,7 @@ import org.slf4j.LoggerFactory;
  */
 public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Transformation<R> {
 
-  public static final String ARRAY_HANDLING_MODE_KEY = "cdc.mongo.array_handling_mode";
+  public static final String ARRAY_HANDLING_MODE_KEY = "array_handling_mode";
 
   public static final String RECORD_ENVELOPE_KEY_SCHEMA_NAME_SUFFIX = ".Key";
 
@@ -111,7 +111,7 @@ public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Trans
     if (beforeRecord.value() == null
         && afterRecord.value() == null
         && updateDescriptionRecord.value() == null) {
-      throw new RuntimeException(
+      throw new IllegalArgumentException(
           String.format("malformed record %s", kafkaMetadataForException(record)));
     }
 
@@ -123,7 +123,7 @@ public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Trans
       beforeBson = BsonDocument.parse(beforeRecord.value().toString());
     }
     if (afterRecord.value() == null && updateDescriptionRecord.value() != null) {
-      afterBson = buildAfterBsonFromPartials(updateDescriptionRecord, beforeBson, keyBson);
+      afterBson = buildAfterBsonFromPartials(updateDescriptionRecord,  (beforeBson == null) ? new BsonDocument() : beforeBson.clone(), keyBson);
     } else if (afterRecord.value() != null) {
       afterBson = BsonDocument.parse(afterRecord.value().toString());
     }
@@ -158,13 +158,11 @@ public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Trans
    * updatedFields
    *
    * @param updateDescriptionRecord Struct on key updateDescriptions
-   * @param maybeBeforeBson parsed Bson of the before field (nullable)
+   * @param initialDocument parsed Bson of the before field (maybe an empty document) to bootstrap
    * @return Bson representing the After fields
    */
   private BsonDocument buildAfterBsonFromPartials(
-      R updateDescriptionRecord, BsonDocument maybeBeforeBson, BsonDocument keyBson) {
-    BsonDocument afterBson =
-        (maybeBeforeBson == null) ? new BsonDocument() : maybeBeforeBson.clone();
+      R updateDescriptionRecord, BsonDocument initialDocument, BsonDocument keyBson) {
 
     Struct updateAsStruct =
         Requirements.requireStruct(updateDescriptionRecord.value(), UPDATE_DESCRIPTION);
@@ -174,21 +172,21 @@ public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Trans
 
     BsonDocument updatedBson = BsonDocument.parse(updated);
     for (Map.Entry<String, BsonValue> valueEntry : updatedBson.entrySet()) {
-      afterBson.append(valueEntry.getKey(), valueEntry.getValue());
+      initialDocument.append(valueEntry.getKey(), valueEntry.getValue());
     }
 
     if (removed != null) {
       for (String field : removed) {
-        afterBson.keySet().remove(field);
+        initialDocument.keySet().remove(field);
       }
     }
     // in a partial update it's possible the updated fields do not include the primary key
     // so bump it from the key.  Note: type may be downcast.
-    if (!afterBson.containsKey("_id")) {
-      afterBson.append("_id", keyBson.get("id"));
+    if (!initialDocument.containsKey("_id")) {
+      initialDocument.append("_id", keyBson.get("id"));
     }
 
-    return afterBson;
+    return initialDocument;
   }
 
   private R newRecord(

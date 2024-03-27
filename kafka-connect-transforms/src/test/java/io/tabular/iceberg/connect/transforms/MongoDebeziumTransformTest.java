@@ -562,6 +562,6 @@ public class MongoDebeziumTransformTest {
             TimestampType.CREATE_TIME);
 
     MongoDebeziumTransform<SinkRecord> smt = getTransformer("array");
-    assertThrows(RuntimeException.class, () -> smt.apply(record));
+    assertThrows(IllegalArgumentException.class, () -> smt.apply(record));
   }
 }
