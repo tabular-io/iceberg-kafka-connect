@@ -62,7 +62,6 @@ public class WorkerTest extends ChannelTestBase {
   public void testDynamicRoute() {
     when(config.dynamicTablesEnabled()).thenReturn(true);
     when(config.tablesRouteField()).thenReturn(FIELD_NAME);
-    when(catalog.tableExists(any())).thenReturn(true);
     Map<String, Object> value = ImmutableMap.of(FIELD_NAME, TABLE_NAME);
     workerTest(value);
   }

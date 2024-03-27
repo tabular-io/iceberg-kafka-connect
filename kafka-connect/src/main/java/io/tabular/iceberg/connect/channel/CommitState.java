@@ -49,14 +49,17 @@ public class CommitState {
     commitBuffer.add(envelope);
     if (!isCommitInProgress()) {
       LOG.warn(
-          "Received commit response when no commit in progress, this can happen during recovery");
+          "Received commit response with commit-id={} when no commit in progress, this can happen during recovery",
+          ((CommitResponsePayload) envelope.event().payload()).commitId());
     }
   }
 
   public void addReady(Envelope envelope) {
     readyBuffer.add((CommitReadyPayload) envelope.event().payload());
     if (!isCommitInProgress()) {
-      LOG.warn("Received commit ready when no commit in progress, this can happen during recovery");
+      LOG.warn(
+          "Received commit ready for commit-id={} when no commit in progress, this can happen during recovery",
+          ((CommitReadyPayload) envelope.event().payload()).commitId());
     }
   }
 
