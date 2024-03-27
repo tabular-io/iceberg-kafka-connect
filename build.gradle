@@ -49,7 +49,10 @@ subprojects {
 
   spotless {
     java {
-      target "src/**/*.java"
+      target project.fileTree(project.rootDir) {
+        include 'src/**/*.java'
+        exclude 'src/*/io/debezium/**/*.java'
+      }
       googleJavaFormat("1.7")
       removeUnusedImports()
       licenseHeaderFile "$rootDir/header.txt"
