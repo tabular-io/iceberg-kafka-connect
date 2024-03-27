@@ -64,12 +64,12 @@ themselves and will throw exceptions if the records are primitives.  You must us
 
 | Property             | Description  (default value)             |
 |----------------------|------------------------------------------|
-| transforms.json.root | (false) Boolean value to start at root   |
+| json.root | (false) Boolean value to start at root   |
 
-The `transform.json.root` is meant for the most inconsistent data.  It will construct a Struct with a single field 
+The `transforms.IDENTIFIER_HERE.json.root` is meant for the most inconsistent data.  It will construct a Struct with a single field 
 called `payload` with a Schema of `Map<String, String>`.  
 
-If `transform.json.root` is false (the default), it will construct a Struct with inferred schemas for primitive and
+If `transforms.IDENTIFIER_HERE.json.root` is false (the default), it will construct a Struct with inferred schemas for primitive and
 array fields.  Nested objects become fields of type `Map<String, String>`.
 
 Keys with empty arrays and empty objects are filtered out from the final schema.  Arrays will be typed unless the 

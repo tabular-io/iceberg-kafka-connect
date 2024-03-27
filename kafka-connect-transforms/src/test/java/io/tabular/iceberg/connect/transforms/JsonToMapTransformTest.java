@@ -85,7 +85,7 @@ public class JsonToMapTransformTest extends FileLoads {
               offset,
               timestamp,
               TimestampType.CREATE_TIME);
-      assertThrows(RuntimeException.class, () -> smt.apply(record));
+      assertThrows(JsonToMapException.class, () -> smt.apply(record));
     }
   }
 
@@ -104,7 +104,7 @@ public class JsonToMapTransformTest extends FileLoads {
               offset,
               timestamp,
               TimestampType.CREATE_TIME);
-      assertThrows(RuntimeException.class, () -> smt.apply(record));
+      assertThrows(JsonToMapException.class, () -> smt.apply(record));
     }
   }
 

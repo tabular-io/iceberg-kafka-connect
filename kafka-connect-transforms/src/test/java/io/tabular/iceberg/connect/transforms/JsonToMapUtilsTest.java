@@ -298,6 +298,7 @@ class JsonToMapUtilsTest extends FileLoads {
     assertThat(result.get("float_is_double")).isEqualTo(3.0);
     assertThat(result.get("double")).isEqualTo(0.3);
     // we don't actually convert to bytes when parsing the json
+    // so just check it is a string
     assertThat(result.get("bytes")).isEqualTo("SGVsbG8=");
     BigDecimal bigIntExpected = new BigDecimal(new BigInteger("354736184430273859332531123456"));
     assertThat(result.get("bigInt")).isEqualTo(bigIntExpected);

@@ -35,7 +35,7 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transformation<R> {
 
-  public static final String JSON_LEVEL = "transforms.json.root";
+  public static final String JSON_LEVEL = "json.root";
 
   private static final ObjectReader mapper = new ObjectMapper().reader();
 
@@ -69,8 +69,7 @@ public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transform
 
   private R process(R record) {
     if (!(record.value() instanceof String)) {
-      // filter out non-string messages
-      return newNullRecord(record);
+      throw new JsonToMapException("record value is not a string, use StringConverter");
     }
 
     String json = (String) record.value();
@@ -79,15 +78,17 @@ public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transform
     try {
       obj = mapper.readTree(json);
     } catch (Exception e) {
-      throw new RuntimeException(
+      throw new JsonToMapException(
           String.format(
               "record.value is not valid json for record.value: %s", collectRecordDetails(record)),
           e);
     }
 
     if (!(obj instanceof ObjectNode)) {
-      throw new RuntimeException(
-          String.format("Expected json object for record.value: %s", collectRecordDetails(record)));
+      throw new JsonToMapException(
+          String.format(
+              "Expected json object for record.value after parsing: %s",
+              collectRecordDetails(record)));
     }
 
     if (startAtRoot) {
@@ -143,18 +144,6 @@ public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transform
   @Override
   public ConfigDef config() {
     return CONFIG_DEF;
-  }
-
-  private R newNullRecord(R record) {
-    return record.newRecord(
-        record.topic(),
-        record.kafkaPartition(),
-        null,
-        null,
-        null,
-        null,
-        record.timestamp(),
-        record.headers());
   }
 
   @Override

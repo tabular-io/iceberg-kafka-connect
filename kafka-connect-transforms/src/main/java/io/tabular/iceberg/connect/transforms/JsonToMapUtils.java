@@ -252,7 +252,7 @@ class JsonToMapUtils {
         obj = extractBytes(node, fieldName);
         break;
       default:
-        throw new RuntimeException(
+        throw new JsonToMapException(
             String.format("Unexpected type %s for field %s", type, fieldName));
     }
     return obj;
@@ -269,7 +269,7 @@ class JsonToMapUtils {
         obj = node.binaryValue();
       }
     } catch (Exception e) {
-      throw new RuntimeException(
+      throw new JsonToMapException(
           String.format("parsing binary value threw exception for %s", fieldName), e);
     }
     return obj;
