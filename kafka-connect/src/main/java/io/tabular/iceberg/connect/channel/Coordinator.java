@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.events.CommitCompletePayload;
 import io.tabular.iceberg.connect.events.CommitRequestPayload;
-import io.tabular.iceberg.connect.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.events.CommitTablePayload;
 import io.tabular.iceberg.connect.events.Event;
 import io.tabular.iceberg.connect.events.EventType;
@@ -38,16 +37,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
+import java.util.stream.Collectors;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.RowDelta;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.Transaction;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.util.Tasks;
 import org.apache.iceberg.util.ThreadPools;
 import org.apache.kafka.clients.admin.MemberDescription;
@@ -98,6 +100,7 @@ public class Coordinator extends Channel {
               EventType.COMMIT_REQUEST,
               new CommitRequestPayload(commitState.currentCommitId()));
       send(event);
+      LOG.info("Started new commit with commit-id={}", commitState.currentCommitId().toString());
     }
 
     consumeAvailable(POLL_DURATION);
@@ -187,27 +190,25 @@ public class Coordinator extends Channel {
 
     Map<Integer, Long> committedOffsets = lastCommittedOffsetsForTable(table, branch.orElse(null));
 
-    List<CommitResponsePayload> payloads =
+    List<Envelope> filteredEnvelopeList =
         envelopeList.stream()
             .filter(
                 envelope -> {
                   Long minOffset = committedOffsets.get(envelope.partition());
                   return minOffset == null || envelope.offset() >= minOffset;
                 })
-            .map(envelope -> (CommitResponsePayload) envelope.event().payload())
             .collect(toList());
 
     List<DataFile> dataFiles =
-        payloads.stream()
-            .filter(payload -> payload.dataFiles() != null)
-            .flatMap(payload -> payload.dataFiles().stream())
+        Deduplicated.dataFiles(commitState.currentCommitId(), tableIdentifier, filteredEnvelopeList)
+            .stream()
             .filter(dataFile -> dataFile.recordCount() > 0)
             .collect(toList());
 
     List<DeleteFile> deleteFiles =
-        payloads.stream()
-            .filter(payload -> payload.deleteFiles() != null)
-            .flatMap(payload -> payload.deleteFiles().stream())
+        Deduplicated.deleteFiles(
+                commitState.currentCommitId(), tableIdentifier, filteredEnvelopeList)
+            .stream()
             .filter(deleteFile -> deleteFile.recordCount() > 0)
             .collect(toList());
 
@@ -215,15 +216,31 @@ public class Coordinator extends Channel {
       LOG.info("Nothing to commit to table {}, skipping", tableIdentifier);
     } else {
       if (deleteFiles.isEmpty()) {
-        AppendFiles appendOp = table.newAppend();
-        branch.ifPresent(appendOp::toBranch);
-        appendOp.set(snapshotOffsetsProp, offsetsJson);
-        appendOp.set(COMMIT_ID_SNAPSHOT_PROP, commitState.currentCommitId().toString());
-        if (vtts != null) {
-          appendOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts));
+        Transaction transaction = table.newTransaction();
+
+        Map<Integer, List<DataFile>> filesBySpec =
+            dataFiles.stream()
+                .collect(Collectors.groupingBy(DataFile::specId, Collectors.toList()));
+
+        List<List<DataFile>> list = Lists.newArrayList(filesBySpec.values());
+        int lastIdx = list.size() - 1;
+        for (int i = 0; i <= lastIdx; i++) {
+          AppendFiles appendOp = transaction.newAppend();
+          branch.ifPresent(appendOp::toBranch);
+
+          list.get(i).forEach(appendOp::appendFile);
+          appendOp.set(COMMIT_ID_SNAPSHOT_PROP, commitState.currentCommitId().toString());
+          if (i == lastIdx) {
+            appendOp.set(snapshotOffsetsProp, offsetsJson);
+            if (vtts != null) {
+              appendOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts));
+            }
+          }
+
+          appendOp.commit();
         }
-        dataFiles.forEach(appendOp::appendFile);
-        appendOp.commit();
+
+        transaction.commitTransaction();
       } else {
         RowDelta deltaOp = table.newRowDelta();
         branch.ifPresent(deltaOp::toBranch);
