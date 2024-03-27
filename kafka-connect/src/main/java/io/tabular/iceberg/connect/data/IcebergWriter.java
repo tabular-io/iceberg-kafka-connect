@@ -141,7 +141,7 @@ public class IcebergWriter implements RecordWriter {
   }
 
   @Override
-  public List<WriterResult> complete() {
+  public synchronized List<WriterResult> complete() {
     flush();
 
     List<WriterResult> result = Lists.newArrayList(writerResults);

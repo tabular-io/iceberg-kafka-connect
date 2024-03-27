@@ -65,9 +65,9 @@ public class EventSerializationTest {
     assertThat(payload.commitId()).isEqualTo(commitId);
     assertThat(payload.tableName().toIdentifier()).isEqualTo(TableIdentifier.parse("db.tbl"));
     assertThat(payload.dataFiles()).hasSize(2);
-    assertThat(payload.dataFiles()).allMatch(f -> f.specId() == 1);
+    assertThat(payload.dataFiles()).allMatch(f -> f.specId() == 0);
     assertThat(payload.deleteFiles()).hasSize(2);
-    assertThat(payload.deleteFiles()).allMatch(f -> f.specId() == 1);
+    assertThat(payload.deleteFiles()).allMatch(f -> f.specId() == 0);
   }
 
   @Test
