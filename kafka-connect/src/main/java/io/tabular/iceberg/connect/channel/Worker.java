@@ -180,9 +180,24 @@ public class Worker extends Channel {
 
     if (config.dynamicTablesEnabled()) {
       routeRecordDynamically(record);
+    } else if (config.topicToTableMap().size() > 0) {
+      routeRecordByMap(record);
     } else {
       routeRecordStatically(record);
     }
+  }
+
+  private void routeRecordByMap(SinkRecord record) {
+    Map<String, String> topicToTableMap = config.topicToTableMap();
+    String topicName = record.topic();
+    String tableName = topicToTableMap.get(topicName);
+
+    if (tableName == null) {
+      routeRecordStatically(record);
+      return;
+    }
+
+    writerForTable(tableName, record, false).write(record);
   }
 
   private void routeRecordStatically(SinkRecord record) {
