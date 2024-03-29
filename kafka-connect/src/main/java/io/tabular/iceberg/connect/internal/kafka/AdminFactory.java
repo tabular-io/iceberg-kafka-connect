@@ -23,7 +23,6 @@ import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.clients.admin.Admin;
 
 // TODO: move to top level package maybe to fix visibility issues
-// Maybe have a generic Factory interface that takes a IcebergSinkConfig and returns a T?
 public class AdminFactory implements Factory<Admin> {
 
   @Override

@@ -57,6 +57,7 @@ class PartitionWorker implements Worker {
   private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
   private final IcebergSinkConfig config;
   private final TopicPartition topicPartition;
+  private final ConsumerGroupMetadata consumerGroupMetadata;
   private final IcebergWriterFactory writerFactory;
   private final Map<String, RecordWriter> writers;
   private Offset sourceOffset;
@@ -71,10 +72,12 @@ class PartitionWorker implements Worker {
   PartitionWorker(
       IcebergSinkConfig config,
       TopicPartition topicPartition,
+      ConsumerGroupMetadata consumerGroupMetadata,
       IcebergWriterFactory writerFactory,
       Factory<Producer<String, byte[]>> transactionalProducerFactory) {
     this.config = config;
     this.topicPartition = topicPartition;
+    this.consumerGroupMetadata = consumerGroupMetadata;
     this.writerFactory = writerFactory;
     this.writers = Maps.newHashMap();
     this.sourceOffset = Offset.NULL_OFFSET;
@@ -223,9 +226,7 @@ class PartitionWorker implements Worker {
         config.controlTopic(),
         events,
         offsetsToCommit,
-        // TODO: think about what groupId to use here, should be same as whatever we were committing
-        // to before.
-        new ConsumerGroupMetadata(config.controlGroupId()));
+        consumerGroupMetadata);
   }
 
   private void clearWriters() {

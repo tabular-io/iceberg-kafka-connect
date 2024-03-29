@@ -78,8 +78,7 @@ public class IcebergSinkTask extends SinkTask {
     // destroy any state if KC re-uses object
     clearObjectState();
 
-    // TODO: are catalogs thread-safe objects? Both coordinator and worker could use catalog at the
-    // same time.
+    // TODO: are Catalogs thread-safe? Coordinator and worker could use Catalog at the same time.
     catalog = Utilities.loadCatalog(config);
     AdminFactory adminFactory = new AdminFactory();
     ConsumerFactory consumerFactory = new ConsumerFactory();
@@ -87,11 +86,9 @@ public class IcebergSinkTask extends SinkTask {
 
     if (isLeader()) {
       LOG.info("Task elected leader");
-
       if (config.controlClusterMode()) {
         createControlClusterTopic(adminFactory);
       }
-
       startCoordinator(adminFactory, consumerFactory, producerFactory);
     }
 
@@ -103,44 +100,43 @@ public class IcebergSinkTask extends SinkTask {
   }
 
   private void createControlClusterTopic(Factory<Admin> adminFactory) {
-    try (Admin sourceAdmin = adminFactory.create(config.sourceClusterKafkaProps())) {
-      try (Admin controlAdmin = adminFactory.create(config.controlClusterKafkaProps())) {
-        // TODO a few options here:
-        // - Create a corresponding topics for each topic we're reading from in control cluster
-        //  - this handles topics.regex case well
-        // - Create a user-specified control-cluster-source-topic which has at least as many
-        // partitions as topics we're reading from here (this minimizes number of topics to create)
-        //  - does this even work for multi-topic connectors? No.
-        //  - This means I now to have plumb this special topic name all the way through to our
-        // PartitionWorker (not too bad but damn it's ugly)
-        // - Create a user-specific-control-cluster-source-topic and then have a different
-        // consumer-group-id that we commit to for each topic
-        //  - now the loadOffsets command also has to change to understand this ... it has to know
-        // all the consumer-group-ids that existed before
-        //  - you want to reset offsets, welcome to nightmare
-        //  - hacky hacky hacky hacky hacky
+    try (Admin sourceAdmin = adminFactory.create(config.sourceClusterKafkaProps());
+        Admin controlAdmin = adminFactory.create(config.controlClusterKafkaProps())) {
+      // TODO a few options here:
+      // - Create a corresponding topics for each topic we're reading from in control cluster
+      //  - this handles topics.regex case well
+      // - Create a user-specified control-cluster-source-topic which has at least as many
+      // partitions as topics we're reading from here (this minimizes number of topics to create)
+      //  - does this even work for multi-topic connectors? No.
+      //  - This means I now to have plumb this special topic name all the way through to our
+      // PartitionWorker (not too bad but damn it's ugly)
+      // - Create a user-specific-control-cluster-source-topic and then have a different
+      // consumer-group-id that we commit to for each topic
+      //  - now the loadOffsets command also has to change to understand this ... it has to know
+      // all the consumer-group-ids that existed before
+      //  - you want to reset offsets, welcome to nightmare
+      //  - hacky hacky hacky hacky hacky
 
-        ConsumerGroupDescription groupDesc =
-            KafkaUtils.consumerGroupDescription(config.connectGroupId(), sourceAdmin);
-        if (groupDesc.state() == ConsumerGroupState.STABLE) {
-          List<NewTopic> newTopics =
-              groupDesc.members().stream()
-                  .flatMap(member -> member.assignment().topicPartitions().stream())
-                  .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.toSet()))
-                  .entrySet()
-                  .stream()
-                  .map(e -> new NewTopic(e.getKey(), e.getValue().size(), (short) 1))
-                  .collect(Collectors.toList());
+      ConsumerGroupDescription groupDesc =
+          KafkaUtils.consumerGroupDescription(config.connectGroupId(), sourceAdmin);
+      if (groupDesc.state() == ConsumerGroupState.STABLE) {
+        List<NewTopic> newTopics =
+            groupDesc.members().stream()
+                .flatMap(member -> member.assignment().topicPartitions().stream())
+                .collect(Collectors.groupingBy(TopicPartition::topic, Collectors.toSet()))
+                .entrySet()
+                .stream()
+                .map(e -> new NewTopic(e.getKey(), e.getValue().size(), (short) 1))
+                .collect(Collectors.toList());
 
-          // TODO: what happens if topic already exists? :)
-          try {
-            controlAdmin.createTopics(newTopics).all().get();
-          } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e);
-          }
-        } else {
-          throw new NotRunningException("Group not stable");
+        // TODO: what happens if topic already exists? :)
+        try {
+          controlAdmin.createTopics(newTopics).all().get();
+        } catch (InterruptedException | ExecutionException e) {
+          throw new RuntimeException(e);
         }
+      } else {
+        throw new NotRunningException("Group not stable");
       }
     }
   }

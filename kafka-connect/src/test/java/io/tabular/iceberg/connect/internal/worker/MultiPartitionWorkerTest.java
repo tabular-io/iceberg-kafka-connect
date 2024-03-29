@@ -40,6 +40,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
@@ -52,6 +53,8 @@ import org.mockito.InOrder;
 class MultiPartitionWorkerTest {
   private static final String SOURCE_TOPIC = "source-topic-name";
   private static final String CONNECTOR_NAME = "connector-name";
+  private static final ConsumerGroupMetadata CONSUMER_GROUP_METADATA =
+      new ConsumerGroupMetadata(String.format("connect-%s", CONNECTOR_NAME));
   private static final String TABLE_1_NAME = "db.tbl1";
   private static final String CONTROL_TOPIC = "control-topic-name";
 
@@ -102,7 +105,8 @@ class MultiPartitionWorkerTest {
         ImmutableList.of(new TopicPartition(SOURCE_TOPIC, 0), new TopicPartition(SOURCE_TOPIC, 1));
 
     final PartitionWorkerFactory partitionWorkerFactory = mock(PartitionWorkerFactory.class);
-    when(partitionWorkerFactory.createWorker(any())).thenReturn(new NoOpWorker());
+    when(partitionWorkerFactory.createWorker(eq(CONSUMER_GROUP_METADATA), any()))
+        .thenReturn(new NoOpWorker());
 
     final Admin admin = mock(Admin.class);
     final Map<TopicPartition, Long> safeOffsets =
@@ -127,12 +131,21 @@ class MultiPartitionWorkerTest {
     final Factory<Admin> adminFactory = (kafkaProps) -> admin;
 
     new MultiPartitionWorker(
-        context, config, topicPartitions, partitionWorkerFactory, adminFactory);
+        context,
+        CONSUMER_GROUP_METADATA,
+        config,
+        topicPartitions,
+        partitionWorkerFactory,
+        adminFactory);
 
     InOrder inOrderVerifier = inOrder(partitionWorkerFactory, admin, context);
     // should create a worker for each topicPartition
-    inOrderVerifier.verify(partitionWorkerFactory).createWorker(topicPartitions.get(0));
-    inOrderVerifier.verify(partitionWorkerFactory).createWorker(topicPartitions.get(1));
+    inOrderVerifier
+        .verify(partitionWorkerFactory)
+        .createWorker(CONSUMER_GROUP_METADATA, topicPartitions.get(0));
+    inOrderVerifier
+        .verify(partitionWorkerFactory)
+        .createWorker(CONSUMER_GROUP_METADATA, topicPartitions.get(1));
     // only after that, should it retrieve offsets from kafka
     inOrderVerifier
         .verify(admin)

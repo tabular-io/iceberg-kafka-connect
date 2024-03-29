@@ -21,6 +21,7 @@ package io.tabular.iceberg.connect.internal.worker;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.internal.data.IcebergWriterFactory;
 import io.tabular.iceberg.connect.internal.kafka.TransactionalProducerFactory;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.common.TopicPartition;
 
 class PartitionWorkerFactory {
@@ -38,8 +39,12 @@ class PartitionWorkerFactory {
     this.transactionalProducerFactory = transactionalProducerFactory;
   }
 
-  Worker createWorker(TopicPartition topicPartition) {
+  Worker createWorker(ConsumerGroupMetadata consumerGroupMetadata, TopicPartition topicPartition) {
     return new PartitionWorker(
-        config, topicPartition, icebergWriterFactory, transactionalProducerFactory);
+        config,
+        topicPartition,
+        consumerGroupMetadata,
+        icebergWriterFactory,
+        transactionalProducerFactory);
   }
 }

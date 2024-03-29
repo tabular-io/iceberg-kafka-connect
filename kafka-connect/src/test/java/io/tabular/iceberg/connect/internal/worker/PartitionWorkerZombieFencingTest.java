@@ -35,19 +35,20 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.apache.commons.compress.utils.Lists;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.inmemory.InMemoryCatalog;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.types.Types;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -72,6 +73,10 @@ class PartitionWorkerZombieFencingTest {
       new Schema(required(1, ID_FIELD_NAME, Types.StringType.get()));
 
   private static final String CONNECTOR_NAME = "connector-name";
+
+  // TODO: think about testing with generation information more carefully if needed
+  private static final ConsumerGroupMetadata CONSUMER_GROUP_METADATA =
+      new ConsumerGroupMetadata(String.format("connect-%s", CONNECTOR_NAME));
 
   private static final int PARTITION = 0;
   private static final TopicPartition SOURCE_TOPIC_PARTITION =
@@ -137,7 +142,7 @@ class PartitionWorkerZombieFencingTest {
                 String.format("iceberg.kafka.%s", ProducerConfig.MAX_BLOCK_MS_CONFIG),
                 "1000"));
 
-    try (final Admin admin = new AdminFactory().create(configs.sourceClusterKafkaProps())) {
+    try (Admin admin = new AdminFactory().create(configs.sourceClusterKafkaProps())) {
       admin
           .createTopics(
               ImmutableList.of(
@@ -151,6 +156,7 @@ class PartitionWorkerZombieFencingTest {
         new PartitionWorker(
             configs,
             SOURCE_TOPIC_PARTITION,
+            CONSUMER_GROUP_METADATA,
             new IcebergWriterFactoryImpl(inMemoryCatalog, configs),
             new TransactionalProducerFactory());
     worker1.save(ImmutableList.of(sinkRecord));
@@ -159,6 +165,7 @@ class PartitionWorkerZombieFencingTest {
         new PartitionWorker(
             configs,
             SOURCE_TOPIC_PARTITION,
+            CONSUMER_GROUP_METADATA,
             new IcebergWriterFactoryImpl(inMemoryCatalog, configs),
             new TransactionalProducerFactory());
     // at this point, worker 1 is fenced
@@ -176,7 +183,7 @@ class PartitionWorkerZombieFencingTest {
 
     assertThat(worker1WasFenced.get()).isTrue();
 
-    try (final Consumer<String, byte[]> consumer =
+    try (Consumer<String, byte[]> consumer =
         new ConsumerFactory()
             .create(
                 ImmutableMap.of(

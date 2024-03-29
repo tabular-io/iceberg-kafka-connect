@@ -48,6 +48,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.types.Types;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -83,6 +84,9 @@ public class PartitionWorkerTest {
 
   private static final String CONNECTOR_NAME = "connector-name";
   private static final String CONNECTOR_GROUP_ID = String.format("connect-%s", CONNECTOR_NAME);
+  private static final ConsumerGroupMetadata CONSUMER_GROUP_METADATA =
+      new ConsumerGroupMetadata(String.format(CONNECTOR_GROUP_ID));
+
   private static final TopicPartition TOPIC_PARTITION = new TopicPartition(SOURCE_TOPIC, 0);
 
   private static final IcebergSinkConfig BASIC_CONFIGS =
@@ -266,7 +270,8 @@ public class PartitionWorkerTest {
         .as("No producers should be initialized yet")
         .isEmpty();
 
-    new PartitionWorker(BASIC_CONFIGS, TOPIC_PARTITION, writerFactory, producerFactory);
+    new PartitionWorker(
+        BASIC_CONFIGS, TOPIC_PARTITION, CONSUMER_GROUP_METADATA, writerFactory, producerFactory);
 
     assertThat(producerFactory.transactionalProducers)
         .as("Worker should have created one producer")
@@ -286,7 +291,12 @@ public class PartitionWorkerTest {
         new RecordingWriterFactory(inMemoryCatalog, BASIC_CONFIGS);
 
     final PartitionWorker worker =
-        new PartitionWorker(BASIC_CONFIGS, TOPIC_PARTITION, writerFactory, producerFactory);
+        new PartitionWorker(
+            BASIC_CONFIGS,
+            TOPIC_PARTITION,
+            CONSUMER_GROUP_METADATA,
+            writerFactory,
+            producerFactory);
 
     assertThat(writerFactory.writers).as("No writers should be initialized yet").isEmpty();
 
@@ -310,7 +320,12 @@ public class PartitionWorkerTest {
         new RecordingWriterFactory(inMemoryCatalog, BASIC_CONFIGS);
 
     final PartitionWorker worker =
-        new PartitionWorker(BASIC_CONFIGS, TOPIC_PARTITION, writerFactory, producerFactory);
+        new PartitionWorker(
+            BASIC_CONFIGS,
+            TOPIC_PARTITION,
+            CONSUMER_GROUP_METADATA,
+            writerFactory,
+            producerFactory);
 
     assertThat(writerFactory.writers).as("No writers should be initialized yet").isEmpty();
 
@@ -347,6 +362,7 @@ public class PartitionWorkerTest {
                     "iceberg.control.topic",
                     CONTROL_TOPIC)),
             TOPIC_PARTITION,
+            CONSUMER_GROUP_METADATA,
             writerFactory,
             producerFactory);
 
@@ -377,7 +393,12 @@ public class PartitionWorkerTest {
         new RecordingWriterFactory(inMemoryCatalog, BASIC_CONFIGS);
 
     final PartitionWorker worker =
-        new PartitionWorker(BASIC_CONFIGS, TOPIC_PARTITION, writerFactory, producerFactory);
+        new PartitionWorker(
+            BASIC_CONFIGS,
+            TOPIC_PARTITION,
+            CONSUMER_GROUP_METADATA,
+            writerFactory,
+            producerFactory);
 
     assertThat(producerFactory.transactionalProducers)
         .as("Worker should have created a producer")
@@ -418,7 +439,12 @@ public class PartitionWorkerTest {
         new RecordingWriterFactory(inMemoryCatalog, BASIC_CONFIGS);
 
     final PartitionWorker worker =
-        new PartitionWorker(BASIC_CONFIGS, TOPIC_PARTITION, writerFactory, producerFactory);
+        new PartitionWorker(
+            BASIC_CONFIGS,
+            TOPIC_PARTITION,
+            CONSUMER_GROUP_METADATA,
+            writerFactory,
+            producerFactory);
 
     assertThat(producerFactory.transactionalProducers)
         .as("Worker should have created a producer")
@@ -503,7 +529,12 @@ public class PartitionWorkerTest {
         new RecordingWriterFactory(inMemoryCatalog, BASIC_CONFIGS);
 
     final Worker worker =
-        new PartitionWorker(BASIC_CONFIGS, TOPIC_PARTITION, writerFactory, producerFactory);
+        new PartitionWorker(
+            BASIC_CONFIGS,
+            TOPIC_PARTITION,
+            CONSUMER_GROUP_METADATA,
+            writerFactory,
+            producerFactory);
     worker.save(ImmutableList.of(makeSinkRecord(10L, 100L)));
 
     assertThat(producerFactory.transactionalProducers)
