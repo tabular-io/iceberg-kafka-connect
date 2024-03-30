@@ -53,6 +53,10 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   // TODO: breaking change technically
   public static final String INTERNAL_TASK_ID = "kafka.connect.task.id";
+  public static final String COMMITTER_FACTORY_V1 =
+      "io.tabular.iceberg.connect.committer.v1.CommitterFactoryImpl";
+  public static final String COMMITTER_FACTORY_V2 =
+      "io.tabular.iceberg.connect.committer.v2.CommitterFactoryImpl";
   private static final String ROUTE_REGEX = "route-regex";
   private static final String ID_COLUMNS = "id-columns";
   private static final String PARTITION_BY = "partition-by";
@@ -62,6 +66,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String HADOOP_PROP_PREFIX = "iceberg.hadoop.";
   private static final String SOURCE_KAFKA_PROP_PREFIX = "iceberg.kafka.";
   private static final String CONTROL_KAFKA_PROP_PREFIX = "iceberg.control.kafka.";
+  public static final String COMMITTER_FACTORY_CLASS_PROP = "committer.factory.class";
   private static final String TABLE_PROP_PREFIX = "iceberg.table.";
   private static final String AUTO_CREATE_PROP_PREFIX = "iceberg.tables.auto-create-props.";
   private static final String WRITE_PROP_PREFIX = "iceberg.table.write-props.";
@@ -247,6 +252,7 @@ public class IcebergSinkConfig extends AbstractConfig {
   private final Map<String, String> sourceClusterKafkaProps;
   private final Map<String, String> controlClusterKafkaProps;
   private final boolean controlClusterMode;
+  private final String committerFactoryClass;
   private final Map<String, String> autoCreateProps;
   private final Map<String, String> writeProps;
   private final Map<String, TableSinkConfig> tableConfigMap = Maps.newHashMap();
@@ -276,6 +282,9 @@ public class IcebergSinkConfig extends AbstractConfig {
       controlClusterKafkaProps.putAll(maybeControlClusterKafkaProps);
       this.controlClusterMode = true;
     }
+
+    this.committerFactoryClass =
+        originalProps.getOrDefault(COMMITTER_FACTORY_CLASS_PROP, COMMITTER_FACTORY_V1);
 
     this.autoCreateProps =
         PropertyUtil.propertiesWithPrefix(originalProps, AUTO_CREATE_PROP_PREFIX);
@@ -337,6 +346,10 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public boolean controlClusterMode() {
     return controlClusterMode;
+  }
+
+  public String committerFactoryClass() {
+    return committerFactoryClass;
   }
 
   public Map<String, String> autoCreateProps() {

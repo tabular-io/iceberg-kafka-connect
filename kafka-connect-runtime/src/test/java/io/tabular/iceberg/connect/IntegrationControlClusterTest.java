@@ -108,6 +108,9 @@ public class IntegrationControlClusterTest extends IntegrationTestBase {
             .config("iceberg.control.commit.timeout-ms", 10000)
             .config("iceberg.kafka.auto.offset.reset", "earliest")
             .config(
+                IcebergSinkConfig.COMMITTER_FACTORY_CLASS_PROP,
+                IcebergSinkConfig.COMMITTER_FACTORY_V2)
+            .config(
                 String.format(
                     "iceberg.control.kafka.%s", CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
                 context.getRemoteControlBootstrapServers());
