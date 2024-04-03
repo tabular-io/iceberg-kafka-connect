@@ -36,9 +36,11 @@ import java.math.BigDecimal;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
+import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -105,12 +107,10 @@ class JsonToMapUtils {
     }
   }
 
-  public static SchemaBuilder addFieldSchemaBuilder(
-      Map.Entry<String, JsonNode> kv, SchemaBuilder builder) {
+  public static void addField(Map.Entry<String, JsonNode> kv, SchemaBuilder builder) {
     String key = kv.getKey();
     JsonNode value = kv.getValue();
     addToSchema(key, schemaFromNode(value), builder);
-    return builder;
   }
 
   public static Schema schemaFromNode(JsonNode node) {
@@ -130,74 +130,75 @@ class JsonToMapUtils {
 
   @SuppressWarnings("checkstyle:CyclomaticComplexity")
   private static Schema arraySchema(ArrayNode array) {
-    // can't create a schema for an empty array since the inner type is not known.
-    if (!array.isEmpty()) {
-      Class<? extends JsonNode> arrayType = arrayNodeType(array);
-      if (arrayType != null) {
-        if (arrayType != NullNode.class && arrayType != MissingNode.class) {
+    final Schema result;
+
+    if (array.isEmpty()) {
+      result = null;
+    } else {
+      final Class<? extends JsonNode> arrayType = arrayNodeType(array);
+
+      if (arrayType == null) {
+        // inconsistent types
+        result = ARRAY_OPTIONAL_STRING;
+      } else {
+        if (arrayType == NullNode.class || arrayType == MissingNode.class) {
+          // if types of the array are inconsistent, convert to a string
+          result = ARRAY_OPTIONAL_STRING;
+        } else {
           if (arrayType == ObjectNode.class) {
-            return ARRAY_MAP_OPTIONAL_STRING;
+            result = ARRAY_MAP_OPTIONAL_STRING;
           } else if (arrayType == ArrayNode.class) {
             // nested array case
             // need to protect against arrays of empty arrays, arrays of empty objects, arrays
             // inconsistent types, etc.
-            List<Schema> nestedSchemas = Lists.newArrayList();
-            boolean hasValidSchema = true;
 
-            for (Iterator<JsonNode> it = array.elements(); it.hasNext(); ) {
-              JsonNode nodeElement = it.next();
-              Schema nestedElementSchema = schemaFromNode(nodeElement);
-              if (nestedElementSchema == null) {
-                hasValidSchema = false;
-              }
-              nestedSchemas.add(nestedElementSchema);
-            }
+            Set<Schema> nestedSchemas = Sets.newHashSet();
+            array
+                .elements()
+                .forEachRemaining(node -> nestedSchemas.add(JsonToMapUtils.schemaFromNode(node)));
 
-            if (!nestedSchemas.isEmpty() && hasValidSchema) {
-              boolean allMatch =
-                  nestedSchemas.stream().allMatch(schema -> schema.equals(nestedSchemas.get(0)));
-              if (allMatch) {
-                return SchemaBuilder.array(nestedSchemas.get(0)).optional().build();
-              } else {
-                return ARRAY_ARRAY_OPTIONAL_STRING;
-              }
+            if (nestedSchemas.size() > 1) {
+              // inconsistent types for nested arrays
+              result = SchemaBuilder.array(ARRAY_OPTIONAL_STRING).optional().build();
             } else {
-              return null;
+              // nestedSchemas.size() == 1 in this case (we already checked array is not empty)
+              // i.e. consistent types for nested arrays
+              Schema nestedArraySchema = nestedSchemas.iterator().next();
+              if (nestedArraySchema == null) {
+                result = null;
+              } else {
+                result = SchemaBuilder.array(nestedArraySchema).optional().build();
+              }
             }
           } else {
             // we are a consistent primitive
-            return SchemaBuilder.array(JSON_NODE_TO_SCHEMA.get(arrayType)).optional().build();
+            result = SchemaBuilder.array(JSON_NODE_TO_SCHEMA.get(arrayType)).optional().build();
           }
         }
-      } else {
-        // if types of the array are inconsistent, convert to a string
-        return ARRAY_OPTIONAL_STRING;
       }
     }
-    return null;
+
+    return result;
   }
 
   /* Kafka Connect arrays must all be the same type */
   public static Class<? extends JsonNode> arrayNodeType(ArrayNode array) {
-    final List<Class<? extends JsonNode>> arrayType = Lists.newArrayList();
-    arrayType.add(null);
-    boolean allTypesConsistent = true;
-    for (Iterator<JsonNode> it = array.elements(); it.hasNext(); ) {
-      JsonNode nodeElement = it.next();
-      Class<? extends JsonNode> type = nodeElement.getClass();
-      if (arrayType.get(0) == null) {
-        arrayType.set(0, type);
-      }
-      if (type != arrayType.get(0)) {
-        allTypesConsistent = false;
-      }
+    Set<Class<? extends JsonNode>> elementTypes = Sets.newHashSet();
+    array.elements().forEachRemaining(node -> elementTypes.add(node.getClass()));
+
+    Class<? extends JsonNode> result;
+    if (elementTypes.isEmpty()) {
+      // empty ArrayNode, cannot determine element type
+      result = null;
+    } else if (elementTypes.size() == 1) {
+      // consistent element type
+      result = elementTypes.iterator().next();
+    } else {
+      // inconsistent element types
+      result = null;
     }
 
-    if (!allTypesConsistent) {
-      return null;
-    }
-
-    return arrayType.get(0);
+    return result;
   }
 
   public static Struct addToStruct(ObjectNode node, Schema schema, Struct struct) {

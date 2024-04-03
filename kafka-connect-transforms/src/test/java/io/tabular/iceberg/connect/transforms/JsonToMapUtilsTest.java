@@ -283,9 +283,7 @@ class JsonToMapUtilsTest extends FileLoads {
   @Test
   public void addToStruct() {
     SchemaBuilder builder = SchemaBuilder.struct();
-    objNode
-        .fields()
-        .forEachRemaining(entry -> JsonToMapUtils.addFieldSchemaBuilder(entry, builder));
+    objNode.fields().forEachRemaining(entry -> JsonToMapUtils.addField(entry, builder));
     Schema schema = builder.build();
 
     Struct result = new Struct(schema);

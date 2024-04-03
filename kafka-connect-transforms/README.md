@@ -51,16 +51,21 @@ It will promote the `before` or `after` element fields to top level and add the 
 # JsonToMapTransform
 _(Experimental)_ 
 
-The `JsonToMapTransform` SMT parses Json object payloads.  It is intended for use when the incoming data is too 
-inconsistent for the `iceberg-connector` to infer `Struct` schemas from (e.g. the object keys are too variable 
-and this leads to an explosion of schema evolutions and columns).  This will get the data into Iceberg where it can 
-be further processed by query engines into a more manageable form.  
+The `JsonToMapTransform` SMT parses Strings as Json object payloads to infer schemas.  The iceberg-kafka-connect 
+connector for schema-less data (e.g. the Map produced by the Kafka supplied JsonConverter) is to Maps as Iceberg 
+Structs.  This is fine when the JSON is well-structured, but when you have JSON objects with dynamically 
+changing keys, it will lead to an explosion of columns in the Iceberg table due to schema evolutions. 
 
-It will parse string values into `SinkRecords` with a Schema and a Struct.  It assumes the messages are json objects 
-themselves and will throw exceptions if the records are primitives.  You must use `StringConverter` as the 
-`ValueConverter`, not `org.apache.kafka.connect.json.JsonConverter`.
+This SMT is useful in situations where the JSON is not well-structured, in order to get data into Iceberg where 
+it can be further processed by query engines into a more manageable form.  It will convert nested objects to Maps of
+strings (rather than Struct). The connector will create Iceberg tables with Iceberg Map type columns for the JSON objects.
 
-Keys are not transformed. 
+Note:
+
+- The SMT accepts messages with String values as valid input.
+  - It expects JSON objects (`{...}`) in those strings. 
+- You must use the `stringConverter` as the `value.converter` setting for your connector, not `jsonConverter`
+- Message keys are not transformed by passed along as-is by the SMT
 
 ## Configuration
 

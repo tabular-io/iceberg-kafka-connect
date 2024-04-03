@@ -114,9 +114,7 @@ public class JsonToMapTransform<R extends ConnectRecord<R>> implements Transform
 
   private R structRecord(R record, ObjectNode contents) {
     SchemaBuilder builder = SchemaBuilder.struct();
-    contents
-        .fields()
-        .forEachRemaining(entry -> JsonToMapUtils.addFieldSchemaBuilder(entry, builder));
+    contents.fields().forEachRemaining(entry -> JsonToMapUtils.addField(entry, builder));
     Schema schema = builder.build();
     Struct value = JsonToMapUtils.addToStruct(contents, schema, new Struct(schema));
     return record.newRecord(
