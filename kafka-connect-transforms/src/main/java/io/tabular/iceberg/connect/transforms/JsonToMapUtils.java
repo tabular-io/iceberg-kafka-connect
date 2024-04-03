@@ -101,16 +101,12 @@ class JsonToMapUtils {
     return ImmutableMap.copyOf(map);
   }
 
-  public static void addToSchema(String fieldName, Schema schema, SchemaBuilder builder) {
-    if (schema != null) {
-      builder.field(fieldName, schema);
-    }
-  }
-
   public static void addField(Map.Entry<String, JsonNode> kv, SchemaBuilder builder) {
     String key = kv.getKey();
-    JsonNode value = kv.getValue();
-    addToSchema(key, schemaFromNode(value), builder);
+    Schema schema = schemaFromNode(kv.getValue());
+    if (schema != null) {
+      builder.field(key, schema);
+    }
   }
 
   public static Schema schemaFromNode(JsonNode node) {

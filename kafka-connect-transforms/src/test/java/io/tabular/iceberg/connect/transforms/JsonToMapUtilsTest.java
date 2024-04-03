@@ -32,8 +32,10 @@ import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.MissingNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.AbstractMap;
 import java.util.Base64;
 import java.util.Map;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
@@ -60,14 +62,18 @@ class JsonToMapUtilsTest extends FileLoads {
   }
 
   @Test
-  @DisplayName("addToSchema should add schemas to builder unless schema is null")
+  @DisplayName("addField should add schemas to builder unless schema is null")
   public void addToSchema() {
     SchemaBuilder builder = SchemaBuilder.struct();
-    JsonToMapUtils.addToSchema("good", Schema.STRING_SCHEMA, builder);
-    JsonToMapUtils.addToSchema("null", null, builder);
+    Map.Entry<String, JsonNode> good =
+        new AbstractMap.SimpleEntry<String, JsonNode>("good", TextNode.valueOf("text"));
+    Map.Entry<String, JsonNode> missing =
+        new AbstractMap.SimpleEntry<String, JsonNode>("missing", NullNode.getInstance());
+    JsonToMapUtils.addField(good, builder);
+    JsonToMapUtils.addField(missing, builder);
     Schema result = builder.build();
     assertThat(result.fields())
-        .isEqualTo(Lists.newArrayList(new Field("good", 0, Schema.STRING_SCHEMA)));
+        .isEqualTo(Lists.newArrayList(new Field("good", 0, Schema.OPTIONAL_STRING_SCHEMA)));
   }
 
   @Test
