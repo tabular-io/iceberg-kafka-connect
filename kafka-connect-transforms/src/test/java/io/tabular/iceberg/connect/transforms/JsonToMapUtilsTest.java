@@ -99,7 +99,7 @@ class JsonToMapUtilsTest extends FileLoads {
   }
 
   @Test
-  @DisplayName("extractSimpleValue converts complex nodes to strings if schema is string")
+  @DisplayName("extractValue converts complex nodes to strings if schema is string")
   public void exactStringsFromComplexNodes() {
     JsonNode arrayObjects = objNode.get("array_objects");
     assertInstanceOf(ArrayNode.class, arrayObjects);

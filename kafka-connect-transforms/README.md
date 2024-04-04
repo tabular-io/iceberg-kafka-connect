@@ -52,20 +52,20 @@ It will promote the `before` or `after` element fields to top level and add the 
 _(Experimental)_ 
 
 The `JsonToMapTransform` SMT parses Strings as Json object payloads to infer schemas.  The iceberg-kafka-connect 
-connector for schema-less data (e.g. the Map produced by the Kafka supplied JsonConverter) is to Maps as Iceberg 
+connector for schema-less data (e.g. the Map produced by the Kafka supplied JsonConverter) is to convert Maps into Iceberg 
 Structs.  This is fine when the JSON is well-structured, but when you have JSON objects with dynamically 
 changing keys, it will lead to an explosion of columns in the Iceberg table due to schema evolutions. 
 
 This SMT is useful in situations where the JSON is not well-structured, in order to get data into Iceberg where 
-it can be further processed by query engines into a more manageable form.  It will convert nested objects to Maps of
-strings (rather than Struct). The connector will create Iceberg tables with Iceberg Map type columns for the JSON objects.
+it can be further processed by query engines into a more manageable form. It will convert nested objects to 
+Maps and include Map type in the Schema.  The connector will respect the Schema and create Iceberg tables with Iceberg
+Map (String) columns for the JSON objects. 
 
 Note:
 
-- The SMT accepts messages with String values as valid input.
-  - It expects JSON objects (`{...}`) in those strings. 
 - You must use the `stringConverter` as the `value.converter` setting for your connector, not `jsonConverter`
-- Message keys are not transformed by passed along as-is by the SMT
+  - It expects JSON objects (`{...}`) in those strings. 
+- Message keys, tombstones, and headers are not transformed and are passed along as-is by the SMT
 
 ## Configuration
 
@@ -93,7 +93,7 @@ Example json:
 }
 ```
 
-Will become the following if `transform.json.root` is true:
+Will become the following if `json.root` is true:
 
 ```
 SinkRecord.schema: 
@@ -108,7 +108,7 @@ Sinkrecord.value (Struct):
    )
 ```
 
-Will become the following if `transform.json.root` is false
+Will become the following if `json.root` is false
 
 ```
 SinkRecord.schema: 
