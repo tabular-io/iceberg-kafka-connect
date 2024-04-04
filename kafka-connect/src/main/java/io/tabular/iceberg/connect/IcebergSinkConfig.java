@@ -333,6 +333,11 @@ public class IcebergSinkConfig extends AbstractConfig {
     return getBoolean(TABLES_DYNAMIC_PROP);
   }
 
+  // TODO
+  public boolean deadLetterTableEnabled() {
+    return false;
+  }
+
   public String tablesRouteField() {
     return getString(TABLES_ROUTE_FIELD_PROP);
   }

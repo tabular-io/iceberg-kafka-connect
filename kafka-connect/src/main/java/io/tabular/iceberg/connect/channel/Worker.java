@@ -53,11 +53,128 @@ import org.apache.kafka.connect.sink.SinkTaskContext;
 public class Worker extends Channel {
 
   private final IcebergSinkConfig config;
-  private final IcebergWriterFactory writerFactory;
+//  private final IcebergWriterFactory writerFactory;
   private final SinkTaskContext context;
   private final String controlGroupId;
   private final Map<String, RecordWriter> writers;
   private final Map<TopicPartition, Offset> sourceOffsets;
+  private final RecordRouter recordRouter;
+
+  private interface WriterForTable {
+    void write(String tableName, SinkRecord sample, boolean ignoreMissingTable);
+  }
+
+  private static class BaseWriterForTable implements WriterForTable {
+
+    private final IcebergWriterFactory writerFactory;
+    private final Map<String, RecordWriter> writers;
+
+    BaseWriterForTable(IcebergWriterFactory writerFactory, Map<String, RecordWriter> writers) {
+      this.writerFactory = writerFactory;
+      this.writers = writers;
+    }
+
+    @Override
+    public void write(String tableName, SinkRecord sample, boolean ignoreMissingTable) {
+      writers.computeIfAbsent(
+              tableName, notUsed -> writerFactory.createWriter(tableName, sample, ignoreMissingTable)).write(sample);
+
+    }
+  }
+
+  private static class DeadLetterWriterForTable implements WriterForTable {
+    private final IcebergWriterFactory writerFactory;
+    private final Map<String, RecordWriter> writers;
+
+    DeadLetterWriterForTable(IcebergWriterFactory writerFactory, Map<String, RecordWriter> writers) {
+      this.writerFactory = writerFactory;
+      this.writers = writers;
+    }
+
+    @Override
+    public void write(String tableName, SinkRecord sample, boolean ignoreMissingTable) {
+      RecordWriter writer = writers.computeIfAbsent(
+              tableName, notUsed -> writerFactory.createWriter(tableName, sample, ignoreMissingTable));
+      try {
+        writer.write(sample);
+      } catch (Exception e) {
+        // dig out the bytes
+        // generate the table name (topic + _dlt) ?
+        // writers.computeIfAbsent
+        // write the message.
+      }
+    }
+  }
+
+  private abstract class RecordRouter {
+    void write(SinkRecord record) {}
+
+    protected String extractRouteValue(Object recordValue, String routeField) {
+      if (recordValue == null) {
+        return null;
+      }
+      // TODO audit this to see if we need to avoid catching it.
+      Object routeValue = Utilities.extractFromRecordValue(recordValue, routeField);
+      return routeValue == null ? null : routeValue.toString();
+    }
+  }
+
+  private class StaticRecordRouter extends RecordRouter {
+    WriterForTable writerForTable;
+    String routeField;
+    StaticRecordRouter(WriterForTable writerForTable, String routeField) {
+      this.writerForTable = writerForTable;
+    }
+    @Override
+    public void write(SinkRecord record) {
+      if (routeField == null) {
+        // route to all tables
+        config
+                .tables()
+                .forEach(
+                        tableName -> {
+                          writerForTable.write(tableName, record, false);
+                        });
+
+      } else {
+        String routeValue = extractRouteValue(record.value(), routeField);
+        if (routeValue != null) {
+          config
+                  .tables()
+                  .forEach(
+                          tableName ->
+                                  config
+                                          .tableConfig(tableName)
+                                          .routeRegex()
+                                          .ifPresent(
+                                                  regex -> {
+                                                    if (regex.matcher(routeValue).matches()) {
+                                                      writerForTable.write(tableName, record, false);
+                                                    }
+                                                  }));
+        }
+      }
+    }
+  }
+
+  private class DynamicRecordRouter extends RecordRouter {
+
+    WriterForTable writerForTable;
+    String routeField;
+
+    DynamicRecordRouter(WriterForTable writerForTable, String routeField) {
+      this.writerForTable = writerForTable;
+      this.routeField = routeField;
+    }
+    @Override
+    public void write(SinkRecord record) {
+      String routeValue = extractRouteValue(record.value(), routeField);
+      if (routeValue != null) {
+        String tableName = routeValue.toLowerCase();
+        writerForTable.write(tableName, record, true);
+      }
+    }
+  }
 
   public Worker(
       IcebergSinkConfig config,
@@ -72,10 +189,24 @@ public class Worker extends Channel {
         clientFactory);
 
     this.config = config;
-    this.writerFactory = writerFactory;
     this.context = context;
     this.controlGroupId = config.controlGroupId();
     this.writers = Maps.newHashMap();
+
+    WriterForTable writerForTable;
+    if (config.deadLetterTableEnabled()) {
+      writerForTable = new DeadLetterWriterForTable(writerFactory, this.writers);
+    } else {
+      writerForTable = new BaseWriterForTable(writerFactory, this.writers);
+    }
+
+    if (config.dynamicTablesEnabled()) {
+      Preconditions.checkNotNull(config.tablesRouteField(), "Route field cannot be null with dynamic routing");
+      recordRouter = new DynamicRecordRouter(writerForTable, config.tablesRouteField());
+    } else {
+      recordRouter = new StaticRecordRouter(writerForTable, config.tablesRouteField());
+    }
+
     this.sourceOffsets = Maps.newHashMap();
   }
 
@@ -178,67 +309,7 @@ public class Worker extends Channel {
         new TopicPartition(record.topic(), record.kafkaPartition()),
         new Offset(record.kafkaOffset() + 1, record.timestamp()));
 
-    if (config.dynamicTablesEnabled()) {
-      routeRecordDynamically(record);
-    } else {
-      routeRecordStatically(record);
-    }
+    recordRouter.write(record);
   }
 
-  private void routeRecordStatically(SinkRecord record) {
-    String routeField = config.tablesRouteField();
-
-    if (routeField == null) {
-      // route to all tables
-      config
-          .tables()
-          .forEach(
-              tableName -> {
-                writerForTable(tableName, record, false).write(record);
-              });
-
-    } else {
-      String routeValue = extractRouteValue(record.value(), routeField);
-      if (routeValue != null) {
-        config
-            .tables()
-            .forEach(
-                tableName ->
-                    config
-                        .tableConfig(tableName)
-                        .routeRegex()
-                        .ifPresent(
-                            regex -> {
-                              if (regex.matcher(routeValue).matches()) {
-                                writerForTable(tableName, record, false).write(record);
-                              }
-                            }));
-      }
-    }
-  }
-
-  private void routeRecordDynamically(SinkRecord record) {
-    String routeField = config.tablesRouteField();
-    Preconditions.checkNotNull(routeField, "Route field cannot be null with dynamic routing");
-
-    String routeValue = extractRouteValue(record.value(), routeField);
-    if (routeValue != null) {
-      String tableName = routeValue.toLowerCase();
-      writerForTable(tableName, record, true).write(record);
-    }
-  }
-
-  private String extractRouteValue(Object recordValue, String routeField) {
-    if (recordValue == null) {
-      return null;
-    }
-    Object routeValue = Utilities.extractFromRecordValue(recordValue, routeField);
-    return routeValue == null ? null : routeValue.toString();
-  }
-
-  private RecordWriter writerForTable(
-      String tableName, SinkRecord sample, boolean ignoreMissingTable) {
-    return writers.computeIfAbsent(
-        tableName, notUsed -> writerFactory.createWriter(tableName, sample, ignoreMissingTable));
-  }
 }
