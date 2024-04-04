@@ -93,6 +93,9 @@ public class Worker extends Channel {
 
     @Override
     public void write(String tableName, SinkRecord sample, boolean ignoreMissingTable) {
+      // TODO 
+      // dig out the correct part of the message here based on the dead letter table shape
+
       RecordWriter writer = writers.computeIfAbsent(
               tableName, notUsed -> writerFactory.createWriter(tableName, sample, ignoreMissingTable));
       try {
