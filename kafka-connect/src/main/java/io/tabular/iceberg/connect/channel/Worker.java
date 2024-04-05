@@ -46,6 +46,9 @@ import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -53,7 +56,6 @@ import org.apache.kafka.connect.sink.SinkTaskContext;
 public class Worker extends Channel {
 
   private final IcebergSinkConfig config;
-//  private final IcebergWriterFactory writerFactory;
   private final SinkTaskContext context;
   private final String controlGroupId;
   private final Map<String, RecordWriter> writers;
@@ -76,40 +78,148 @@ public class Worker extends Channel {
 
     @Override
     public void write(String tableName, SinkRecord sample, boolean ignoreMissingTable) {
-      writers.computeIfAbsent(
-              tableName, notUsed -> writerFactory.createWriter(tableName, sample, ignoreMissingTable)).write(sample);
-
+      writers
+          .computeIfAbsent(
+              tableName,
+              notUsed -> writerFactory.createWriter(tableName, sample, ignoreMissingTable))
+          .write(sample);
     }
   }
 
   private static class DeadLetterWriterForTable implements WriterForTable {
+    private static final String PAYLOAD_KEY = "transformed";
+    private static final String ORIGINAL_BYTES_KEY = "original";
+    private static final String KEY_BYTES = "key";
+    private static final String VALUE_BYTES = "value";
+    private static final String HEADERS = "headers";
     private final IcebergWriterFactory writerFactory;
     private final Map<String, RecordWriter> writers;
+    private final String deadLetterTableSuffix;
 
-    DeadLetterWriterForTable(IcebergWriterFactory writerFactory, Map<String, RecordWriter> writers) {
+    static final Schema HEADER_ELEMENT_SCHEMA =
+        SchemaBuilder.struct()
+            .field("key", Schema.STRING_SCHEMA)
+            .field("value", Schema.OPTIONAL_BYTES_SCHEMA)
+            .optional()
+            .build();
+    static final Schema HEADER_SCHEMA =
+        SchemaBuilder.array(HEADER_ELEMENT_SCHEMA).optional().build();
+    static final Schema FAILED_SCHEMA =
+        SchemaBuilder.struct()
+            .name("failed_message")
+            .parameter("isFailed", "true")
+            .field("topic", Schema.STRING_SCHEMA)
+            .field("partition", Schema.INT32_SCHEMA)
+            .field("offset", Schema.INT64_SCHEMA)
+            .field("location", Schema.STRING_SCHEMA)
+            .field("timestamp", Schema.OPTIONAL_INT64_SCHEMA)
+            .field("exception", Schema.OPTIONAL_STRING_SCHEMA)
+            .field("stack_trace", Schema.OPTIONAL_STRING_SCHEMA)
+            .field("key_bytes", Schema.OPTIONAL_BYTES_SCHEMA)
+            .field("value_bytes", Schema.OPTIONAL_BYTES_SCHEMA)
+            .field(HEADERS, HEADER_SCHEMA)
+            .field("target_table", Schema.OPTIONAL_STRING_SCHEMA)
+            .schema();
+
+    DeadLetterWriterForTable(
+        IcebergWriterFactory writerFactory,
+        Map<String, RecordWriter> writers,
+        IcebergSinkConfig config) {
       this.writerFactory = writerFactory;
       this.writers = writers;
+      this.deadLetterTableSuffix = config.deadLetterTableSuffix();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void write(String tableName, SinkRecord sample, boolean ignoreMissingTable) {
-      // TODO 
-      // dig out the correct part of the message here based on the dead letter table shape
+      if (sample.value() != null) {
+        if (sample.value() instanceof Map) {
+          RecordWriter writer;
+          Map<String, Object> payload = (Map<String, Object>) sample.value();
+          SinkRecord transformed = (SinkRecord) payload.get(PAYLOAD_KEY);
+          if (isFailed(transformed)) {
+            String deadLetterTableName = deadLetterTableName(sample);
 
-      RecordWriter writer = writers.computeIfAbsent(
-              tableName, notUsed -> writerFactory.createWriter(tableName, sample, ignoreMissingTable));
-      try {
-        writer.write(sample);
-      } catch (Exception e) {
-        // dig out the bytes
-        // generate the table name (topic + _dlt) ?
-        // writers.computeIfAbsent
-        // write the message.
+            // TODO here I know the tableName so need to dig out the struct and inject the
+            // target_table parameter
+
+            writer =
+                writers.computeIfAbsent(
+                    deadLetterTableName,
+                    notUsed ->
+                        writerFactory.createWriter(
+                            deadLetterTableName, transformed, ignoreMissingTable));
+          } else {
+            writer =
+                writers.computeIfAbsent(
+                    tableName,
+                    notUsed ->
+                        writerFactory.createWriter(tableName, transformed, ignoreMissingTable));
+          }
+          try {
+            writer.write(sample);
+          } catch (Exception e) {
+            String deadLetterTableName = deadLetterTableName(sample);
+            SinkRecord newRecord = failedRecord(tableName, sample);
+            // TODO figure out if I can make this more granular
+            writers
+                .computeIfAbsent(
+                    deadLetterTableName,
+                    notUsed -> writerFactory.createWriter(tableName, newRecord, ignoreMissingTable))
+                .write(newRecord);
+          }
+        } else {
+          throw new IllegalArgumentException(
+              "Record not in format expected for dead letter handling");
+        }
       }
+    }
+
+    private boolean isFailed(SinkRecord record) {
+      return "true".equals(record.valueSchema().parameters().get("isFailed"));
+    }
+
+    private String deadLetterTableName(SinkRecord record) {
+      // TODO maybe make this a config option?
+      return record.topic() + deadLetterTableSuffix;
+    }
+
+    @SuppressWarnings("unchecked")
+    private SinkRecord failedRecord(String targetTable, SinkRecord record) {
+      Map<String, Object> payload = (Map<String, Object>) record.value();
+      Map<String, Object> bytes = (Map<String, Object>) payload.get(ORIGINAL_BYTES_KEY);
+      Struct struct = new Struct(FAILED_SCHEMA);
+      Object keyBytes = bytes.get(KEY_BYTES);
+      Object valueBytes = bytes.get(VALUE_BYTES);
+      Object headers = bytes.get(HEADERS);
+      if (bytes.get(KEY_BYTES) != null) {
+        struct.put("key_bytes", keyBytes);
+      }
+      if (valueBytes != null) {
+        struct.put("value_bytes", valueBytes);
+      }
+      if (headers != null) {
+        struct.put(HEADERS, headers);
+      }
+      struct.put("topic", record.topic());
+      struct.put("partition", record.kafkaPartition());
+      struct.put("offset", record.kafkaOffset());
+      struct.put("record_timestamp", record.timestamp());
+      struct.put("target_table", targetTable);
+
+      return record.newRecord(
+          record.topic(),
+          record.kafkaPartition(),
+          null,
+          null,
+          FAILED_SCHEMA,
+          struct,
+          record.timestamp());
     }
   }
 
-  private abstract class RecordRouter {
+  private abstract static class RecordRouter {
     void write(SinkRecord record) {}
 
     protected String extractRouteValue(Object recordValue, String routeField) {
@@ -123,52 +233,56 @@ public class Worker extends Channel {
   }
 
   private class StaticRecordRouter extends RecordRouter {
-    WriterForTable writerForTable;
-    String routeField;
+    private final WriterForTable writerForTable;
+    private final String routeField;
+
     StaticRecordRouter(WriterForTable writerForTable, String routeField) {
       this.writerForTable = writerForTable;
+      this.routeField = routeField;
     }
+
     @Override
     public void write(SinkRecord record) {
       if (routeField == null) {
         // route to all tables
         config
-                .tables()
-                .forEach(
-                        tableName -> {
-                          writerForTable.write(tableName, record, false);
-                        });
+            .tables()
+            .forEach(
+                tableName -> {
+                  writerForTable.write(tableName, record, false);
+                });
 
       } else {
         String routeValue = extractRouteValue(record.value(), routeField);
         if (routeValue != null) {
           config
-                  .tables()
-                  .forEach(
-                          tableName ->
-                                  config
-                                          .tableConfig(tableName)
-                                          .routeRegex()
-                                          .ifPresent(
-                                                  regex -> {
-                                                    if (regex.matcher(routeValue).matches()) {
-                                                      writerForTable.write(tableName, record, false);
-                                                    }
-                                                  }));
+              .tables()
+              .forEach(
+                  tableName ->
+                      config
+                          .tableConfig(tableName)
+                          .routeRegex()
+                          .ifPresent(
+                              regex -> {
+                                if (regex.matcher(routeValue).matches()) {
+                                  writerForTable.write(tableName, record, false);
+                                }
+                              }));
         }
       }
     }
   }
 
-  private class DynamicRecordRouter extends RecordRouter {
+  private static class DynamicRecordRouter extends RecordRouter {
 
-    WriterForTable writerForTable;
-    String routeField;
+    private final WriterForTable writerForTable;
+    private final String routeField;
 
     DynamicRecordRouter(WriterForTable writerForTable, String routeField) {
       this.writerForTable = writerForTable;
       this.routeField = routeField;
     }
+
     @Override
     public void write(SinkRecord record) {
       String routeValue = extractRouteValue(record.value(), routeField);
@@ -198,13 +312,14 @@ public class Worker extends Channel {
 
     WriterForTable writerForTable;
     if (config.deadLetterTableEnabled()) {
-      writerForTable = new DeadLetterWriterForTable(writerFactory, this.writers);
+      writerForTable = new DeadLetterWriterForTable(writerFactory, this.writers, config);
     } else {
       writerForTable = new BaseWriterForTable(writerFactory, this.writers);
     }
 
     if (config.dynamicTablesEnabled()) {
-      Preconditions.checkNotNull(config.tablesRouteField(), "Route field cannot be null with dynamic routing");
+      Preconditions.checkNotNull(
+          config.tablesRouteField(), "Route field cannot be null with dynamic routing");
       recordRouter = new DynamicRecordRouter(writerForTable, config.tablesRouteField());
     } else {
       recordRouter = new StaticRecordRouter(writerForTable, config.tablesRouteField());
@@ -314,5 +429,4 @@ public class Worker extends Channel {
 
     recordRouter.write(record);
   }
-
 }

@@ -21,6 +21,7 @@ package io.tabular.iceberg.connect.data;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
@@ -41,9 +42,19 @@ public class IcebergWriterFactory {
   private final Catalog catalog;
   private final IcebergSinkConfig config;
 
+  private final Predicate<String> shouldAutoCreate;
+
   public IcebergWriterFactory(Catalog catalog, IcebergSinkConfig config) {
     this.catalog = catalog;
     this.config = config;
+
+    if (config.autoCreateEnabled()) {
+      shouldAutoCreate = (unused) -> true;
+    } else if (config.dynamicTablesEnabled()) {
+      shouldAutoCreate = (tableName) -> tableName.endsWith(config.deadLetterTableSuffix());
+    } else {
+      shouldAutoCreate = (unused) -> false;
+    }
   }
 
   public RecordWriter createWriter(
@@ -53,7 +64,7 @@ public class IcebergWriterFactory {
     try {
       table = catalog.loadTable(identifier);
     } catch (NoSuchTableException nst) {
-      if (config.autoCreateEnabled()) {
+      if (shouldAutoCreate.test(tableName)) {
         table = autoCreateTable(tableName, sample);
       } else if (ignoreMissingTable) {
         return new RecordWriter() {};

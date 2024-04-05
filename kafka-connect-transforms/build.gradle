@@ -8,6 +8,7 @@ dependencies {
 
   testImplementation libs.mockito
   testImplementation libs.assertj
+  testRuntimeOnly libs.kafka.connect.runtime
 }
 
 configurations {
