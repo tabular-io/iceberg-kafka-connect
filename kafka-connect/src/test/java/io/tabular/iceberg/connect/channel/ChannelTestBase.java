@@ -28,6 +28,7 @@ import static org.mockito.Mockito.when;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.TableSinkConfig;
 import java.io.IOException;
+import java.util.UUID;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Namespace;
@@ -36,6 +37,7 @@ import org.apache.iceberg.inmemory.InMemoryCatalog;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Types;
+import org.apache.iceberg.util.Pair;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -50,14 +52,18 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
-public class ChannelTestBase {
+class ChannelTestBase {
   protected static final String SRC_TOPIC_NAME = "src-topic";
   protected static final String CTL_TOPIC_NAME = "ctl-topic";
+  protected static final TopicPartition CTL_TOPIC_PARTITION = new TopicPartition(CTL_TOPIC_NAME, 0);
   protected static final String CONTROL_CONSUMER_GROUP_ID = "cg-connector";
   protected InMemoryCatalog catalog;
   protected Table table;
   protected IcebergSinkConfig config;
-  protected KafkaClientFactory clientFactory;
+  protected ConsumerFactory consumerFactory;
+  protected ProducerFactory producerFactory;
+  protected AdminFactory adminFactory;
+  protected UUID producerId;
   protected MockProducer<String, byte[]> producer;
   protected MockConsumer<String, byte[]> consumer;
   protected Admin admin;
@@ -107,15 +113,19 @@ public class ChannelTestBase {
     admin = mock(Admin.class);
     when(admin.describeTopics(anyCollection())).thenReturn(describeResult);
 
+    producerId = UUID.randomUUID();
     producer = new MockProducer<>(false, new StringSerializer(), new ByteArraySerializer());
-    producer.initTransactions();
 
     consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
 
-    clientFactory = mock(KafkaClientFactory.class);
-    when(clientFactory.createProducer(any())).thenReturn(producer);
-    when(clientFactory.createConsumer(any())).thenReturn(consumer);
-    when(clientFactory.createAdmin()).thenReturn(admin);
+    consumerFactory = mock(ConsumerFactory.class);
+    when(consumerFactory.create(any())).thenReturn(consumer);
+
+    producerFactory = mock(ProducerFactory.class);
+    when(producerFactory.create(any())).thenReturn(Pair.of(producerId, producer));
+
+    adminFactory = mock(AdminFactory.class);
+    when(adminFactory.create(any())).thenReturn(admin);
   }
 
   @AfterEach
@@ -124,8 +134,7 @@ public class ChannelTestBase {
   }
 
   protected void initConsumer() {
-    TopicPartition tp = new TopicPartition(CTL_TOPIC_NAME, 0);
-    consumer.rebalance(ImmutableList.of(tp));
-    consumer.updateBeginningOffsets(ImmutableMap.of(tp, 0L));
+    consumer.rebalance(ImmutableList.of(CTL_TOPIC_PARTITION));
+    consumer.updateBeginningOffsets(ImmutableMap.of(CTL_TOPIC_PARTITION, 0L));
   }
 }

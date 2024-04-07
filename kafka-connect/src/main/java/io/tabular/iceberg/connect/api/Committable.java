@@ -16,25 +16,32 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect;
+package io.tabular.iceberg.connect.api;
 
-import static io.tabular.iceberg.connect.IcebergSinkConfig.INTERNAL_TASK_ID;
-import static org.assertj.core.api.Assertions.assertThat;
-
+import io.tabular.iceberg.connect.data.Offset;
+import io.tabular.iceberg.connect.data.WriterResult;
 import java.util.List;
 import java.util.Map;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.kafka.connect.sink.SinkConnector;
-import org.junit.jupiter.api.Test;
+import org.apache.kafka.common.TopicPartition;
 
-public class IcebergSinkConnectorTest {
+public class Committable {
 
-  @Test
-  public void testTaskConfigs() {
-    SinkConnector connector = new IcebergSinkConnector();
-    connector.start(ImmutableMap.of());
-    List<Map<String, String>> configs = connector.taskConfigs(3);
-    assertThat(configs).hasSize(3);
-    configs.forEach(map -> assertThat(map).containsKey(INTERNAL_TASK_ID));
+  private final ImmutableMap<TopicPartition, Offset> offsetsByTopicPartition;
+  private final ImmutableList<WriterResult> writerResults;
+
+  public Committable(
+      Map<TopicPartition, Offset> offsetsByTopicPartition, List<WriterResult> writerResults) {
+    this.offsetsByTopicPartition = ImmutableMap.copyOf(offsetsByTopicPartition);
+    this.writerResults = ImmutableList.copyOf(writerResults);
+  }
+
+  public Map<TopicPartition, Offset> offsetsByTopicPartition() {
+    return offsetsByTopicPartition;
+  }
+
+  public List<WriterResult> writerResults() {
+    return writerResults;
   }
 }

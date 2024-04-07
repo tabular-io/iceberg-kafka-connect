@@ -35,13 +35,6 @@ public class CoordinatorThread extends Thread {
 
   @Override
   public void run() {
-    try {
-      coordinator.start();
-    } catch (Exception e) {
-      LOG.error("Coordinator error during start, exiting thread", e);
-      terminated = true;
-    }
-
     while (!terminated) {
       try {
         coordinator.process();
@@ -52,7 +45,7 @@ public class CoordinatorThread extends Thread {
     }
 
     try {
-      coordinator.stop();
+      coordinator.close();
     } catch (Exception e) {
       LOG.error("Coordinator error during stop, ignoring", e);
     }

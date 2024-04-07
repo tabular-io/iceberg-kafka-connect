@@ -97,7 +97,7 @@ public class IntegrationDynamicTableTest extends IntegrationTestBase {
             .config("value.converter.schemas.enable", useSchema)
             .config("iceberg.tables.dynamic-enabled", true)
             .config("iceberg.tables.route-field", "payload")
-            .config("iceberg.control.commit.interval-ms", 1000)
+            .config("iceberg.control.commit.interval-ms", 5000)
             .config("iceberg.control.commit.timeout-ms", Integer.MAX_VALUE)
             .config("iceberg.kafka.auto.offset.reset", "earliest");
 

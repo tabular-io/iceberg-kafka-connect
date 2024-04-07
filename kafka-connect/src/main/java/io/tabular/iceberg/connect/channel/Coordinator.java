@@ -23,6 +23,7 @@ import static java.util.stream.Collectors.toList;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import io.tabular.iceberg.connect.data.Utilities;
 import io.tabular.iceberg.connect.events.CommitCompletePayload;
 import io.tabular.iceberg.connect.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.events.CommitTablePayload;
@@ -36,6 +37,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 import org.apache.iceberg.AppendFiles;
@@ -48,46 +50,102 @@ import org.apache.iceberg.Transaction;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.NoSuchTableException;
+import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
+import org.apache.iceberg.util.Pair;
 import org.apache.iceberg.util.Tasks;
 import org.apache.iceberg.util.ThreadPools;
 import org.apache.kafka.clients.admin.MemberDescription;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Coordinator extends Channel {
+class Coordinator implements AutoCloseable {
 
   private static final Logger LOG = LoggerFactory.getLogger(Coordinator.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String OFFSETS_SNAPSHOT_PROP_FMT = "kafka.connect.offsets.%s.%s";
   private static final String COMMIT_ID_SNAPSHOT_PROP = "kafka.connect.commit-id";
   private static final String VTTS_SNAPSHOT_PROP = "kafka.connect.vtts";
-  private static final Duration POLL_DURATION = Duration.ofMillis(1000);
 
-  private final Catalog catalog;
   private final IcebergSinkConfig config;
+  private final Catalog catalog;
   private final int totalPartitionCount;
+  private final UUID producerId;
+  private final Producer<String, byte[]> producer;
+  private final Consumer<String, byte[]> consumer;
+  private boolean isFirstPoll = true;
+  private final Map<Integer, Long> controlTopicOffsetsByPartition = Maps.newHashMap();
   private final String snapshotOffsetsProp;
   private final ExecutorService exec;
   private final CommitState commitState;
 
-  public Coordinator(
-      Catalog catalog,
+  Coordinator(
       IcebergSinkConfig config,
       Collection<MemberDescription> members,
-      KafkaClientFactory clientFactory) {
-    // pass consumer group ID to which we commit low watermark offsets
-    super("coordinator", config.controlGroupId() + "-coord", config, clientFactory);
+      ConsumerFactory consumerFactory,
+      ProducerFactory producerFactory) {
+    this(config, members, Utilities.loadCatalog(config), consumerFactory, producerFactory);
+  }
 
-    this.catalog = catalog;
+  @VisibleForTesting
+  Coordinator(
+      IcebergSinkConfig config,
+      Collection<MemberDescription> members,
+      Catalog catalog,
+      ConsumerFactory consumerFactory,
+      ProducerFactory producerFactory) {
+
     this.config = config;
+    this.catalog = catalog;
     this.totalPartitionCount =
         members.stream().mapToInt(desc -> desc.assignment().topicPartitions().size()).sum();
+
+    Map<String, String> producerProps = Maps.newHashMap(config.kafkaProps());
+    // use a random transactional-id to avoid producer generation based fencing
+    producerProps.put(
+        ProducerConfig.TRANSACTIONAL_ID_CONFIG,
+        String.join(
+            "-",
+            config.connectGroupId(),
+            config.taskId().toString(),
+            "coordinator",
+            UUID.randomUUID().toString()));
+    Pair<UUID, Producer<String, byte[]>> uuidProducerPair = producerFactory.create(producerProps);
+    this.producerId = uuidProducerPair.first();
+    this.producer = uuidProducerPair.second();
+    producer.initTransactions();
+
+    Map<String, String> consumerProps = Maps.newHashMap(config.kafkaProps());
+    // use consumer group ID to which we commit low watermark offsets
+    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, config.controlGroupId() + "-coord");
+    this.consumer = consumerFactory.create(consumerProps);
+    consumer.subscribe(ImmutableList.of(config.controlTopic()));
+
     this.snapshotOffsetsProp =
         String.format(OFFSETS_SNAPSHOT_PROP_FMT, config.controlTopic(), config.controlGroupId());
     this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.commitThreads());
     this.commitState = new CommitState(config);
+  }
+
+  // initial poll with longer duration so the consumer will initialize...
+  private Duration pollDuration() {
+    final Duration duration;
+    if (isFirstPoll) {
+      isFirstPoll = false;
+      duration = Duration.ofMillis(1000);
+    } else {
+      duration = Duration.ZERO;
+    }
+    return duration;
   }
 
   public void process() {
@@ -99,19 +157,34 @@ public class Coordinator extends Channel {
               config.controlGroupId(),
               EventType.COMMIT_REQUEST,
               new CommitRequestPayload(commitState.currentCommitId()));
-      send(event);
+      KafkaUtils.send(producerId, producer, config.controlTopic(), ImmutableList.of(event));
       LOG.info("Started new commit with commit-id={}", commitState.currentCommitId().toString());
     }
 
-    consumeAvailable(POLL_DURATION);
+    KafkaUtils.consumeAvailable(
+        consumer,
+        pollDuration(),
+        record -> {
+          // the consumer stores the offsets that corresponds to the next record to consume,
+          // so increment the record offset by one
+          controlTopicOffsetsByPartition.put(record.partition(), record.offset() + 1);
+
+          Event event = Event.decode(record.value());
+
+          if (event.groupId().equals(config.controlGroupId())) {
+            LOG.debug("Received event of type: {}", event.type().name());
+            if (receive(new Envelope(event, record.partition(), record.offset()))) {
+              LOG.info("Handled event of type: {}", event.type().name());
+            }
+          }
+        });
 
     if (commitState.isCommitTimedOut()) {
       commit(true);
     }
   }
 
-  @Override
-  protected boolean receive(Envelope envelope) {
+  private boolean receive(Envelope envelope) {
     switch (envelope.event().type()) {
       case COMMIT_RESPONSE:
         commitState.addResponse(envelope);
@@ -159,7 +232,7 @@ public class Coordinator extends Channel {
             config.controlGroupId(),
             EventType.COMMIT_COMPLETE,
             new CommitCompletePayload(commitState.currentCommitId(), vtts));
-    send(event);
+    KafkaUtils.send(producerId, producer, config.controlTopic(), ImmutableList.of(event));
 
     LOG.info(
         "Commit {} complete, committed to {} table(s), vtts {}",
@@ -170,7 +243,7 @@ public class Coordinator extends Channel {
 
   private String offsetsJson() {
     try {
-      return MAPPER.writeValueAsString(controlTopicOffsets());
+      return MAPPER.writeValueAsString(controlTopicOffsetsByPartition);
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
@@ -261,7 +334,7 @@ public class Coordinator extends Channel {
               EventType.COMMIT_TABLE,
               new CommitTablePayload(
                   commitState.currentCommitId(), TableName.of(tableIdentifier), snapshotId, vtts));
-      send(event);
+      KafkaUtils.send(producerId, producer, config.controlTopic(), ImmutableList.of(event));
 
       LOG.info(
           "Commit complete to table {}, snapshot {}, commit ID {}, vtts {}",
@@ -296,5 +369,23 @@ public class Coordinator extends Channel {
       snapshot = parentSnapshotId != null ? table.snapshot(parentSnapshotId) : null;
     }
     return ImmutableMap.of();
+  }
+
+  private void commitConsumerOffsets() {
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = Maps.newHashMap();
+    controlTopicOffsetsByPartition.forEach(
+        (k, v) ->
+            offsetsToCommit.put(
+                new TopicPartition(config.controlTopic(), k), new OffsetAndMetadata(v)));
+    consumer.commitSync(offsetsToCommit);
+  }
+
+  @Override
+  public void close() throws IOException {
+    LOG.info("Closing Coordinator");
+    exec.shutdownNow();
+    producer.close();
+    consumer.close();
+    Utilities.close(catalog);
   }
 }

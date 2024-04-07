@@ -51,8 +51,7 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   private static final Logger LOG = LoggerFactory.getLogger(IcebergSinkConfig.class.getName());
 
-  public static final String INTERNAL_TRANSACTIONAL_SUFFIX_PROP =
-      "iceberg.coordinator.transactional.suffix";
+  public static final String INTERNAL_TASK_ID = "kafka.connect.task.id";
   private static final String ROUTE_REGEX = "route-regex";
   private static final String ID_COLUMNS = "id-columns";
   private static final String PARTITION_BY = "partition-by";
@@ -296,9 +295,9 @@ public class IcebergSinkConfig extends AbstractConfig {
     return originalProps.get(NAME_PROP);
   }
 
-  public String transactionalSuffix() {
+  public Integer taskId() {
     // this is for internal use and is not part of the config definition...
-    return originalProps.get(INTERNAL_TRANSACTIONAL_SUFFIX_PROP);
+    return Integer.valueOf(originalProps.get(INTERNAL_TASK_ID));
   }
 
   public Map<String, String> catalogProps() {
