@@ -21,6 +21,7 @@ package io.tabular.iceberg.connect.transforms;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -237,7 +238,7 @@ public class ErrorTransformTest {
       SinkRecord result =
           smt.apply(createRecord(malformedKey, VALUE_STRING, stringAsByteHeaders()));
       assertThat(result.keySchema()).isNull();
-      assertThat(result.valueSchema()).isEqualTo(ErrorTransform.FAILED_SCHEMA);
+      assertThat(result.valueSchema()).isEqualTo(DeadLetterUtils.FAILED_SCHEMA);
       assertThat(result.valueSchema().name()).isEqualTo("failed_message");
       assertThat(result.value()).isInstanceOf(Struct.class);
       Struct value = (Struct) result.value();
@@ -281,7 +282,7 @@ public class ErrorTransformTest {
       SinkRecord result =
           smt.apply(createRecord(KEY_STRING, malformedValue, stringAsByteHeaders()));
       assertThat(result.keySchema()).isNull();
-      assertThat(result.valueSchema()).isEqualTo(ErrorTransform.FAILED_SCHEMA);
+      assertThat(result.valueSchema()).isEqualTo(DeadLetterUtils.FAILED_SCHEMA);
       assertThat(result.valueSchema().name()).isEqualTo("failed_message");
       assertThat(result.value()).isInstanceOf(Struct.class);
       Struct value = (Struct) result.value();
@@ -332,7 +333,7 @@ public class ErrorTransformTest {
       SinkRecord record = createRecord(KEY_STRING, VALUE_STRING, headers);
       SinkRecord result = smt.apply(record);
       assertThat(result.keySchema()).isNull();
-      assertThat(result.valueSchema()).isEqualTo(ErrorTransform.FAILED_SCHEMA);
+      assertThat(result.valueSchema()).isEqualTo(DeadLetterUtils.FAILED_SCHEMA);
       assertThat(result.valueSchema().name()).isEqualTo("failed_message");
       assertThat(result.value()).isInstanceOf(Struct.class);
       Struct value = (Struct) result.value();
@@ -379,7 +380,7 @@ public class ErrorTransformTest {
       SinkRecord record = createRecord(KEY_STRING, VALUE_STRING, stringAsByteHeaders());
       SinkRecord result = smt.apply(record);
       assertThat(result.keySchema()).isNull();
-      assertThat(result.valueSchema()).isEqualTo(ErrorTransform.FAILED_SCHEMA);
+      assertThat(result.valueSchema()).isEqualTo(DeadLetterUtils.FAILED_SCHEMA);
       assertThat(result.valueSchema().name()).isEqualTo("failed_message");
       assertThat(result.value()).isInstanceOf(Struct.class);
       Struct value = (Struct) result.value();

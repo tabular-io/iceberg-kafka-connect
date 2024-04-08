@@ -26,6 +26,7 @@ import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.data.IcebergWriter;
 import io.tabular.iceberg.connect.data.IcebergWriterFactory;
+import io.tabular.iceberg.connect.data.RecordWriter;
 import io.tabular.iceberg.connect.data.WriterResult;
 import io.tabular.iceberg.connect.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.events.CommitRequestPayload;
@@ -33,17 +34,20 @@ import io.tabular.iceberg.connect.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.events.Event;
 import io.tabular.iceberg.connect.events.EventTestUtil;
 import io.tabular.iceberg.connect.events.EventType;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
+import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 public class WorkerTest extends ChannelTestBase {
@@ -115,5 +119,34 @@ public class WorkerTest extends ChannelTestBase {
     assertThat(readyPayload.assignments()).hasSize(1);
     // offset should be one more than the record offset
     assertThat(readyPayload.assignments().get(0).offset()).isEqualTo(1L);
+  }
+
+  private static class RecordingRecordWriter implements RecordWriter {
+    List<SinkRecord> seen = Lists.newArrayList();
+
+    public void write(SinkRecord record) {
+      seen.add(record);
+    }
+  }
+
+  @Test
+  @DisplayName("DeadLetterWriterForTable should handle custom ErrorTransform payloads")
+  public void deadLetterWriterForTable() {
+    //    RecordWriter writer = new RecordingRecordWriter();
+    //
+    //    IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
+    //    when(writerFactory.createWriter(any(), any(), anyBoolean())).thenReturn(writer);
+    //
+    //    Map<String, RecordWriter> writerMap = Maps.newHashMap();
+    //
+    //    Worker.DeadLetterWriterForTable writerForTable = new Worker.DeadLetterWriterForTable(
+    //            writerFactory,
+    //            writerMap,
+    //            config
+    //    );
+    //
+    //    SinkRecord nullRecord = new SinkRecord(SRC_TOPIC_NAME, 0, null, null, null, null, 0);
+    //    writerForTable.write(, );
+
   }
 }

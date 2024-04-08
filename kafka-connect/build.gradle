@@ -1,5 +1,6 @@
 dependencies {
   implementation project(":iceberg-kafka-connect-events")
+  implementation project(":iceberg-kafka-connect-deadletter")
   implementation libs.bundles.iceberg
   implementation libs.bundles.jackson
   implementation libs.avro

@@ -18,8 +18,7 @@
  */
 package io.tabular.iceberg.connect.transforms;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
+import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -30,10 +29,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
-import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.data.SchemaBuilder;
-import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
@@ -123,50 +119,15 @@ public class ErrorTransform implements Transformation<SinkRecord> {
     SinkRecord handle(SinkRecord original, Throwable error, String location) {
       throw new java.lang.IllegalStateException("handle not implemented");
     }
-
-    protected final SinkRecord failedRecord(SinkRecord original, Throwable error, String location) {
-      StringWriter sw = new StringWriter();
-      PrintWriter pw = new PrintWriter(sw);
-      error.printStackTrace(pw);
-      String stackTrace = sw.toString();
-      Struct struct = new Struct(FAILED_SCHEMA);
-      struct.put("topic", original.topic());
-      struct.put("partition", original.kafkaPartition());
-      struct.put("offset", original.kafkaOffset());
-      struct.put("timestamp", original.timestamp());
-      struct.put("location", location);
-      struct.put("exception", error.toString());
-      struct.put("stack_trace", stackTrace);
-      struct.put("key_bytes", original.key());
-      struct.put("value_bytes", original.value());
-
-      if (!original.headers().isEmpty()) {
-        List<Struct> headers = serializedHeaders(original);
-        struct.put(HEADERS, headers);
-      }
-
-      return original.newRecord(
-          original.topic(),
-          original.kafkaPartition(),
-          null,
-          null,
-          FAILED_SCHEMA,
-          struct,
-          original.timestamp());
-    }
   }
 
   private static class AllExceptions extends ExceptionHandler {
     @Override
     SinkRecord handle(SinkRecord original, Throwable error, String location) {
-      return failedRecord(original, error, location);
+      return DeadLetterUtils.failedRecord(original, error, location);
     }
   }
 
-  private static final String PAYLOAD_KEY = "transformed";
-  private static final String ORIGINAL_BYTES_KEY = "original";
-  private static final String KEY_BYTES = "key";
-  private static final String VALUE_BYTES = "value";
   private static final String HEADERS = "headers";
   private static final String KEY_CONVERTER = "key.converter";
   private static final String VALUE_CONVERTER = "value.converter";
@@ -176,29 +137,6 @@ public class ErrorTransform implements Transformation<SinkRecord> {
   private static final String VALUE_FAILURE = "VALUE_CONVERTER";
   private static final String HEADER_FAILURE = "HEADER_CONVERTER";
   private static final String SMT_FAILURE = "SMT_FAILURE";
-  static final Schema HEADER_ELEMENT_SCHEMA =
-      SchemaBuilder.struct()
-          .field("key", Schema.STRING_SCHEMA)
-          .field("value", Schema.OPTIONAL_BYTES_SCHEMA)
-          .optional()
-          .build();
-  static final Schema HEADER_SCHEMA = SchemaBuilder.array(HEADER_ELEMENT_SCHEMA).optional().build();
-  static final Schema FAILED_SCHEMA =
-      SchemaBuilder.struct()
-          .name("failed_message")
-          .parameter("isFailed", "true")
-          .field("topic", Schema.STRING_SCHEMA)
-          .field("partition", Schema.INT32_SCHEMA)
-          .field("offset", Schema.INT64_SCHEMA)
-          .field("location", Schema.STRING_SCHEMA)
-          .field("timestamp", Schema.OPTIONAL_INT64_SCHEMA)
-          .field("exception", Schema.OPTIONAL_STRING_SCHEMA)
-          .field("stack_trace", Schema.OPTIONAL_STRING_SCHEMA)
-          .field("key_bytes", Schema.OPTIONAL_BYTES_SCHEMA)
-          .field("value_bytes", Schema.OPTIONAL_BYTES_SCHEMA)
-          .field(HEADERS, HEADER_SCHEMA)
-          .field("target_table", Schema.OPTIONAL_STRING_SCHEMA)
-          .schema();
 
   private ExceptionHandler errorHandler;
   private List<Transformation<SinkRecord>> smts;
@@ -413,21 +351,21 @@ public class ErrorTransform implements Transformation<SinkRecord> {
     Map<String, Object> bytes = Maps.newHashMap();
 
     if (original.key() != null) {
-      bytes.put(KEY_BYTES, original.key());
+      bytes.put(DeadLetterUtils.KEY_BYTES, original.key());
     }
     if (original.value() == null) {
       throw new IllegalStateException("newRecord called with null value for record.value");
     }
 
     if (!original.headers().isEmpty()) {
-      bytes.put(HEADERS, serializedHeaders(original));
+      bytes.put(HEADERS, DeadLetterUtils.serializedHeaders(original));
     }
 
-    bytes.put(VALUE_BYTES, original.value());
+    bytes.put(DeadLetterUtils.VALUE_BYTES, original.value());
 
     Map<String, Object> result = Maps.newHashMap();
-    result.put(PAYLOAD_KEY, transformed);
-    result.put(ORIGINAL_BYTES_KEY, bytes);
+    result.put(DeadLetterUtils.PAYLOAD_KEY, transformed);
+    result.put(DeadLetterUtils.ORIGINAL_BYTES_KEY, bytes);
 
     return transformed.newRecord(
         transformed.topic(),
@@ -438,25 +376,5 @@ public class ErrorTransform implements Transformation<SinkRecord> {
         result,
         transformed.timestamp(),
         transformed.headers());
-  }
-
-  /**
-   * No way to get back the original Kafka header bytes. We instead have an array with elements of
-   * {"key": String, "value": bytes} for each header. This can be converted back into a Kafka
-   * Connect header by the user later, and further converted into Kafka RecordHeaders to be put back
-   * into a ProducerRecord to create the original headers on the Kafka record.
-   *
-   * @param original record where headers are still byte array values
-   * @return Struct for an Array that can be put into Iceberg
-   */
-  private static List<Struct> serializedHeaders(SinkRecord original) {
-    List<Struct> headers = Lists.newArrayList();
-    for (Header header : original.headers()) {
-      Struct headerStruct = new Struct(HEADER_ELEMENT_SCHEMA);
-      headerStruct.put("key", header.key());
-      headerStruct.put("value", header.value());
-      headers.add(headerStruct);
-    }
-    return headers;
   }
 }
