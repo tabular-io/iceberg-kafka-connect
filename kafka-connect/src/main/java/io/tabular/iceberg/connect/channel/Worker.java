@@ -239,17 +239,10 @@ public class Worker extends Channel {
 
     private final RouteExtractor extractor;
 
-    private final String deadLetterNamespace;
-
-    StaticRecordRouter(
-        WriterForTable writerForTable,
-        String routeField,
-        RouteExtractor extractor,
-        String deadLetterNamespace) {
+    StaticRecordRouter(WriterForTable writerForTable, String routeField, RouteExtractor extractor) {
       this.writerForTable = writerForTable;
       this.routeField = routeField;
       this.extractor = extractor;
-      this.deadLetterNamespace = deadLetterNamespace;
     }
 
     @Override
@@ -278,17 +271,11 @@ public class Worker extends Channel {
     private final String routeField;
     private final RouteExtractor extractor;
 
-    private final String deadLetterNamespace;
-
     DynamicRecordRouter(
-        WriterForTable writerForTable,
-        String routeField,
-        RouteExtractor extractor,
-        String deadLetterNamespace) {
+        WriterForTable writerForTable, String routeField, RouteExtractor extractor) {
       this.writerForTable = writerForTable;
       this.routeField = routeField;
       this.extractor = extractor;
-      this.deadLetterNamespace = deadLetterNamespace;
     }
 
     @Override
@@ -334,21 +321,13 @@ public class Worker extends Channel {
       Preconditions.checkNotNull(
           config.tablesRouteField(), "Route field cannot be null with dynamic routing");
       baseRecordRouter =
-          new DynamicRecordRouter(
-              writerForTable,
-              config.tablesRouteField(),
-              routeExtractor,
-              config.deadLetterTopicNamespace());
+          new DynamicRecordRouter(writerForTable, config.tablesRouteField(), routeExtractor);
     } else {
       if (config.tablesRouteField() == null) {
         baseRecordRouter = new ConfigRecordRouter(writerForTable);
       } else {
         baseRecordRouter =
-            new StaticRecordRouter(
-                writerForTable,
-                config.tablesRouteField(),
-                routeExtractor,
-                config.deadLetterTopicNamespace());
+            new StaticRecordRouter(writerForTable, config.tablesRouteField(), routeExtractor);
       }
     }
     if (config.deadLetterTableEnabled()) {
