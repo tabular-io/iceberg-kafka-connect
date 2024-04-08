@@ -62,7 +62,7 @@ public class Worker extends Channel {
   private final RecordRouter recordRouter;
 
   public interface WriterForTable {
-    void write(String tableName, SinkRecord sample, boolean ignoreMissingTable);
+    void write(String tableName, SinkRecord record, boolean ignoreMissingTable);
 
     void writeFailed(String namespace, SinkRecord sample, String location, Throwable error);
   }
@@ -78,12 +78,12 @@ public class Worker extends Channel {
     }
 
     @Override
-    public void write(String tableName, SinkRecord sample, boolean ignoreMissingTable) {
+    public void write(String tableName, SinkRecord record, boolean ignoreMissingTable) {
       writers
           .computeIfAbsent(
               tableName,
-              notUsed -> writerFactory.createWriter(tableName, sample, ignoreMissingTable))
-          .write(sample);
+              notUsed -> writerFactory.createWriter(tableName, record, ignoreMissingTable))
+          .write(record);
     }
 
     @Override
@@ -104,8 +104,6 @@ public class Worker extends Channel {
     private final Map<String, RecordWriter> writers;
     private final String deadLetterTableSuffix;
 
-    private final String deadLetterTopicNamespace;
-
     DeadLetterWriterForTable(
         IcebergWriterFactory writerFactory,
         Map<String, RecordWriter> writers,
@@ -113,16 +111,15 @@ public class Worker extends Channel {
       this.writerFactory = writerFactory;
       this.writers = writers;
       this.deadLetterTableSuffix = config.deadLetterTableSuffix();
-      this.deadLetterTopicNamespace = config.deadLetterTableSuffix();
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public void write(String tableName, SinkRecord sample, boolean ignoreMissingTable) {
-      if (sample.value() != null) {
-        if (sample.value() instanceof Map) {
+    public void write(String tableName, SinkRecord record, boolean ignoreMissingTable) {
+      if (record.value() != null) {
+        if (record.value() instanceof Map) {
           RecordWriter writer;
-          Map<String, Object> payload = (Map<String, Object>) sample.value();
+          Map<String, Object> payload = (Map<String, Object>) record.value();
           SinkRecord transformed = (SinkRecord) payload.get(PAYLOAD_KEY);
           if (isFailed(transformed)) {
             String deadLetterTableName = deadLetterTableName(tableName);
@@ -143,12 +140,12 @@ public class Worker extends Channel {
                         writerFactory.createWriter(tableName, transformed, ignoreMissingTable));
           }
           try {
-            writer.write(sample);
+            writer.write(record);
           } catch (Exception e) {
             String deadLetterTableName = deadLetterTableName(tableName);
             SinkRecord newRecord =
                 DeadLetterUtils.mapToFailedRecord(
-                    tableName, sample, ICEBERG_TRANSFORMATION_LOCATION, e);
+                    tableName, record, ICEBERG_TRANSFORMATION_LOCATION, e);
             writers
                 .computeIfAbsent(
                     deadLetterTableName,
