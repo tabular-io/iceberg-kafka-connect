@@ -187,50 +187,6 @@ public class Worker extends Channel {
     }
   }
 
-  private static class RouteExtractor {
-    public static class RouteValueResult {
-      private String value = null;
-      private Throwable error = null;
-
-      RouteValueResult(String value) {
-        this.value = value;
-      }
-
-      RouteValueResult(Throwable error) {
-        this.error = error;
-      }
-
-      String getValue() {
-        return this.value;
-      }
-
-      Throwable getError() {
-        return error;
-      }
-    }
-
-    RouteValueResult extract(Object recordValue, String routeField) {
-      if (recordValue == null) {
-        return null;
-      }
-      Object routeValue = Utilities.extractFromRecordValue(recordValue, routeField);
-      return routeValue == null ? null : new RouteValueResult(routeValue.toString());
-    }
-  }
-
-  private static class ErrorHandlingRouteExtractor extends RouteExtractor {
-    @Override
-    RouteValueResult extract(Object recordValue, String routeField) {
-      RouteValueResult result;
-      try {
-        result = super.extract(recordValue, routeField);
-      } catch (Exception error) {
-        result = new RouteValueResult(error);
-      }
-      return result;
-    }
-  }
-
   private abstract static class RecordRouter {
 
     void write(SinkRecord record) {}
@@ -255,6 +211,28 @@ public class Worker extends Channel {
     }
   }
 
+  private static class ErrorHandlingRecordRouter extends RecordRouter {
+    private final RecordRouter underlying;
+    private final WriterForTable writerForTable;
+    private final String namespace;
+
+    ErrorHandlingRecordRouter(
+        RecordRouter underlying, WriterForTable writerForTable, String namespace) {
+      this.underlying = underlying;
+      this.writerForTable = writerForTable;
+      this.namespace = namespace;
+    }
+
+    @Override
+    public void write(SinkRecord record) {
+      try {
+        underlying.write(record);
+      } catch (DeadLetterUtils.DeadLetterException e) {
+        writerForTable.writeFailed(namespace, record, e.getLocation(), e.getError());
+      }
+    }
+  }
+
   private class StaticRecordRouter extends RecordRouter {
     private final WriterForTable writerForTable;
     private final String routeField;
@@ -276,27 +254,21 @@ public class Worker extends Channel {
 
     @Override
     public void write(SinkRecord record) {
-      RouteExtractor.RouteValueResult routeValue = extractor.extract(record.value(), routeField);
+      String routeValue = extractor.extract(record.value(), routeField);
       if (routeValue != null) {
-        String route = routeValue.getValue();
-        if (route != null) {
-          config
-              .tables()
-              .forEach(
-                  tableName ->
-                      config
-                          .tableConfig(tableName)
-                          .routeRegex()
-                          .ifPresent(
-                              regex -> {
-                                if (regex.matcher(route).matches()) {
-                                  writerForTable.write(tableName, record, false);
-                                }
-                              }));
-        } else if (routeValue.getError() != null) {
-          writerForTable.writeFailed(
-              deadLetterNamespace, record, "ROUTE_EXTRACT", routeValue.getError());
-        }
+        config
+            .tables()
+            .forEach(
+                tableName ->
+                    config
+                        .tableConfig(tableName)
+                        .routeRegex()
+                        .ifPresent(
+                            regex -> {
+                              if (regex.matcher(routeValue).matches()) {
+                                writerForTable.write(tableName, record, false);
+                              }
+                            }));
       }
     }
   }
@@ -321,16 +293,10 @@ public class Worker extends Channel {
 
     @Override
     public void write(SinkRecord record) {
-      RouteExtractor.RouteValueResult routeValue = extractor.extract(record.value(), routeField);
+      String routeValue = extractor.extract(record.value(), routeField);
       if (routeValue != null) {
-        String route = routeValue.getValue();
-        if (route != null) {
-          String tableName = route.toLowerCase();
-          writerForTable.write(tableName, record, true);
-        } else if (routeValue.getError() != null) {
-          writerForTable.writeFailed(
-              deadLetterNamespace, record, "ROUTE_EXTRACT", routeValue.getError());
-        }
+        String tableName = routeValue.toLowerCase();
+        writerForTable.write(tableName, record, true);
       }
     }
   }
@@ -353,20 +319,21 @@ public class Worker extends Channel {
     this.writers = Maps.newHashMap();
 
     RouteExtractor routeExtractor;
+    RecordRouter baseRecordRouter;
 
     WriterForTable writerForTable;
     if (config.deadLetterTableEnabled()) {
       writerForTable = new DeadLetterWriterForTable(writerFactory, this.writers, config);
-      routeExtractor = new ErrorHandlingRouteExtractor();
+      routeExtractor = new ErrorHandlingRouteExtractor(new DefaultRouteExtractor());
     } else {
       writerForTable = new BaseWriterForTable(writerFactory, this.writers);
-      routeExtractor = new RouteExtractor();
+      routeExtractor = new DefaultRouteExtractor();
     }
 
     if (config.dynamicTablesEnabled()) {
       Preconditions.checkNotNull(
           config.tablesRouteField(), "Route field cannot be null with dynamic routing");
-      recordRouter =
+      baseRecordRouter =
           new DynamicRecordRouter(
               writerForTable,
               config.tablesRouteField(),
@@ -374,9 +341,9 @@ public class Worker extends Channel {
               config.deadLetterTopicNamespace());
     } else {
       if (config.tablesRouteField() == null) {
-        recordRouter = new ConfigRecordRouter(writerForTable);
+        baseRecordRouter = new ConfigRecordRouter(writerForTable);
       } else {
-        recordRouter =
+        baseRecordRouter =
             new StaticRecordRouter(
                 writerForTable,
                 config.tablesRouteField(),
@@ -384,8 +351,46 @@ public class Worker extends Channel {
                 config.deadLetterTopicNamespace());
       }
     }
+    if (config.deadLetterTableEnabled()) {
+      recordRouter =
+          new ErrorHandlingRecordRouter(
+              baseRecordRouter, writerForTable, config.deadLetterTopicNamespace());
+    } else {
+      recordRouter = baseRecordRouter;
+    }
 
     this.sourceOffsets = Maps.newHashMap();
+  }
+
+  private interface RouteExtractor {
+    String extract(Object recordValue, String fieldName);
+  }
+
+  private static class DefaultRouteExtractor implements RouteExtractor {
+
+    public String extract(Object recordValue, String routeField) {
+      if (recordValue == null) {
+        return null;
+      }
+      Object routeValue = Utilities.extractFromRecordValue(recordValue, routeField);
+      return routeValue == null ? null : routeValue.toString();
+    }
+  }
+
+  private static class ErrorHandlingRouteExtractor implements RouteExtractor {
+    private final RouteExtractor underlying;
+
+    ErrorHandlingRouteExtractor(RouteExtractor underlying) {
+      this.underlying = underlying;
+    }
+
+    public String extract(Object recordValue, String routeField) {
+      try {
+        return underlying.extract(recordValue, routeField);
+      } catch (Exception error) {
+        throw new DeadLetterUtils.DeadLetterException("ROUTE_FIELD", error);
+      }
+    }
   }
 
   public void syncCommitOffsets() {

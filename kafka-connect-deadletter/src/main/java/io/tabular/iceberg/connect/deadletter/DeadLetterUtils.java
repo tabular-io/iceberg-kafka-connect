@@ -31,6 +31,25 @@ import org.apache.kafka.connect.sink.SinkRecord;
 
 public class DeadLetterUtils {
 
+  public static class DeadLetterException extends RuntimeException {
+    private final String location;
+    private final Throwable error;
+
+    public DeadLetterException(String location, Throwable error) {
+      super(error);
+      this.location = location;
+      this.error = error;
+    }
+
+    public String getLocation() {
+      return location;
+    }
+
+    public Throwable getError() {
+      return error;
+    }
+  }
+
   private DeadLetterUtils() {
     throw new IllegalStateException("Should not be initialialized");
   }
