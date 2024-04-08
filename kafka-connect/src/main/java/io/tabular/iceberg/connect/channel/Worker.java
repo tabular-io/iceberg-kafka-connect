@@ -94,11 +94,6 @@ public class Worker extends Channel {
 
   public static class DeadLetterWriterForTable implements WriterForTable {
     private static final String PAYLOAD_KEY = "transformed";
-    private static final String ORIGINAL_BYTES_KEY = "original";
-    private static final String KEY_BYTES = "key";
-    private static final String VALUE_BYTES = "value";
-    private static final String HEADERS = "headers";
-
     private static final String ICEBERG_TRANSFORMATION_LOCATION = "ICEBERG_TRANSFORM";
     private final IcebergWriterFactory writerFactory;
     private final Map<String, RecordWriter> writers;
@@ -117,13 +112,23 @@ public class Worker extends Channel {
     @Override
     public void write(String tableName, SinkRecord record, boolean ignoreMissingTable) {
       if (record.value() != null) {
+
+        RecordWriter writer = null;
+        SinkRecord recordToWrite = null;
+
         if (record.value() instanceof Map) {
-          RecordWriter writer;
           Map<String, Object> payload = (Map<String, Object>) record.value();
           SinkRecord transformed = (SinkRecord) payload.get(PAYLOAD_KEY);
-          if (isFailed(transformed)) {
+          writer =
+              writers.computeIfAbsent(
+                  tableName,
+                  notUsed ->
+                      writerFactory.createWriter(tableName, transformed, ignoreMissingTable));
+          recordToWrite = transformed;
+        } else if (record.value() instanceof Struct) {
+          if (isFailed(record)) {
             String deadLetterTableName = deadLetterTableName(tableName);
-            Struct transformedStruct = (Struct) transformed.value();
+            Struct transformedStruct = (Struct) record.value();
             transformedStruct.put("target_table", tableName);
 
             writer =
@@ -131,31 +136,27 @@ public class Worker extends Channel {
                     deadLetterTableName,
                     notUsed ->
                         writerFactory.createWriter(
-                            deadLetterTableName, transformed, ignoreMissingTable));
-          } else {
-            writer =
-                writers.computeIfAbsent(
-                    tableName,
-                    notUsed ->
-                        writerFactory.createWriter(tableName, transformed, ignoreMissingTable));
-          }
-          try {
-            writer.write(record);
-          } catch (Exception e) {
-            String deadLetterTableName = deadLetterTableName(tableName);
-            SinkRecord newRecord =
-                DeadLetterUtils.mapToFailedRecord(
-                    tableName, record, ICEBERG_TRANSFORMATION_LOCATION, e);
-            writers
-                .computeIfAbsent(
-                    deadLetterTableName,
-                    notUsed ->
-                        writerFactory.createWriter(
-                            deadLetterTableName, newRecord, ignoreMissingTable))
-                .write(newRecord);
+                            deadLetterTableName, record, ignoreMissingTable));
+            recordToWrite = record;
           }
         } else {
           throw new IllegalArgumentException("Record not in format expected for dead letter table");
+        }
+
+        try {
+          writer.write(recordToWrite);
+        } catch (Exception e) {
+          String deadLetterTableName = deadLetterTableName(tableName);
+          SinkRecord newRecord =
+              DeadLetterUtils.mapToFailedRecord(
+                  tableName, record, ICEBERG_TRANSFORMATION_LOCATION, e);
+          writers
+              .computeIfAbsent(
+                  deadLetterTableName,
+                  notUsed ->
+                      writerFactory.createWriter(
+                          deadLetterTableName, newRecord, ignoreMissingTable))
+              .write(newRecord);
         }
       }
     }
@@ -172,7 +173,14 @@ public class Worker extends Channel {
     }
 
     private boolean isFailed(SinkRecord record) {
-      return "true".equals(record.valueSchema().parameters().get("isFailed"));
+      Map<String, String> parameters = record.valueSchema().parameters();
+      if (parameters != null) {
+        String isFailed = parameters.get("isFailed");
+        if (isFailed != null) {
+          return isFailed.equals("true");
+        }
+      }
+      return false;
     }
 
     private String deadLetterTableName(String namespace, SinkRecord record) {

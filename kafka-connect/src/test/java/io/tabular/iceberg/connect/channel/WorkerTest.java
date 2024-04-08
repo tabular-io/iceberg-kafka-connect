@@ -28,12 +28,14 @@ import io.tabular.iceberg.connect.data.IcebergWriter;
 import io.tabular.iceberg.connect.data.IcebergWriterFactory;
 import io.tabular.iceberg.connect.data.RecordWriter;
 import io.tabular.iceberg.connect.data.WriterResult;
+import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
 import io.tabular.iceberg.connect.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.events.Event;
 import io.tabular.iceberg.connect.events.EventTestUtil;
 import io.tabular.iceberg.connect.events.EventType;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -42,9 +44,14 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.junit.jupiter.api.DisplayName;
@@ -54,6 +61,57 @@ public class WorkerTest extends ChannelTestBase {
 
   private static final String TABLE_NAME = "db.tbl";
   private static final String FIELD_NAME = "fld";
+
+  private static class RecordingRecordWriter implements RecordWriter {
+
+    private final boolean shouldThrowOnFirstRecord;
+    private int count = 0;
+
+    RecordingRecordWriter(boolean shouldThrowOnFirstRecord) {
+      this.shouldThrowOnFirstRecord = shouldThrowOnFirstRecord;
+    }
+
+    List<SinkRecord> written = Lists.newArrayList();
+
+    public void write(SinkRecord record) {
+      if (shouldThrowOnFirstRecord && count == 0) {
+        count += 1;
+        throw new IllegalArgumentException("test throw");
+      }
+      written.add(record);
+      count += 1;
+    }
+  }
+
+  private static final byte[] ORIGINAL_BYTES =
+      "{\"field\":\"success\"}".getBytes(StandardCharsets.UTF_8);
+
+  private SinkRecord errorTransformSuccessRecord() {
+    Schema schema =
+        SchemaBuilder.struct()
+            .field("field", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
+            .build();
+    Struct struct = new Struct(schema);
+    struct.put("field", "success");
+    Map<String, Object> map = Maps.newHashMap();
+    SinkRecord success =
+        new SinkRecord(
+            "topic", 0, null, null, schema, struct, 100L, 1000L, TimestampType.CREATE_TIME);
+    map.put(DeadLetterUtils.PAYLOAD_KEY, success);
+    Map<String, Object> failed = Maps.newHashMap();
+    failed.put(DeadLetterUtils.VALUE_BYTES, ORIGINAL_BYTES);
+    map.put(DeadLetterUtils.ORIGINAL_BYTES_KEY, failed);
+    return new SinkRecord(
+        "topic", 0, null, null, null, map, 100L, 1000L, TimestampType.CREATE_TIME);
+  }
+
+  private SinkRecord errorTransformFailedRecord() {
+    SinkRecord originalRecord =
+        new SinkRecord(
+            "topic", 0, null, null, null, ORIGINAL_BYTES, 100L, 1000L, TimestampType.CREATE_TIME);
+    return DeadLetterUtils.failedRecord(
+        originalRecord, new IllegalArgumentException("test"), "location");
+  }
 
   @Test
   public void testStaticRoute() {
@@ -121,32 +179,99 @@ public class WorkerTest extends ChannelTestBase {
     assertThat(readyPayload.assignments().get(0).offset()).isEqualTo(1L);
   }
 
-  private static class RecordingRecordWriter implements RecordWriter {
-    List<SinkRecord> seen = Lists.newArrayList();
+  @Test
+  @DisplayName("DeadLetterWriterForTable should ignore null records")
+  public void deadLetterWriterForTableNullRecords() {
+    RecordingRecordWriter writer = new RecordingRecordWriter(false);
 
-    public void write(SinkRecord record) {
-      seen.add(record);
-    }
+    IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
+    when(writerFactory.createWriter(any(), any(), anyBoolean())).thenReturn(writer);
+
+    Map<String, RecordWriter> writerMap = Maps.newHashMap();
+
+    Worker.DeadLetterWriterForTable writerForTable =
+        new Worker.DeadLetterWriterForTable(writerFactory, writerMap, config);
+
+    SinkRecord nullRecord = new SinkRecord(SRC_TOPIC_NAME, 0, null, null, null, null, 0);
+    writerForTable.write(TABLE_NAME, nullRecord, true);
+
+    assertThat(writer.written).isEmpty();
   }
 
   @Test
-  @DisplayName("DeadLetterWriterForTable should handle custom ErrorTransform payloads")
-  public void deadLetterWriterForTable() {
-    //    RecordWriter writer = new RecordingRecordWriter();
-    //
-    //    IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
-    //    when(writerFactory.createWriter(any(), any(), anyBoolean())).thenReturn(writer);
-    //
-    //    Map<String, RecordWriter> writerMap = Maps.newHashMap();
-    //
-    //    Worker.DeadLetterWriterForTable writerForTable = new Worker.DeadLetterWriterForTable(
-    //            writerFactory,
-    //            writerMap,
-    //            config
-    //    );
-    //
-    //    SinkRecord nullRecord = new SinkRecord(SRC_TOPIC_NAME, 0, null, null, null, null, 0);
-    //    writerForTable.write(, );
+  @DisplayName("DeadLetterWriterForTable should write successful ErrorTransformed records")
+  public void deadLetterWriterForTableSuccessErrorTransform() {
+    RecordingRecordWriter writer = new RecordingRecordWriter(false);
 
+    IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
+    when(writerFactory.createWriter(any(), any(), anyBoolean())).thenReturn(writer);
+
+    Map<String, RecordWriter> writerMap = Maps.newHashMap();
+
+    Worker.DeadLetterWriterForTable writerForTable =
+        new Worker.DeadLetterWriterForTable(writerFactory, writerMap, config);
+
+    writerForTable.write(TABLE_NAME, errorTransformSuccessRecord(), true);
+    Schema expectedSchema =
+        SchemaBuilder.struct()
+            .field("field", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
+            .build();
+    assertThat(writer.written.size()).isEqualTo(1);
+    SinkRecord result = writer.written.get(0);
+    assertThat(result.valueSchema()).isEqualTo(expectedSchema);
+    assertThat(result.value()).isInstanceOf(Struct.class);
+    Struct resultStruct = (Struct) result.value();
+    assertThat(resultStruct.get("field")).isEqualTo("success");
+  }
+
+  @Test
+  @DisplayName("DeadLetterWriterForTable should write failed ErrorTransformed records")
+  public void deadLetterWriterForTableFailureErrorTransform() {
+    RecordingRecordWriter writer = new RecordingRecordWriter(false);
+
+    IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
+    when(writerFactory.createWriter(any(), any(), anyBoolean())).thenReturn(writer);
+
+    Map<String, RecordWriter> writerMap = Maps.newHashMap();
+
+    Worker.DeadLetterWriterForTable writerForTable =
+        new Worker.DeadLetterWriterForTable(writerFactory, writerMap, config);
+
+    writerForTable.write(TABLE_NAME, errorTransformFailedRecord(), true);
+    assertThat(writer.written.size()).isEqualTo(1);
+    SinkRecord result = writer.written.get(0);
+    assertThat(result.valueSchema()).isEqualTo(DeadLetterUtils.FAILED_SCHEMA);
+    assertThat(result.value()).isInstanceOf(Struct.class);
+    Struct resultValue = (Struct) result.value();
+    assertThat(resultValue.get("exception").toString().contains("test")).isTrue();
+    String resultBytesAsString =
+        new String((byte[]) resultValue.get("value_bytes"), StandardCharsets.UTF_8);
+    assertThat(resultBytesAsString).isEqualTo(new String(ORIGINAL_BYTES, StandardCharsets.UTF_8));
+  }
+
+  @Test
+  @DisplayName(
+      "DeadLetterWriterForTable should convert Iceberg Writer failures to failed SinkRecord")
+  public void deadLetterWriterForTableConvertWriterFailures() {
+    RecordingRecordWriter writer = new RecordingRecordWriter(true);
+
+    IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
+    when(writerFactory.createWriter(any(), any(), anyBoolean())).thenReturn(writer);
+
+    Map<String, RecordWriter> writerMap = Maps.newHashMap();
+
+    Worker.DeadLetterWriterForTable writerForTable =
+        new Worker.DeadLetterWriterForTable(writerFactory, writerMap, config);
+
+    writerForTable.write(TABLE_NAME, errorTransformSuccessRecord(), true);
+    assertThat(writer.written.size()).isEqualTo(1);
+    SinkRecord result = writer.written.get(0);
+    assertThat(result.valueSchema()).isEqualTo(DeadLetterUtils.FAILED_SCHEMA);
+    assertThat(result.value()).isInstanceOf(Struct.class);
+    Struct resultValue = (Struct) result.value();
+    assertThat(resultValue.get("exception").toString().contains("test throw")).isTrue();
+    String resultBytesAsString =
+        new String((byte[]) resultValue.get("value_bytes"), StandardCharsets.UTF_8);
+    assertThat(resultBytesAsString).isEqualTo(new String(ORIGINAL_BYTES, StandardCharsets.UTF_8));
   }
 }
