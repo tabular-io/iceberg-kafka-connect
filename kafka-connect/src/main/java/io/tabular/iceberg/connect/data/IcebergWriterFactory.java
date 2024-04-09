@@ -19,9 +19,7 @@
 package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import org.apache.iceberg.PartitionSpec;
@@ -30,11 +28,8 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.NoSuchTableException;
-import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
-import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.util.Tasks;
-import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,130 +38,25 @@ public class IcebergWriterFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(IcebergWriterFactory.class);
 
-  private final Catalog catalog;
   private final IcebergSinkConfig config;
 
   private final Predicate<String> shouldAutoCreate;
 
-  private TableIdentifierSupplier tableIdSupplier;
-
-  private TableCreator tableCreator;
-
-  private static class TableIdentifierSupplier {
-    TableIdentifier id(String name) {
-      return TableIdentifier.parse(name);
-    }
-  }
-
-  private static class ErrorHandlingTableIdentifierSupplier extends TableIdentifierSupplier {
-    @Override
-    TableIdentifier id(String name) {
-      TableIdentifier tableId;
-      try {
-        tableId = super.id(name);
-      } catch (Exception error) {
-        throw new DeadLetterUtils.DeadLetterException("TABLE_IDENTIFIER", error);
-      }
-      return tableId;
-    }
-  }
-
-  private static class TableCreator {
-
-    private final Catalog catalog;
-    private final IcebergSinkConfig config;
-
-    TableCreator(Catalog catalog, IcebergSinkConfig config) {
-      this.catalog = catalog;
-      this.config = config;
-    }
-
-    public Table createTable(
-        TableIdentifier identifier,
-        Schema schema,
-        PartitionSpec spec,
-        Map<String, String> properties) {
-      return catalog.createTable(identifier, schema, spec, properties);
-    }
-
-    public Schema schema(TableIdentifier identifier, SinkRecord sample) {
-      StructType structType;
-      if (sample.valueSchema() == null) {
-        structType =
-            SchemaUtils.inferIcebergType(sample.value(), config)
-                .orElseThrow(() -> new DataException("Unable to create table from empty object"))
-                .asStructType();
-      } else {
-        structType = SchemaUtils.toIcebergType(sample.valueSchema(), config).asStructType();
-      }
-
-      return new org.apache.iceberg.Schema(structType.fields());
-    }
-  }
-
-  private class ErrorHandlingTableCreator extends TableCreator {
-
-    private final TableIdentifier deadLetterTableId;
-
-    ErrorHandlingTableCreator(Catalog catalog, IcebergSinkConfig config) {
-      super(catalog, config);
-      this.deadLetterTableId = TableIdentifier.parse(config.deadLetterTableName());
-    }
-
-    @Override
-    public Table createTable(
-        TableIdentifier identifier,
-        Schema schema,
-        PartitionSpec spec,
-        Map<String, String> properties) {
-
-      Table table;
-      if (identifier == deadLetterTableId) {
-        table = catalog.createTable(identifier, schema, spec, properties);
-      } else {
-        try {
-          table = catalog.createTable(identifier, schema, spec, properties);
-        } catch (IllegalArgumentException | ValidationException error) {
-
-          // CommitStateUnknown exception.
-          // Look into NullPointer exceptions
-          // look into JsonProcessing exceptions inside of Iceberg
-
-          throw new DeadLetterUtils.DeadLetterException("CREATE_TABLE", error);
-        }
-      }
-      return table;
-    }
-
-    @Override
-    public Schema schema(TableIdentifier identifier, SinkRecord sample) {
-      Schema schema;
-      if (identifier == deadLetterTableId) {
-        schema = super.schema(identifier, sample);
-      } else {
-        try {
-          schema = super.schema(identifier, sample);
-        } catch (IllegalArgumentException | ValidationException error) {
-          throw new DeadLetterUtils.DeadLetterException("CREATE_SCHEMA", error);
-        }
-      }
-      return schema;
-    }
-  }
+  private final CatalogApi catalogApi;
 
   public IcebergWriterFactory(Catalog catalog, IcebergSinkConfig config) {
-    this.catalog = catalog;
+    this(config, getCatalogApi(catalog, config));
+  }
+
+  public IcebergWriterFactory(IcebergSinkConfig config, CatalogApi api) {
     this.config = config;
-    this.tableCreator = new TableCreator(catalog, config);
-    this.tableIdSupplier = new TableIdentifierSupplier();
+    this.catalogApi = api;
 
     if (config.autoCreateEnabled()) {
       shouldAutoCreate = (unused) -> true;
     } else if (config.deadLetterTableEnabled()) {
       String deadLetterTableName = config.deadLetterTableName().toLowerCase();
       shouldAutoCreate = (tableName) -> tableName.equals(deadLetterTableName);
-      this.tableCreator = new ErrorHandlingTableCreator(catalog, config);
-      this.tableIdSupplier = new ErrorHandlingTableIdentifierSupplier();
     } else {
       shouldAutoCreate = (unused) -> false;
     }
@@ -175,11 +65,10 @@ public class IcebergWriterFactory {
   public RecordWriter createWriter(
       String tableName, SinkRecord sample, boolean ignoreMissingTable) {
 
-    // this can fail.
-    TableIdentifier identifier = tableIdSupplier.id(tableName);
+    TableIdentifier identifier = catalogApi.tableId(tableName);
     Table table;
     try {
-      table = catalog.loadTable(identifier);
+      table = catalogApi.loadTable(identifier);
     } catch (NoSuchTableException nst) {
       if (shouldAutoCreate.test(tableName)) {
         table = autoCreateTable(tableName, sample);
@@ -196,9 +85,9 @@ public class IcebergWriterFactory {
   @VisibleForTesting
   Table autoCreateTable(String tableName, SinkRecord sample) {
 
-    TableIdentifier identifier = tableIdSupplier.id(tableName);
+    TableIdentifier identifier = catalogApi.tableId(tableName);
 
-    Schema schema = tableCreator.schema(identifier, sample);
+    Schema schema = catalogApi.schema(identifier, sample);
 
     List<String> partitionBy = config.tableConfig(tableName).partitionBy();
 
@@ -221,13 +110,21 @@ public class IcebergWriterFactory {
         .run(
             notUsed -> {
               try {
-                result.set(catalog.loadTable(identifier));
+                result.set(catalogApi.loadTable(identifier));
               } catch (NoSuchTableException e) {
                 result.set(
-                    tableCreator.createTable(
+                    catalogApi.createTable(
                         identifier, schema, partitionSpec, config.autoCreateProps()));
               }
             });
     return result.get();
+  }
+
+  private static CatalogApi getCatalogApi(Catalog catalog, IcebergSinkConfig config) {
+    if (config.deadLetterTableEnabled()) {
+      return new CatalogApi.ErrorHandlingCatalogApi(catalog, config);
+    } else {
+      return new CatalogApi(catalog, config) {};
+    }
   }
 }

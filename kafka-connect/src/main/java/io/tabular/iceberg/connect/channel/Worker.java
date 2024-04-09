@@ -35,6 +35,7 @@ import io.tabular.iceberg.connect.events.Event;
 import io.tabular.iceberg.connect.events.EventType;
 import io.tabular.iceberg.connect.events.TableName;
 import io.tabular.iceberg.connect.events.TopicPartitionOffset;
+import java.io.UncheckedIOException;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
@@ -68,7 +69,7 @@ public class Worker extends Channel {
     void writeFailed(SinkRecord sample, String location, Throwable error, String targetTableName);
   }
 
-  private static class BaseWriterForTable implements WriterForTable {
+  public static class BaseWriterForTable implements WriterForTable {
 
     private final IcebergWriterFactory writerFactory;
     private final Map<String, RecordWriter> writers;
@@ -160,10 +161,12 @@ public class Worker extends Channel {
         if (recordToWrite != null) {
           try {
             writer.write(recordToWrite);
-          } catch (Exception e) {
+          } catch (UncheckedIOException error) {
+            throw error;
+          } catch (Exception error) {
             SinkRecord newRecord =
                 DeadLetterUtils.mapToFailedRecord(
-                    tableName, record, ICEBERG_TRANSFORMATION_LOCATION, e, rowIdentifier);
+                    tableName, record, ICEBERG_TRANSFORMATION_LOCATION, error, rowIdentifier);
             writers
                 .computeIfAbsent(
                     deadLetterTableName,
