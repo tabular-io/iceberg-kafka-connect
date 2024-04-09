@@ -19,7 +19,6 @@
 package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import org.apache.iceberg.PartitionSpec;
@@ -31,12 +30,8 @@ import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.util.Tasks;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class IcebergWriterFactory {
-
-  private static final Logger LOG = LoggerFactory.getLogger(IcebergWriterFactory.class);
 
   private final IcebergSinkConfig config;
 
@@ -89,21 +84,8 @@ public class IcebergWriterFactory {
 
     Schema schema = catalogApi.schema(identifier, sample);
 
-    List<String> partitionBy = config.tableConfig(tableName).partitionBy();
+    PartitionSpec partitionSpec = catalogApi.partitionSpec(tableName, schema);
 
-    PartitionSpec spec;
-    try {
-      spec = SchemaUtils.createPartitionSpec(schema, partitionBy);
-    } catch (Exception e) {
-      LOG.error(
-          "Unable to create partition spec {}, table {} will be unpartitioned",
-          partitionBy,
-          identifier,
-          e);
-      spec = PartitionSpec.unpartitioned();
-    }
-
-    PartitionSpec partitionSpec = spec;
     AtomicReference<Table> result = new AtomicReference<>();
     Tasks.range(1)
         .retry(IcebergSinkConfig.CREATE_TABLE_RETRIES)

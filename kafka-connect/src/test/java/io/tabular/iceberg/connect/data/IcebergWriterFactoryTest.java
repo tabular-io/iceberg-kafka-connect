@@ -37,8 +37,6 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Types.LongType;
 import org.apache.iceberg.types.Types.StringType;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
@@ -87,47 +85,4 @@ public class IcebergWriterFactoryTest {
     assertThat(specCaptor.getValue().isPartitioned()).isEqualTo(partitioned);
     assertThat(propsCaptor.getValue()).containsKey("test-prop");
   }
-
-  @Test
-  @DisplayName(
-      "createWriter should create a DeadLetterTable even when autocreatetables is not configured")
-  public void createWriterAutoCreatesDeadLetterTable() {
-    Catalog catalog = mock(Catalog.class);
-
-    IcebergSinkConfig config = mock(IcebergSinkConfig.class);
-    when(config.autoCreateEnabled()).thenReturn(false);
-    when(config.deadLetterTableName()).thenReturn(DEAD_LETTER_TABLE);
-  }
-
-  @Test
-  @DisplayName("createWriter should return DeadLetterException for invalid table names")
-  public void createWriterThrowsDeadLetterExceptions() {
-    // when configured for DeadLetterTable
-  }
-
-  @Test
-  @DisplayName("createWriter should return DeadLetterException for select schema conversion errors")
-  public void createWriterThrowsOnSchemaConversionErrors() {}
-
-  @Test
-  @DisplayName(
-      "createWriter should return underlying exception for schema conversion errors if table is dead letter table")
-  public void createWriterThrowsOnSchmeaConversionErrorsForDLT() {}
-
-  @Test
-  @DisplayName("createWriter should return DeadLetterExceptions for select table creation errors")
-  public void createWriterThrowsTableCreationErrors() {}
-
-  @Test
-  @DisplayName(
-      "createWriter should return underlying exception for table creation errors if table is dead letter table")
-  public void createWriterThrowsTableCreationErrorsDLT() {}
-
-  @Test
-  @DisplayName("createWriter should apply partition spec from Configuration during table creation")
-  public void createWriterAppliesPartitionSpec() {}
-
-  @Test
-  @DisplayName("createWriter should apply id column from Configuration during table creation")
-  public void createWriterAppliesIdColumn() {}
 }

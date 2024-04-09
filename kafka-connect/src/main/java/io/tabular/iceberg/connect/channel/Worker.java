@@ -142,10 +142,6 @@ public class Worker extends Channel {
             Struct transformedStruct = (Struct) record.value();
             transformedStruct.put("target_table", tableName);
             transformedStruct.put("identifier", rowIdentifier);
-
-            // not sure I should wrap this?
-            // anything thrown here is a bug on our part, no? Someone has messed w/ the table?
-            // everything here should be valid at this point
             writer =
                 writers.computeIfAbsent(
                     deadLetterTableName,

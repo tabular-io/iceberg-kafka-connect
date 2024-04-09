@@ -20,6 +20,7 @@ package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
+import java.util.List;
 import java.util.Map;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
@@ -30,8 +31,11 @@ import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.iceberg.types.Types;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public abstract class CatalogApi {
+  private static final Logger LOG = LoggerFactory.getLogger(CatalogApi.class);
 
   private final Catalog catalog;
   private final IcebergSinkConfig config;
@@ -47,6 +51,23 @@ public abstract class CatalogApi {
 
   public final Table loadTable(TableIdentifier identifier) {
     return catalog.loadTable(identifier);
+  }
+
+  public final PartitionSpec partitionSpec(String tableName, Schema schema) {
+    List<String> partitionBy = config.tableConfig(tableName).partitionBy();
+
+    PartitionSpec spec;
+    try {
+      spec = SchemaUtils.createPartitionSpec(schema, partitionBy);
+    } catch (Exception e) {
+      LOG.error(
+          "Unable to create partition spec {}, table {} will be unpartitioned",
+          partitionBy,
+          tableName,
+          e);
+      spec = PartitionSpec.unpartitioned();
+    }
+    return spec;
   }
 
   public Table createTable(
