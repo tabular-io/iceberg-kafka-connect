@@ -115,30 +115,20 @@ public class ErrorTransform implements Transformation<SinkRecord> {
     }
   }
 
-  private abstract static class ExceptionHandler {
-    SinkRecord handle(SinkRecord original, Throwable error, String location) {
-      throw new java.lang.IllegalStateException("handle not implemented");
-    }
-  }
-
-  private static class AllExceptions extends ExceptionHandler {
-    @Override
-    SinkRecord handle(SinkRecord original, Throwable error, String location) {
-      return DeadLetterUtils.failedRecord(original, error, location, null);
-    }
-  }
-
   private static final String HEADERS = "headers";
   private static final String KEY_CONVERTER = "key.converter";
   private static final String VALUE_CONVERTER = "value.converter";
   private static final String HEADER_CONVERTER = "header.converter";
+  private static final String CONVERTER_ERROR_HANDLER = "error.converter";
+  private static final String SMT_ERROR_HANDLER = "error.smt";
   private static final String TRANSFORMATIONS = "smts";
   private static final String KEY_FAILURE = "KEY_CONVERTER";
   private static final String VALUE_FAILURE = "VALUE_CONVERTER";
   private static final String HEADER_FAILURE = "HEADER_CONVERTER";
   private static final String SMT_FAILURE = "SMT_FAILURE";
 
-  private ExceptionHandler errorHandler;
+  private TransformExceptionHandler converterErrorHandler;
+  private TransformExceptionHandler smtErrorHandler;
   private List<Transformation<SinkRecord>> smts;
   private Function<SinkRecord, SchemaAndValue> keyConverter;
   private Function<SinkRecord, SchemaAndValue> valueConverter;
@@ -164,8 +154,19 @@ public class ErrorTransform implements Transformation<SinkRecord> {
               "org.apache.kafka.connect.converters.ByteArrayConverter",
               ConfigDef.Importance.MEDIUM,
               "header.converter")
+          .define(TRANSFORMATIONS, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, "smts")
           .define(
-              TRANSFORMATIONS, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, "smts");
+              CONVERTER_ERROR_HANDLER,
+              ConfigDef.Type.STRING,
+              "io.tabular.iceberg.connect.transforms.DefaultExceptionHandler",
+              ConfigDef.Importance.MEDIUM,
+              "Error handling class for converter errors")
+          .define(
+              SMT_ERROR_HANDLER,
+              ConfigDef.Type.STRING,
+              "io.tabular.iceberg.connect.transforms.DefaultExceptionHandler",
+              ConfigDef.Importance.MEDIUM,
+              "Error handling class for SMT errors");
 
   @Override
   public SinkRecord apply(SinkRecord record) {
@@ -188,7 +189,7 @@ public class ErrorTransform implements Transformation<SinkRecord> {
           break;
         }
       } catch (Exception e) {
-        return errorHandler.handle(record, e, SMT_FAILURE);
+        return smtErrorHandler.handle(record, e, SMT_FAILURE);
       }
     }
     // SMT could filter out messages
@@ -245,7 +246,6 @@ public class ErrorTransform implements Transformation<SinkRecord> {
           (HeaderConverter)
               loadClass("org.apache.kafka.connect.converters.ByteArrayConverter", loader)) {
         converter.configure(PropsParser.apply(props, HEADER_CONVERTER));
-        headerConverter = converter;
       } catch (Exception e) {
         throw new TransformInitializationException(
             String.format(
@@ -294,7 +294,10 @@ public class ErrorTransform implements Transformation<SinkRecord> {
               .collect(Collectors.toList());
     }
 
-    errorHandler = new AllExceptions();
+    converterErrorHandler =
+        (TransformExceptionHandler) loadClass(config.getString(CONVERTER_ERROR_HANDLER), loader);
+    smtErrorHandler =
+        (TransformExceptionHandler) loadClass(config.getString(SMT_ERROR_HANDLER), loader);
   }
 
   private Object loadClass(String name, ClassLoader loader) {
@@ -320,18 +323,18 @@ public class ErrorTransform implements Transformation<SinkRecord> {
     try {
       keyData = keyConverter.apply(record);
     } catch (Exception e) {
-      return new DeserializedRecord(errorHandler.handle(record, e, KEY_FAILURE), true);
+      return new DeserializedRecord(converterErrorHandler.handle(record, e, KEY_FAILURE), true);
     }
 
     try {
       valueData = valueConverter.apply(record);
     } catch (Exception e) {
-      return new DeserializedRecord(errorHandler.handle(record, e, VALUE_FAILURE), true);
+      return new DeserializedRecord(converterErrorHandler.handle(record, e, VALUE_FAILURE), true);
     }
     try {
       newHeaders = headerConverterFn.apply(record);
     } catch (Exception e) {
-      return new DeserializedRecord(errorHandler.handle(record, e, HEADER_FAILURE), true);
+      return new DeserializedRecord(converterErrorHandler.handle(record, e, HEADER_FAILURE), true);
     }
 
     return new DeserializedRecord(
