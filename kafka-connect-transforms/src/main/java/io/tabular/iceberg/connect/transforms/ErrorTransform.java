@@ -124,7 +124,7 @@ public class ErrorTransform implements Transformation<SinkRecord> {
   private static class AllExceptions extends ExceptionHandler {
     @Override
     SinkRecord handle(SinkRecord original, Throwable error, String location) {
-      return DeadLetterUtils.failedRecord(original, error, location);
+      return DeadLetterUtils.failedRecord(original, error, location, null);
     }
   }
 

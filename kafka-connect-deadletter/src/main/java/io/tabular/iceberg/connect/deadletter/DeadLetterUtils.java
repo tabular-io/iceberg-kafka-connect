@@ -54,6 +54,7 @@ public class DeadLetterUtils {
     throw new IllegalStateException("Should not be initialialized");
   }
 
+  public static final String TYPE = "dlt";
   public static final String KEY_BYTES = "key";
   public static final String VALUE_BYTES = "value";
   public static final String PAYLOAD_KEY = "transformed";
@@ -71,6 +72,7 @@ public class DeadLetterUtils {
       SchemaBuilder.struct()
           .name("failed_message")
           .parameter("isFailed", "true")
+          .field("identifier", Schema.OPTIONAL_STRING_SCHEMA)
           .field("topic", Schema.STRING_SCHEMA)
           .field("partition", Schema.INT32_SCHEMA)
           .field("offset", Schema.INT64_SCHEMA)
@@ -82,6 +84,7 @@ public class DeadLetterUtils {
           .field("value_bytes", Schema.OPTIONAL_BYTES_SCHEMA)
           .field(HEADERS, HEADER_SCHEMA)
           .field("target_table", Schema.OPTIONAL_STRING_SCHEMA)
+          .field("type", Schema.STRING_SCHEMA)
           .schema();
 
   public static String stackTrace(Throwable error) {
@@ -118,19 +121,28 @@ public class DeadLetterUtils {
     }
   }
 
-  public static SinkRecord failedRecord(SinkRecord original, Throwable error, String location) {
+  public static SinkRecord failedRecord(
+      SinkRecord original, Throwable error, String location, String identifier) {
     List<Struct> headers = null;
     if (!original.headers().isEmpty()) {
       headers = DeadLetterUtils.serializedHeaders(original);
     }
     Values values = new Values(original.key(), original.value(), headers);
-    return failedRecord(original, values, error, location, null);
+    return failedRecord(original, values, error, location, null, identifier);
   }
 
   private static SinkRecord failedRecord(
-      SinkRecord original, Values values, Throwable error, String location, String targetTable) {
+      SinkRecord original,
+      Values values,
+      Throwable error,
+      String location,
+      String targetTable,
+      String identifier) {
 
     Struct struct = new Struct(FAILED_SCHEMA);
+    if (identifier != null) {
+      struct.put("identifier", identifier);
+    }
     struct.put("topic", original.topic());
     struct.put("partition", original.kafkaPartition());
     struct.put("offset", original.kafkaOffset());
@@ -154,6 +166,7 @@ public class DeadLetterUtils {
       struct.put("target_table", targetTable);
     }
 
+    struct.put("type", TYPE);
     return original.newRecord(
         original.topic(),
         original.kafkaPartition(),
@@ -186,13 +199,13 @@ public class DeadLetterUtils {
 
   @SuppressWarnings("unchecked")
   public static SinkRecord mapToFailedRecord(
-      String targetTable, SinkRecord record, String location, Throwable error) {
+      String targetTable, SinkRecord record, String location, Throwable error, String identifier) {
     Map<String, Object> payload = (Map<String, Object>) record.value();
     Map<String, Object> bytes = (Map<String, Object>) payload.get(ORIGINAL_BYTES_KEY);
     Object keyBytes = bytes.get(KEY_BYTES);
     Object valueBytes = bytes.get(VALUE_BYTES);
     Object headers = bytes.get(HEADERS);
     Values values = new Values(keyBytes, valueBytes, headers);
-    return failedRecord(record, values, error, location, targetTable);
+    return failedRecord(record, values, error, location, targetTable, identifier);
   }
 }

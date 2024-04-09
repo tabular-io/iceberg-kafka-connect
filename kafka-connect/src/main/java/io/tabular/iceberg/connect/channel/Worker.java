@@ -101,6 +101,8 @@ public class Worker extends Channel {
     private final Map<String, RecordWriter> writers;
     private final String deadLetterTableName;
 
+    private final String rowIdentifier;
+
     DeadLetterWriterForTable(
         IcebergWriterFactory writerFactory,
         Map<String, RecordWriter> writers,
@@ -110,6 +112,7 @@ public class Worker extends Channel {
       Preconditions.checkNotNull(
           config.deadLetterTableName(), "Dead letter table name cannot be null");
       this.deadLetterTableName = config.deadLetterTableName().toLowerCase();
+      this.rowIdentifier = config.connectorName().toLowerCase().replace('-', '_');
     }
 
     @SuppressWarnings("unchecked")
@@ -137,6 +140,7 @@ public class Worker extends Channel {
           if (isFailed(record)) {
             Struct transformedStruct = (Struct) record.value();
             transformedStruct.put("target_table", tableName);
+            transformedStruct.put("identifier", rowIdentifier);
 
             // not sure I should wrap this?
             // anything thrown here is a bug on our part, no? Someone has messed w/ the table?
@@ -159,7 +163,7 @@ public class Worker extends Channel {
           } catch (Exception e) {
             SinkRecord newRecord =
                 DeadLetterUtils.mapToFailedRecord(
-                    tableName, record, ICEBERG_TRANSFORMATION_LOCATION, e);
+                    tableName, record, ICEBERG_TRANSFORMATION_LOCATION, e, rowIdentifier);
             writers
                 .computeIfAbsent(
                     deadLetterTableName,
@@ -176,7 +180,8 @@ public class Worker extends Channel {
     public void writeFailed(
         SinkRecord sample, String location, Throwable error, String targetTableName) {
       SinkRecord newRecord =
-          DeadLetterUtils.mapToFailedRecord(targetTableName, sample, location, error);
+          DeadLetterUtils.mapToFailedRecord(
+              targetTableName, sample, location, error, rowIdentifier);
       writers
           .computeIfAbsent(
               deadLetterTableName,

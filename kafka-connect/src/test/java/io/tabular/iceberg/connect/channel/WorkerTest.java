@@ -112,7 +112,7 @@ public class WorkerTest extends ChannelTestBase {
         new SinkRecord(
             "topic", 0, null, null, null, ORIGINAL_BYTES, 100L, 1000L, TimestampType.CREATE_TIME);
     return DeadLetterUtils.failedRecord(
-        originalRecord, new IllegalArgumentException("test"), "location");
+        originalRecord, new IllegalArgumentException("test"), "location", "test_identifier");
   }
 
   @Test
