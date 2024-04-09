@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
@@ -64,7 +65,7 @@ public class Worker extends Channel {
   public interface WriterForTable {
     void write(String tableName, SinkRecord record, boolean ignoreMissingTable);
 
-    void writeFailed(String namespace, SinkRecord sample, String location, Throwable error);
+    void writeFailed(SinkRecord sample, String location, Throwable error, String targetTableName);
   }
 
   private static class BaseWriterForTable implements WriterForTable {
@@ -87,7 +88,8 @@ public class Worker extends Channel {
     }
 
     @Override
-    public void writeFailed(String namespace, SinkRecord sample, String location, Throwable error) {
+    public void writeFailed(
+        SinkRecord sample, String location, Throwable error, String targetTableName) {
       throw new IllegalArgumentException("BaseWriterForTable cannot write failed records", error);
     }
   }
@@ -97,7 +99,7 @@ public class Worker extends Channel {
     private static final String ICEBERG_TRANSFORMATION_LOCATION = "ICEBERG_TRANSFORM";
     private final IcebergWriterFactory writerFactory;
     private final Map<String, RecordWriter> writers;
-    private final String deadLetterTableSuffix;
+    private final String deadLetterTableName;
 
     DeadLetterWriterForTable(
         IcebergWriterFactory writerFactory,
@@ -105,7 +107,9 @@ public class Worker extends Channel {
         IcebergSinkConfig config) {
       this.writerFactory = writerFactory;
       this.writers = writers;
-      this.deadLetterTableSuffix = config.deadLetterTableSuffix();
+      Preconditions.checkNotNull(
+          config.deadLetterTableName(), "Dead letter table name cannot be null");
+      this.deadLetterTableName = config.deadLetterTableName().toLowerCase();
     }
 
     @SuppressWarnings("unchecked")
@@ -119,18 +123,24 @@ public class Worker extends Channel {
         if (record.value() instanceof Map) {
           Map<String, Object> payload = (Map<String, Object>) record.value();
           SinkRecord transformed = (SinkRecord) payload.get(PAYLOAD_KEY);
-          writer =
-              writers.computeIfAbsent(
-                  tableName,
-                  notUsed ->
-                      writerFactory.createWriter(tableName, transformed, ignoreMissingTable));
-          recordToWrite = transformed;
+          try {
+            writer =
+                writers.computeIfAbsent(
+                    tableName,
+                    notUsed ->
+                        writerFactory.createWriter(tableName, transformed, ignoreMissingTable));
+            recordToWrite = transformed;
+          } catch (DeadLetterUtils.DeadLetterException error) {
+            writeFailed(record, error.getLocation(), error.getError(), tableName);
+          }
         } else if (record.value() instanceof Struct) {
           if (isFailed(record)) {
-            String deadLetterTableName = deadLetterTableName(tableName);
             Struct transformedStruct = (Struct) record.value();
             transformedStruct.put("target_table", tableName);
 
+            // not sure I should wrap this?
+            // anything thrown here is a bug on our part, no? Someone has messed w/ the table?
+            // everything here should be valid at this point
             writer =
                 writers.computeIfAbsent(
                     deadLetterTableName,
@@ -143,28 +153,30 @@ public class Worker extends Channel {
           throw new IllegalArgumentException("Record not in format expected for dead letter table");
         }
 
-        try {
-          writer.write(recordToWrite);
-        } catch (Exception e) {
-          String deadLetterTableName = deadLetterTableName(tableName);
-          SinkRecord newRecord =
-              DeadLetterUtils.mapToFailedRecord(
-                  tableName, record, ICEBERG_TRANSFORMATION_LOCATION, e);
-          writers
-              .computeIfAbsent(
-                  deadLetterTableName,
-                  notUsed ->
-                      writerFactory.createWriter(
-                          deadLetterTableName, newRecord, ignoreMissingTable))
-              .write(newRecord);
+        if (recordToWrite != null) {
+          try {
+            writer.write(recordToWrite);
+          } catch (Exception e) {
+            SinkRecord newRecord =
+                DeadLetterUtils.mapToFailedRecord(
+                    tableName, record, ICEBERG_TRANSFORMATION_LOCATION, e);
+            writers
+                .computeIfAbsent(
+                    deadLetterTableName,
+                    notUsed ->
+                        writerFactory.createWriter(
+                            deadLetterTableName, newRecord, ignoreMissingTable))
+                .write(newRecord);
+          }
         }
       }
     }
 
     @Override
-    public void writeFailed(String namespace, SinkRecord sample, String location, Throwable error) {
-      String deadLetterTableName = deadLetterTableName(namespace, sample);
-      SinkRecord newRecord = DeadLetterUtils.mapToFailedRecord(null, sample, location, error);
+    public void writeFailed(
+        SinkRecord sample, String location, Throwable error, String targetTableName) {
+      SinkRecord newRecord =
+          DeadLetterUtils.mapToFailedRecord(targetTableName, sample, location, error);
       writers
           .computeIfAbsent(
               deadLetterTableName,
@@ -182,14 +194,6 @@ public class Worker extends Channel {
       }
       return false;
     }
-
-    private String deadLetterTableName(String namespace, SinkRecord record) {
-      return String.format("%s.%s_%s", namespace, record.topic(), deadLetterTableSuffix);
-    }
-
-    private String deadLetterTableName(String originalTableName) {
-      return originalTableName + deadLetterTableSuffix;
-    }
   }
 
   private abstract static class RecordRouter {
@@ -197,35 +201,32 @@ public class Worker extends Channel {
     void write(SinkRecord record) {}
   }
 
-  private class ConfigRecordRouter extends RecordRouter {
+  private static class ConfigRecordRouter extends RecordRouter {
     private final WriterForTable writerForTable;
+    private final List<String> tables;
 
-    ConfigRecordRouter(WriterForTable writerForTable) {
+    ConfigRecordRouter(WriterForTable writerForTable, List<String> tables) {
       this.writerForTable = writerForTable;
+      this.tables = tables;
     }
 
     @Override
     public void write(SinkRecord record) {
       // route to all tables
-      config
-          .tables()
-          .forEach(
-              tableName -> {
-                writerForTable.write(tableName, record, false);
-              });
+      tables.forEach(
+          tableName -> {
+            writerForTable.write(tableName, record, false);
+          });
     }
   }
 
   private static class ErrorHandlingRecordRouter extends RecordRouter {
     private final RecordRouter underlying;
     private final WriterForTable writerForTable;
-    private final String namespace;
 
-    ErrorHandlingRecordRouter(
-        RecordRouter underlying, WriterForTable writerForTable, String namespace) {
+    ErrorHandlingRecordRouter(RecordRouter underlying, WriterForTable writerForTable) {
       this.underlying = underlying;
       this.writerForTable = writerForTable;
-      this.namespace = namespace;
     }
 
     @Override
@@ -233,7 +234,7 @@ public class Worker extends Channel {
       try {
         underlying.write(record);
       } catch (DeadLetterUtils.DeadLetterException e) {
-        writerForTable.writeFailed(namespace, record, e.getLocation(), e.getError());
+        writerForTable.writeFailed(record, e.getLocation(), e.getError(), null);
       }
     }
   }
@@ -329,16 +330,17 @@ public class Worker extends Channel {
           new DynamicRecordRouter(writerForTable, config.tablesRouteField(), routeExtractor);
     } else {
       if (config.tablesRouteField() == null) {
-        baseRecordRouter = new ConfigRecordRouter(writerForTable);
+        // validate all table identifiers are valid, otherwise exception is thrown
+        // as this is an invalid config setting, not an error during processing
+        config.tables().forEach(TableIdentifier::of);
+        baseRecordRouter = new ConfigRecordRouter(writerForTable, config.tables());
       } else {
         baseRecordRouter =
             new StaticRecordRouter(writerForTable, config.tablesRouteField(), routeExtractor);
       }
     }
     if (config.deadLetterTableEnabled()) {
-      recordRouter =
-          new ErrorHandlingRecordRouter(
-              baseRecordRouter, writerForTable, config.deadLetterTopicNamespace());
+      recordRouter = new ErrorHandlingRecordRouter(baseRecordRouter, writerForTable);
     } else {
       recordRouter = baseRecordRouter;
     }

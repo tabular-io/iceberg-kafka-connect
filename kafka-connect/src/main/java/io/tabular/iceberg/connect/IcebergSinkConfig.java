@@ -83,12 +83,7 @@ public class IcebergSinkConfig extends AbstractConfig {
       "iceberg.tables.schema-force-optional";
   private static final String TABLES_SCHEMA_CASE_INSENSITIVE_PROP =
       "iceberg.tables.schema-case-insensitive";
-  private static final String USE_DEAD_LETTER_TABLE_PROP = "iceberg.tables.deadletter";
-  private static final String DEAD_LETTER_TABLE_SUFFIX_PROP = "iceberg.tables.deadletter.suffix";
-  private static final String DEAD_LETTER_TABLE_SUFFIX_DEFAULT = "__dlt";
-
-  private static final String DEAD_LETTER_TABLE_NAMESPACE = "iceberg.tables.deadletter.namespace";
-  private static final String DEAD_LETTER_TABLE_NAMESPACE_DEFAULT = "dead_letter";
+  private static final String DEAD_LETTER_TABLE_PROP = "iceberg.tables.deadletter";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
   private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group-id";
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.control.commit.interval-ms";
@@ -244,23 +239,11 @@ public class IcebergSinkConfig extends AbstractConfig {
         Importance.MEDIUM,
         "Coordinator threads to use for table commits, default is (cores * 2)");
     configDef.define(
-        USE_DEAD_LETTER_TABLE_PROP,
-        Type.BOOLEAN,
-        false,
-        Importance.MEDIUM,
-        "Handle dead letter table payloads. Must use ErrorTransform SMT");
-    configDef.define(
-        DEAD_LETTER_TABLE_SUFFIX_PROP,
+        DEAD_LETTER_TABLE_PROP,
         Type.STRING,
-        DEAD_LETTER_TABLE_SUFFIX_DEFAULT,
+        null,
         Importance.MEDIUM,
-        "If using dead letter table, suffix to append to table to generate dead letter table name");
-    configDef.define(
-        DEAD_LETTER_TABLE_NAMESPACE,
-        Type.STRING,
-        DEAD_LETTER_TABLE_NAMESPACE_DEFAULT,
-        Importance.MEDIUM,
-        "If using dead letter table, namespace to put the tables with undetermined destination");
+        "If using ErrorTransform for Dead Letter Table, the db.name to write");
     return configDef;
   }
 
@@ -358,15 +341,12 @@ public class IcebergSinkConfig extends AbstractConfig {
   }
 
   public boolean deadLetterTableEnabled() {
-    return getBoolean(USE_DEAD_LETTER_TABLE_PROP);
+    String table = getString(DEAD_LETTER_TABLE_PROP);
+    return table != null;
   }
 
-  public String deadLetterTableSuffix() {
-    return getString(DEAD_LETTER_TABLE_SUFFIX_PROP);
-  }
-
-  public String deadLetterTopicNamespace() {
-    return getString(DEAD_LETTER_TABLE_NAMESPACE);
+  public String deadLetterTableName() {
+    return getString(DEAD_LETTER_TABLE_PROP);
   }
 
   public String tablesRouteField() {
