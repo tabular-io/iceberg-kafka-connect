@@ -22,12 +22,14 @@ import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.ValidationException;
+import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.types.Types;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -97,10 +99,24 @@ public abstract class CatalogApi {
     private final TableIdentifier deadLetterTableId;
     private final Catalog catalog;
 
+    private final BiFunction<TableIdentifier, SinkRecord, Schema> schemaFactory;
+
     ErrorHandlingCatalogApi(Catalog catalog, IcebergSinkConfig config) {
       super(catalog, config);
       this.deadLetterTableId = TableIdentifier.parse(config.deadLetterTableName());
       this.catalog = catalog;
+      this.schemaFactory = super::schema;
+    }
+
+    @VisibleForTesting
+    ErrorHandlingCatalogApi(
+        Catalog catalog,
+        IcebergSinkConfig config,
+        BiFunction<TableIdentifier, SinkRecord, Schema> schemaFactory) {
+      super(catalog, config);
+      this.deadLetterTableId = TableIdentifier.parse(config.deadLetterTableName());
+      this.catalog = catalog;
+      this.schemaFactory = schemaFactory;
     }
 
     @Override
@@ -138,10 +154,10 @@ public abstract class CatalogApi {
     public Schema schema(TableIdentifier identifier, SinkRecord sample) {
       Schema schema;
       if (identifier == deadLetterTableId) {
-        schema = super.schema(identifier, sample);
+        schema = this.schemaFactory.apply(identifier, sample);
       } else {
         try {
-          schema = super.schema(identifier, sample);
+          schema = this.schemaFactory.apply(identifier, sample);
         } catch (IllegalArgumentException | ValidationException error) {
           throw new DeadLetterUtils.DeadLetterException("CREATE_SCHEMA", error);
         }
