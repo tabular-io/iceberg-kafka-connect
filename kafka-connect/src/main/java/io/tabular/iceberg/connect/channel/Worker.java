@@ -113,7 +113,7 @@ public class Worker extends Channel {
       Preconditions.checkNotNull(
           config.deadLetterTableName(), "Dead letter table name cannot be null");
       Preconditions.checkArgument(
-          config.deadLetterTableName().isEmpty(), "Dead letter table name cannot be empty");
+          !config.deadLetterTableName().isEmpty(), "Dead letter table name cannot be empty");
       this.deadLetterTableName = config.deadLetterTableName().toLowerCase();
       this.rowIdentifier = config.connectorName().toLowerCase().replace('-', '_');
     }
