@@ -18,7 +18,7 @@
  */
 package io.tabular.iceberg.connect.channel;
 
-import io.tabular.iceberg.connect.events.Event;
+import org.apache.iceberg.connect.events.Event;
 
 public class Envelope {
   private final Event event;

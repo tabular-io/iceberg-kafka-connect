@@ -22,11 +22,12 @@ import static java.util.stream.Collectors.toList;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.Offset;
-import io.tabular.iceberg.connect.events.Event;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.iceberg.connect.events.AvroUtil;
+import org.apache.iceberg.connect.events.Event;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
@@ -84,7 +85,7 @@ public abstract class Channel {
             .map(
                 event -> {
                   LOG.info("Sending event of type: {}", event.type().name());
-                  byte[] data = Event.encode(event);
+                  byte[] data = AvroUtil.encode(event);
                   // key by producer ID to keep event order
                   return new ProducerRecord<>(controlTopic, producerId, data);
                 })
@@ -122,7 +123,7 @@ public abstract class Channel {
             // so increment the record offset by one
             controlTopicOffsets.put(record.partition(), record.offset() + 1);
 
-            Event event = Event.decode(record.value());
+            Event event = AvroUtil.decode(record.value());
 
             if (event.groupId().equals(groupId)) {
               LOG.debug("Received event of type: {}", event.type().name());

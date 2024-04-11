@@ -21,16 +21,10 @@ package io.tabular.iceberg.connect.channel;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import io.tabular.iceberg.connect.events.CommitCompletePayload;
-import io.tabular.iceberg.connect.events.CommitReadyPayload;
-import io.tabular.iceberg.connect.events.CommitRequestPayload;
-import io.tabular.iceberg.connect.events.CommitResponsePayload;
-import io.tabular.iceberg.connect.events.CommitTablePayload;
-import io.tabular.iceberg.connect.events.Event;
-import io.tabular.iceberg.connect.events.EventTestUtil;
-import io.tabular.iceberg.connect.events.EventType;
-import io.tabular.iceberg.connect.events.TableName;
-import io.tabular.iceberg.connect.events.TopicPartitionOffset;
+import io.tabular.iceberg.connect.fixtures.EventTestUtil;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,6 +40,16 @@ import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Snapshot;
+import org.apache.iceberg.connect.events.AvroUtil;
+import org.apache.iceberg.connect.events.CommitComplete;
+import org.apache.iceberg.connect.events.CommitToTable;
+import org.apache.iceberg.connect.events.DataComplete;
+import org.apache.iceberg.connect.events.DataWritten;
+import org.apache.iceberg.connect.events.Event;
+import org.apache.iceberg.connect.events.PayloadType;
+import org.apache.iceberg.connect.events.StartCommit;
+import org.apache.iceberg.connect.events.TableReference;
+import org.apache.iceberg.connect.events.TopicPartitionOffset;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
@@ -64,7 +68,7 @@ public class CoordinatorTest extends ChannelTestBase {
   public void testCommitAppend() {
     Assertions.assertEquals(0, ImmutableList.copyOf(table.snapshots().iterator()).size());
 
-    long ts = System.currentTimeMillis();
+    OffsetDateTime ts = OffsetDateTime.ofInstant(Instant.now(), ZoneOffset.UTC);
     UUID commitId =
         coordinatorTest(ImmutableList.of(EventTestUtil.createDataFile()), ImmutableList.of(), ts);
     table.refresh();
@@ -84,12 +88,13 @@ public class CoordinatorTest extends ChannelTestBase {
     Map<String, String> summary = snapshot.summary();
     Assertions.assertEquals(commitId.toString(), summary.get(COMMIT_ID_SNAPSHOT_PROP));
     Assertions.assertEquals("{\"0\":3}", summary.get(OFFSETS_SNAPSHOT_PROP));
-    Assertions.assertEquals(Long.toString(ts), summary.get(VTTS_SNAPSHOT_PROP));
+    Assertions.assertEquals(
+        Long.toString(ts.toInstant().toEpochMilli()), summary.get(VTTS_SNAPSHOT_PROP));
   }
 
   @Test
   public void testCommitDelta() {
-    long ts = System.currentTimeMillis();
+    OffsetDateTime ts = OffsetDateTime.ofInstant(Instant.now(), ZoneOffset.UTC);
     UUID commitId =
         coordinatorTest(
             ImmutableList.of(EventTestUtil.createDataFile()),
@@ -111,12 +116,13 @@ public class CoordinatorTest extends ChannelTestBase {
     Map<String, String> summary = snapshot.summary();
     Assertions.assertEquals(commitId.toString(), summary.get(COMMIT_ID_SNAPSHOT_PROP));
     Assertions.assertEquals("{\"0\":3}", summary.get(OFFSETS_SNAPSHOT_PROP));
-    Assertions.assertEquals(Long.toString(ts), summary.get(VTTS_SNAPSHOT_PROP));
+    Assertions.assertEquals(
+        Long.toString(ts.toInstant().toEpochMilli()), summary.get(VTTS_SNAPSHOT_PROP));
   }
 
   @Test
   public void testCommitNoFiles() {
-    long ts = System.currentTimeMillis();
+    OffsetDateTime ts = OffsetDateTime.ofInstant(Instant.now(), ZoneOffset.UTC);
     UUID commitId = coordinatorTest(ImmutableList.of(), ImmutableList.of(), ts);
 
     assertThat(producer.history()).hasSize(2);
@@ -139,7 +145,10 @@ public class CoordinatorTest extends ChannelTestBase {
             .withRecordCount(5)
             .build();
 
-    coordinatorTest(ImmutableList.of(badDataFile), ImmutableList.of(), 0L);
+    coordinatorTest(
+        ImmutableList.of(badDataFile),
+        ImmutableList.of(),
+        OffsetDateTime.ofInstant(Instant.ofEpochMilli(0L), ZoneOffset.UTC));
 
     // no commit messages sent
     assertThat(producer.history()).hasSize(1);
@@ -150,7 +159,7 @@ public class CoordinatorTest extends ChannelTestBase {
 
   @Test
   public void testShouldDeduplicateDataFilesBeforeAppending() {
-    long ts = System.currentTimeMillis();
+    OffsetDateTime ts = OffsetDateTime.ofInstant(Instant.now(), ZoneOffset.UTC);
     DataFile dataFile = EventTestUtil.createDataFile();
 
     UUID commitId =
@@ -159,11 +168,10 @@ public class CoordinatorTest extends ChannelTestBase {
               Event commitResponse =
                   new Event(
                       config.controlGroupId(),
-                      EventType.COMMIT_RESPONSE,
-                      new CommitResponsePayload(
+                      new DataWritten(
                           StructType.of(),
                           currentCommitId,
-                          new TableName(ImmutableList.of("db"), "tbl"),
+                          new TableReference("catalog", ImmutableList.of("db"), "tbl"),
                           ImmutableList.of(dataFile, dataFile), // duplicated data files
                           ImmutableList.of()));
 
@@ -172,8 +180,7 @@ public class CoordinatorTest extends ChannelTestBase {
                   commitResponse, // duplicate commit response
                   new Event(
                       config.controlGroupId(),
-                      EventType.COMMIT_READY,
-                      new CommitReadyPayload(
+                      new DataComplete(
                           currentCommitId,
                           ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts)))));
             });
@@ -192,7 +199,7 @@ public class CoordinatorTest extends ChannelTestBase {
 
   @Test
   public void testShouldDeduplicateDeleteFilesBeforeAppending() {
-    long ts = System.currentTimeMillis();
+    OffsetDateTime ts = OffsetDateTime.ofInstant(Instant.now(), ZoneOffset.UTC);
     DeleteFile deleteFile = EventTestUtil.createDeleteFile();
 
     UUID commitId =
@@ -201,11 +208,10 @@ public class CoordinatorTest extends ChannelTestBase {
               Event duplicateCommitResponse =
                   new Event(
                       config.controlGroupId(),
-                      EventType.COMMIT_RESPONSE,
-                      new CommitResponsePayload(
+                      new DataWritten(
                           StructType.of(),
                           currentCommitId,
-                          new TableName(ImmutableList.of("db"), "tbl"),
+                          new TableReference("catalog", ImmutableList.of("db"), "tbl"),
                           ImmutableList.of(),
                           ImmutableList.of(deleteFile, deleteFile))); // duplicate delete files
 
@@ -214,8 +220,7 @@ public class CoordinatorTest extends ChannelTestBase {
                   duplicateCommitResponse, // duplicate commit response
                   new Event(
                       config.controlGroupId(),
-                      EventType.COMMIT_READY,
-                      new CommitReadyPayload(
+                      new DataComplete(
                           currentCommitId,
                           ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts)))));
             });
@@ -294,9 +299,9 @@ public class CoordinatorTest extends ChannelTestBase {
 
     // retrieve commitId from commit request produced by coordinator
     final byte[] bytes = producer.history().get(0).value();
-    final Event commitRequest = Event.decode(bytes);
-    assert commitRequest.type().equals(EventType.COMMIT_REQUEST);
-    final UUID commitId = ((CommitRequestPayload) commitRequest.payload()).commitId();
+    final Event commitRequest = AvroUtil.decode(bytes);
+    assert commitRequest.type().equals(PayloadType.START_COMMIT);
+    final UUID commitId = ((StartCommit) commitRequest.payload()).commitId();
 
     // each worker sends its responses for the commit request
     Map<Integer, PartitionSpec> workerIdToSpecMap =
@@ -323,14 +328,13 @@ public class CoordinatorTest extends ChannelTestBase {
               0,
               currentControlTopicOffset,
               "key",
-              Event.encode(
+              AvroUtil.encode(
                   new Event(
                       config.controlGroupId(),
-                      EventType.COMMIT_RESPONSE,
-                      new CommitResponsePayload(
+                      new DataWritten(
                           spec.partitionType(),
                           commitId,
-                          TableName.of(TABLE_IDENTIFIER),
+                          TableReference.of("catalog", TABLE_IDENTIFIER),
                           ImmutableList.of(dataFile),
                           ImmutableList.of())))));
       currentControlTopicOffset += 1;
@@ -341,14 +345,18 @@ public class CoordinatorTest extends ChannelTestBase {
               0,
               currentControlTopicOffset,
               "key",
-              Event.encode(
+              AvroUtil.encode(
                   new Event(
                       config.controlGroupId(),
-                      EventType.COMMIT_READY,
-                      new CommitReadyPayload(
+                      new DataComplete(
                           commitId,
                           ImmutableList.of(
-                              new TopicPartitionOffset(SRC_TOPIC_NAME, 0, 100L, 100L)))))));
+                              new TopicPartitionOffset(
+                                  SRC_TOPIC_NAME,
+                                  0,
+                                  100L,
+                                  OffsetDateTime.ofInstant(
+                                      Instant.ofEpochMilli(100L), ZoneOffset.UTC))))))));
       currentControlTopicOffset += 1;
     }
 
@@ -391,45 +399,44 @@ public class CoordinatorTest extends ChannelTestBase {
         "Only the most recent snapshot should include vtts in it's summary");
   }
 
-  private void assertCommitTable(int idx, UUID commitId, long ts) {
+  private void assertCommitTable(int idx, UUID commitId, OffsetDateTime ts) {
     byte[] bytes = producer.history().get(idx).value();
-    Event commitTable = Event.decode(bytes);
-    assertThat(commitTable.type()).isEqualTo(EventType.COMMIT_TABLE);
-    CommitTablePayload commitTablePayload = (CommitTablePayload) commitTable.payload();
+    Event commitTable = AvroUtil.decode(bytes);
+    assertThat(commitTable.type()).isEqualTo(PayloadType.COMMIT_TO_TABLE);
+    CommitToTable commitTablePayload = (CommitToTable) commitTable.payload();
     assertThat(commitTablePayload.commitId()).isEqualTo(commitId);
-    assertThat(commitTablePayload.tableName().toIdentifier().toString())
+    assertThat(commitTablePayload.tableReference().identifier().toString())
         .isEqualTo(TABLE_IDENTIFIER.toString());
-    assertThat(commitTablePayload.vtts()).isEqualTo(ts);
+    assertThat(commitTablePayload.validThroughTs()).isEqualTo(ts);
   }
 
-  private void assertCommitComplete(int idx, UUID commitId, long ts) {
+  private void assertCommitComplete(int idx, UUID commitId, OffsetDateTime ts) {
     byte[] bytes = producer.history().get(idx).value();
-    Event commitComplete = Event.decode(bytes);
-    assertThat(commitComplete.type()).isEqualTo(EventType.COMMIT_COMPLETE);
-    CommitCompletePayload commitCompletePayload = (CommitCompletePayload) commitComplete.payload();
+    Event commitComplete = AvroUtil.decode(bytes);
+    assertThat(commitComplete.type()).isEqualTo(PayloadType.COMMIT_COMPLETE);
+    CommitComplete commitCompletePayload = (CommitComplete) commitComplete.payload();
     assertThat(commitCompletePayload.commitId()).isEqualTo(commitId);
-    assertThat(commitCompletePayload.vtts()).isEqualTo(ts);
+    assertThat(commitCompletePayload.validThroughTs()).isEqualTo(ts);
   }
 
-  private UUID coordinatorTest(List<DataFile> dataFiles, List<DeleteFile> deleteFiles, long ts) {
+  private UUID coordinatorTest(
+      List<DataFile> dataFiles, List<DeleteFile> deleteFiles, OffsetDateTime ts) {
     return coordinatorTest(
         currentCommitId -> {
           Event commitResponse =
               new Event(
                   config.controlGroupId(),
-                  EventType.COMMIT_RESPONSE,
-                  new CommitResponsePayload(
+                  new DataWritten(
                       StructType.of(),
                       currentCommitId,
-                      new TableName(ImmutableList.of("db"), "tbl"),
+                      new TableReference("catalog", ImmutableList.of("db"), "tbl"),
                       dataFiles,
                       deleteFiles));
 
           Event commitReady =
               new Event(
                   config.controlGroupId(),
-                  EventType.COMMIT_READY,
-                  new CommitReadyPayload(
+                  new DataComplete(
                       currentCommitId,
                       ImmutableList.of(new TopicPartitionOffset("topic", 1, 1L, ts))));
 
@@ -453,14 +460,14 @@ public class CoordinatorTest extends ChannelTestBase {
     assertThat(producer.history()).hasSize(1);
 
     byte[] bytes = producer.history().get(0).value();
-    Event commitRequest = Event.decode(bytes);
-    assertThat(commitRequest.type()).isEqualTo(EventType.COMMIT_REQUEST);
+    Event commitRequest = AvroUtil.decode(bytes);
+    assertThat(commitRequest.type()).isEqualTo(PayloadType.START_COMMIT);
 
-    UUID commitId = ((CommitRequestPayload) commitRequest.payload()).commitId();
+    UUID commitId = ((StartCommit) commitRequest.payload()).commitId();
 
     int currentOffset = 1;
     for (Event event : eventsFn.apply(commitId)) {
-      bytes = Event.encode(event);
+      bytes = AvroUtil.encode(event);
       consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, currentOffset, "key", bytes));
       currentOffset += 1;
     }

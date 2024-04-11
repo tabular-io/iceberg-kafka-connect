@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.events;
+package io.tabular.iceberg.connect.fixtures;
 
 import java.util.UUID;
 import org.apache.iceberg.DataFile;

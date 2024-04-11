@@ -18,6 +18,9 @@
  */
 package io.tabular.iceberg.connect.data;
 
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Objects;
 
 public class Offset implements Comparable<Offset> {
@@ -36,8 +39,15 @@ public class Offset implements Comparable<Offset> {
     return offset;
   }
 
-  public Long timestamp() {
-    return timestamp;
+  //  public Long timestamp() {
+  //    return timestamp;
+  //  }
+
+  public OffsetDateTime timestamp() {
+    if (timestamp == null) {
+      return null;
+    }
+    return OffsetDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneOffset.UTC);
   }
 
   @Override

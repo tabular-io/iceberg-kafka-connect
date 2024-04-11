@@ -27,15 +27,16 @@ import static org.mockito.Mockito.when;
 import io.tabular.iceberg.connect.data.IcebergWriter;
 import io.tabular.iceberg.connect.data.IcebergWriterFactory;
 import io.tabular.iceberg.connect.data.WriterResult;
-import io.tabular.iceberg.connect.events.CommitReadyPayload;
-import io.tabular.iceberg.connect.events.CommitRequestPayload;
-import io.tabular.iceberg.connect.events.CommitResponsePayload;
-import io.tabular.iceberg.connect.events.Event;
-import io.tabular.iceberg.connect.events.EventTestUtil;
-import io.tabular.iceberg.connect.events.EventType;
+import io.tabular.iceberg.connect.fixtures.EventTestUtil;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.connect.events.AvroUtil;
+import org.apache.iceberg.connect.events.DataComplete;
+import org.apache.iceberg.connect.events.DataWritten;
+import org.apache.iceberg.connect.events.Event;
+import org.apache.iceberg.connect.events.PayloadType;
+import org.apache.iceberg.connect.events.StartCommit;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
@@ -54,6 +55,7 @@ public class WorkerTest extends ChannelTestBase {
   @Test
   public void testStaticRoute() {
     when(config.tables()).thenReturn(ImmutableList.of(TABLE_NAME));
+    when(config.catalogName()).thenReturn("catalog");
     Map<String, Object> value = ImmutableMap.of(FIELD_NAME, "val");
     workerTest(value);
   }
@@ -62,6 +64,8 @@ public class WorkerTest extends ChannelTestBase {
   public void testDynamicRoute() {
     when(config.dynamicTablesEnabled()).thenReturn(true);
     when(config.tablesRouteField()).thenReturn(FIELD_NAME);
+    when(config.catalogName()).thenReturn("catalog");
+
     Map<String, Object> value = ImmutableMap.of(FIELD_NAME, TABLE_NAME);
     workerTest(value);
   }
@@ -93,24 +97,22 @@ public class WorkerTest extends ChannelTestBase {
     worker.save(ImmutableList.of(rec));
 
     UUID commitId = UUID.randomUUID();
-    Event commitRequest =
-        new Event(
-            config.controlGroupId(), EventType.COMMIT_REQUEST, new CommitRequestPayload(commitId));
-    byte[] bytes = Event.encode(commitRequest);
+    Event commitRequest = new Event(config.controlGroupId(), new StartCommit(commitId));
+    byte[] bytes = AvroUtil.encode(commitRequest);
     consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, 1, "key", bytes));
 
     worker.process();
 
     assertThat(producer.history()).hasSize(2);
 
-    Event event = Event.decode(producer.history().get(0).value());
-    assertThat(event.type()).isEqualTo(EventType.COMMIT_RESPONSE);
-    CommitResponsePayload responsePayload = (CommitResponsePayload) event.payload();
+    Event event = AvroUtil.decode(producer.history().get(0).value());
+    assertThat(event.type()).isEqualTo(PayloadType.DATA_WRITTEN);
+    DataWritten responsePayload = (DataWritten) event.payload();
     assertThat(responsePayload.commitId()).isEqualTo(commitId);
 
-    event = Event.decode(producer.history().get(1).value());
-    assertThat(event.type()).isEqualTo(EventType.COMMIT_READY);
-    CommitReadyPayload readyPayload = (CommitReadyPayload) event.payload();
+    event = AvroUtil.decode(producer.history().get(1).value());
+    assertThat(event.type()).isEqualTo(PayloadType.DATA_COMPLETE);
+    DataComplete readyPayload = (DataComplete) event.payload();
     assertThat(readyPayload.commitId()).isEqualTo(commitId);
     assertThat(readyPayload.assignments()).hasSize(1);
     // offset should be one more than the record offset

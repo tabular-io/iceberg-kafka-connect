@@ -27,13 +27,6 @@ import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.data.RecordWriter;
 import io.tabular.iceberg.connect.data.Utilities;
 import io.tabular.iceberg.connect.data.WriterResult;
-import io.tabular.iceberg.connect.events.CommitReadyPayload;
-import io.tabular.iceberg.connect.events.CommitRequestPayload;
-import io.tabular.iceberg.connect.events.CommitResponsePayload;
-import io.tabular.iceberg.connect.events.Event;
-import io.tabular.iceberg.connect.events.EventType;
-import io.tabular.iceberg.connect.events.TableName;
-import io.tabular.iceberg.connect.events.TopicPartitionOffset;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
@@ -41,6 +34,13 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import org.apache.iceberg.connect.events.DataComplete;
+import org.apache.iceberg.connect.events.DataWritten;
+import org.apache.iceberg.connect.events.Event;
+import org.apache.iceberg.connect.events.PayloadType;
+import org.apache.iceberg.connect.events.StartCommit;
+import org.apache.iceberg.connect.events.TableReference;
+import org.apache.iceberg.connect.events.TopicPartitionOffset;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
@@ -104,7 +104,7 @@ public class Worker extends Channel {
   @Override
   protected boolean receive(Envelope envelope) {
     Event event = envelope.event();
-    if (event.type() != EventType.COMMIT_REQUEST) {
+    if (event.type() != PayloadType.START_COMMIT) {
       return false;
     }
 
@@ -131,7 +131,7 @@ public class Worker extends Channel {
                 })
             .collect(toList());
 
-    UUID commitId = ((CommitRequestPayload) event.payload()).commitId();
+    UUID commitId = ((StartCommit) event.payload()).commitId();
 
     List<Event> events =
         writeResults.stream()
@@ -139,20 +139,15 @@ public class Worker extends Channel {
                 writeResult ->
                     new Event(
                         config.controlGroupId(),
-                        EventType.COMMIT_RESPONSE,
-                        new CommitResponsePayload(
+                        new DataWritten(
                             writeResult.partitionStruct(),
                             commitId,
-                            TableName.of(writeResult.tableIdentifier()),
+                            TableReference.of(config.catalogName(), writeResult.tableIdentifier()),
                             writeResult.dataFiles(),
                             writeResult.deleteFiles())))
             .collect(toList());
 
-    Event readyEvent =
-        new Event(
-            config.controlGroupId(),
-            EventType.COMMIT_READY,
-            new CommitReadyPayload(commitId, assignments));
+    Event readyEvent = new Event(config.controlGroupId(), new DataComplete(commitId, assignments));
     events.add(readyEvent);
 
     send(events, offsets);
