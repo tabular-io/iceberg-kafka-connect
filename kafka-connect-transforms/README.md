@@ -27,7 +27,7 @@ The `CopyValue` SMT copies a value from one field to a new field.
 # KafkaMetadataTransform
 _(Experimental)_
 
-The `KafkaMetadata` injects `topic`, `partition`, `offset`, `record timestamp`.
+The `KafkaMetadata` injects `topic`, `partition`, `offset`, `timestamp` which are properties are the Kafka message.
 
 ## Configuration
 
@@ -39,10 +39,10 @@ The `KafkaMetadata` injects `topic`, `partition`, `offset`, `record timestamp`.
 
 If `nested` is on: 
 
-`_kafka_metadata.topic`, `_kafka_metadata.partition`, `kafka_metadata.offset`, `kafka_metadata.record_timestamp`
+`_kafka_metadata.topic`, `_kafka_metadata.partition`, `_kafka_metadata.offset`, `_kafka_metadata.timestamp`
 
 If `nested` is off:
-`_kafka_metdata_topic`, `_kafka_metadata_partition`, `_kafka_metadata_offset`, `kafka_metadata_record_timestamp`
+`_kafka_metdata_topic`, `_kafka_metadata_partition`, `_kafka_metadata_offset`, `_kafka_metadata_timestamp`
 
 # DmsTransform
 _(Experimental)_
