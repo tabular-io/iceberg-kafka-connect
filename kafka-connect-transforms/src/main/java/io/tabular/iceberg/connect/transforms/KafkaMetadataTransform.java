@@ -37,29 +37,23 @@ public class KafkaMetadataTransform implements Transformation<SinkRecord> {
 
   private interface RecordAppender {
 
-    SchemaBuilder addToSchema(SchemaBuilder builder);
+    void addToSchema(SchemaBuilder builder);
 
-    Struct addToStruct(SinkRecord record, Struct struct);
+    void addToStruct(SinkRecord record, Struct struct);
 
-    Map<String, Object> addToMap(SinkRecord record, Map<String, Object> map);
+    void addToMap(SinkRecord record, Map<String, Object> map);
   }
 
   private static class NoOpRecordAppender implements RecordAppender {
 
     @Override
-    public SchemaBuilder addToSchema(SchemaBuilder builder) {
-      return builder;
-    }
+    public void addToSchema(SchemaBuilder builder) {}
 
     @Override
-    public Struct addToStruct(SinkRecord record, Struct struct) {
-      return struct;
-    }
+    public void addToStruct(SinkRecord record, Struct struct) {}
 
     @Override
-    public Map<String, Object> addToMap(SinkRecord record, Map<String, Object> map) {
-      return map;
-    }
+    public void addToMap(SinkRecord record, Map<String, Object> map) {}
   }
 
   private static RecordAppender getExternalFieldAppender(
@@ -77,19 +71,18 @@ public class KafkaMetadataTransform implements Transformation<SinkRecord> {
     return new RecordAppender() {
 
       @Override
-      public SchemaBuilder addToSchema(SchemaBuilder builder) {
-        return builder.field(fieldName, Schema.STRING_SCHEMA);
+      public void addToSchema(SchemaBuilder builder) {
+        builder.field(fieldName, Schema.STRING_SCHEMA);
       }
 
       @Override
-      public Struct addToStruct(SinkRecord record, Struct struct) {
-        return struct.put(fieldName, fieldValue);
+      public void addToStruct(SinkRecord record, Struct struct) {
+        struct.put(fieldName, fieldValue);
       }
 
       @Override
-      public Map<String, Object> addToMap(SinkRecord record, Map<String, Object> map) {
+      public void addToMap(SinkRecord record, Map<String, Object> map) {
         map.put(fieldName, fieldValue);
-        return map;
       }
     };
   }
@@ -102,7 +95,6 @@ public class KafkaMetadataTransform implements Transformation<SinkRecord> {
   private static final String KEY_METADATA_FIELD_NAME = "field_name";
   private static final String KEY_METADATA_IS_NESTED = "nested";
   private static final String DEFAULT_METADATA_FIELD_NAME = "_kafka_metadata";
-
   private static RecordAppender recordAppender;
 
   private static final ConfigDef CONFIG_DEF =
@@ -157,12 +149,12 @@ public class KafkaMetadataTransform implements Transformation<SinkRecord> {
 
       return new RecordAppender() {
         @Override
-        public SchemaBuilder addToSchema(SchemaBuilder builder) {
-          return builder.field(metadataFieldName, nestedSchema);
+        public void addToSchema(SchemaBuilder builder) {
+          builder.field(metadataFieldName, nestedSchema);
         }
 
         @Override
-        public Struct addToStruct(SinkRecord record, Struct struct) {
+        public void addToStruct(SinkRecord record, Struct struct) {
           Struct nested = new Struct(nestedSchema);
           nested.put(TOPIC, record.topic());
           nested.put(PARTITION, record.kafkaPartition());
@@ -172,11 +164,10 @@ public class KafkaMetadataTransform implements Transformation<SinkRecord> {
           }
           externalFieldAppender.addToStruct(record, nested);
           struct.put(metadataFieldName, nested);
-          return struct;
         }
 
         @Override
-        public Map<String, Object> addToMap(SinkRecord record, Map<String, Object> map) {
+        public void addToMap(SinkRecord record, Map<String, Object> map) {
           Map<String, Object> nested = Maps.newHashMap();
           nested.put(TOPIC, record.topic());
           nested.put(PARTITION, record.kafkaPartition());
@@ -186,7 +177,6 @@ public class KafkaMetadataTransform implements Transformation<SinkRecord> {
           }
           externalFieldAppender.addToMap(record, nested);
           map.put(metadataFieldName, nested);
-          return map;
         }
       };
 
@@ -201,17 +191,16 @@ public class KafkaMetadataTransform implements Transformation<SinkRecord> {
           getExternalFieldAppender(config.getString(EXTERNAL_KAFKA_METADATA), namer);
       return new RecordAppender() {
         @Override
-        public SchemaBuilder addToSchema(SchemaBuilder builder) {
+        public void addToSchema(SchemaBuilder builder) {
           builder
               .field(topicFieldName, Schema.STRING_SCHEMA)
               .field(partitionFieldName, Schema.INT32_SCHEMA)
               .field(offsetFieldName, Schema.OPTIONAL_INT64_SCHEMA)
               .field(timestampFieldName, Schema.OPTIONAL_INT64_SCHEMA);
-          return externalFieldAppender.addToSchema(builder);
         }
 
         @Override
-        public Struct addToStruct(SinkRecord record, Struct struct) {
+        public void addToStruct(SinkRecord record, Struct struct) {
           struct.put(topicFieldName, record.topic());
           struct.put(partitionFieldName, record.kafkaPartition());
           struct.put(offsetFieldName, record.kafkaOffset());
@@ -219,11 +208,10 @@ public class KafkaMetadataTransform implements Transformation<SinkRecord> {
             struct.put(timestampFieldName, record.timestamp());
           }
           externalFieldAppender.addToStruct(record, struct);
-          return struct;
         }
 
         @Override
-        public Map<String, Object> addToMap(SinkRecord record, Map<String, Object> map) {
+        public void addToMap(SinkRecord record, Map<String, Object> map) {
           map.put(topicFieldName, record.topic());
           map.put(partitionFieldName, record.kafkaPartition());
           map.put(offsetFieldName, record.kafkaOffset());
@@ -231,7 +219,6 @@ public class KafkaMetadataTransform implements Transformation<SinkRecord> {
             map.put(timestampFieldName, record.timestamp());
           }
           externalFieldAppender.addToMap(record, map);
-          return map;
         }
       };
     }
