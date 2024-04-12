@@ -99,7 +99,7 @@ public class KafkaMetadataTransform implements Transformation<SinkRecord> {
 
   private static final String OFFSET = "offset";
 
-  private static final String TIMESTAMP = "record_timestamp";
+  private static final String TIMESTAMP = "timestamp";
 
   private static final String EXTERNAL_KAFKA_METADATA = "external_field";
   private static final String KEY_METADATA_FIELD_NAME = "field_name";

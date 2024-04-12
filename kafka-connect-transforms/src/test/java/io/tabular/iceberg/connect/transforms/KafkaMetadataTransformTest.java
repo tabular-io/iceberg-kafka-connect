@@ -111,7 +111,7 @@ public class KafkaMetadataTransformTest {
       assertThat(value.get("_some_field_topic")).isEqualTo(result.topic());
       assertThat(value.get("_some_field_partition")).isEqualTo(result.kafkaPartition());
       assertThat(value.get("_some_field_offset")).isEqualTo(result.kafkaOffset());
-      assertThat(value.get("_some_field_record_timestamp")).isEqualTo(result.timestamp());
+      assertThat(value.get("_some_field_timestamp")).isEqualTo(result.timestamp());
       assertThat(result.timestampType()).isEqualTo(record.timestampType());
       assertThat(result.key()).isEqualTo(record.key());
       assertThat(result.keySchema()).isEqualTo(record.keySchema());
@@ -142,7 +142,7 @@ public class KafkaMetadataTransformTest {
       assertThat(metadata.get("topic")).isEqualTo(result.topic());
       assertThat(metadata.get("partition")).isEqualTo(result.kafkaPartition());
       assertThat(metadata.get("offset")).isEqualTo(result.kafkaOffset());
-      assertThat(metadata.get("record_timestamp")).isEqualTo(result.timestamp());
+      assertThat(metadata.get("timestamp")).isEqualTo(result.timestamp());
       assertThat(result.timestampType()).isEqualTo(record.timestampType());
       assertThat(result.key()).isEqualTo(record.key());
       assertThat(result.keySchema()).isEqualTo(record.keySchema());
@@ -172,7 +172,7 @@ public class KafkaMetadataTransformTest {
       assertThat(value.get("_kafka_metadata_topic")).isEqualTo(result.topic());
       assertThat(value.get("_kafka_metadata_partition")).isEqualTo(result.kafkaPartition());
       assertThat(value.get("_kafka_metadata_offset")).isEqualTo(result.kafkaOffset());
-      assertThat(value.get("_kafka_metadata_record_timestamp")).isEqualTo(result.timestamp());
+      assertThat(value.get("_kafka_metadata_timestamp")).isEqualTo(result.timestamp());
       assertThat(value.get("_kafka_metadata_external")).isEqualTo("value");
     }
   }
@@ -210,7 +210,7 @@ public class KafkaMetadataTransformTest {
       assertThat(value.get("_kafka_metadata_topic")).isEqualTo(result.topic());
       assertThat(value.get("_kafka_metadata_partition")).isEqualTo(result.kafkaPartition());
       assertThat(value.get("_kafka_metadata_offset")).isEqualTo(result.kafkaOffset());
-      assertThat(value.get("_kafka_metadata_record_timestamp")).isEqualTo(result.timestamp());
+      assertThat(value.get("_kafka_metadata_timestamp")).isEqualTo(result.timestamp());
       assertThat(result.timestampType()).isEqualTo(record.timestampType());
       assertThat(result.key()).isEqualTo(record.key());
       assertThat(result.keySchema()).isEqualTo(record.keySchema());
@@ -241,7 +241,7 @@ public class KafkaMetadataTransformTest {
       assertThat(metadata.get("topic")).isEqualTo(result.topic());
       assertThat(metadata.get("partition")).isEqualTo(result.kafkaPartition());
       assertThat(metadata.get("offset")).isEqualTo(result.kafkaOffset());
-      assertThat(metadata.get("record_timestamp")).isEqualTo(result.timestamp());
+      assertThat(metadata.get("timestamp")).isEqualTo(result.timestamp());
       assertThat(result.timestampType()).isEqualTo(record.timestampType());
       assertThat(result.key()).isEqualTo(record.key());
       assertThat(result.keySchema()).isEqualTo(record.keySchema());
