@@ -49,7 +49,7 @@ public class KafkaMetadataTransformTest {
     SinkRecord record =
         new SinkRecord(
             TOPIC, PARTITION, null, null, null, null, OFFSET, TIMESTAMP, TimestampType.CREATE_TIME);
-    try (KafkaMetadataTransform<SinkRecord> smt = new KafkaMetadataTransform<>()) {
+    try (KafkaMetadataTransform smt = new KafkaMetadataTransform()) {
       smt.configure(ImmutableMap.of());
       SinkRecord result = smt.apply(record);
       assertThat(record).isSameAs(result);
@@ -81,7 +81,7 @@ public class KafkaMetadataTransformTest {
             OFFSET,
             TIMESTAMP,
             TimestampType.CREATE_TIME);
-    try (KafkaMetadataTransform<SinkRecord> smt = new KafkaMetadataTransform<>()) {
+    try (KafkaMetadataTransform smt = new KafkaMetadataTransform()) {
       smt.configure(ImmutableMap.of());
       assertThrows(RuntimeException.class, () -> smt.apply(recordNotMap));
       assertThrows(RuntimeException.class, () -> smt.apply(recordNotStruct));
@@ -102,8 +102,69 @@ public class KafkaMetadataTransformTest {
             OFFSET,
             TIMESTAMP,
             TimestampType.CREATE_TIME);
-    try (KafkaMetadataTransform<SinkRecord> smt = new KafkaMetadataTransform<>()) {
-      smt.configure(ImmutableMap.of());
+    try (KafkaMetadataTransform smt = new KafkaMetadataTransform()) {
+      smt.configure(ImmutableMap.of("field_name", "_some_field"));
+      SinkRecord result = smt.apply(record);
+      assertThat(result.value()).isInstanceOf(Struct.class);
+      Struct value = (Struct) result.value();
+      assertThat(value.get("id")).isEqualTo("value");
+      assertThat(value.get("_some_field_topic")).isEqualTo(result.topic());
+      assertThat(value.get("_some_field_partition")).isEqualTo(result.kafkaPartition());
+      assertThat(value.get("_some_field_offset")).isEqualTo(result.kafkaOffset());
+      assertThat(value.get("_some_field_record_timestamp")).isEqualTo(result.timestamp());
+      assertThat(result.timestampType()).isEqualTo(record.timestampType());
+      assertThat(result.key()).isEqualTo(record.key());
+      assertThat(result.keySchema()).isEqualTo(record.keySchema());
+    }
+  }
+
+  @Test
+  @DisplayName("should append kafka metadata to nested structs")
+  public void testAppendsToStructsNested() {
+    SinkRecord record =
+        new SinkRecord(
+            TOPIC,
+            PARTITION,
+            KEY_SCHEMA,
+            KEY_VALUE,
+            SCHEMA,
+            VALUE_STRUCT,
+            OFFSET,
+            TIMESTAMP,
+            TimestampType.CREATE_TIME);
+    try (KafkaMetadataTransform smt = new KafkaMetadataTransform()) {
+      smt.configure(ImmutableMap.of("nested", "true"));
+      SinkRecord result = smt.apply(record);
+      assertThat(result.value()).isInstanceOf(Struct.class);
+      Struct value = (Struct) result.value();
+      assertThat(value.get("_kafka_metadata")).isInstanceOf(Struct.class);
+      Struct metadata = (Struct) value.get("_kafka_metadata");
+      assertThat(metadata.get("topic")).isEqualTo(result.topic());
+      assertThat(metadata.get("partition")).isEqualTo(result.kafkaPartition());
+      assertThat(metadata.get("offset")).isEqualTo(result.kafkaOffset());
+      assertThat(metadata.get("record_timestamp")).isEqualTo(result.timestamp());
+      assertThat(result.timestampType()).isEqualTo(record.timestampType());
+      assertThat(result.key()).isEqualTo(record.key());
+      assertThat(result.keySchema()).isEqualTo(record.keySchema());
+    }
+  }
+
+  @Test
+  @DisplayName("should append external fields to struct")
+  public void testAppendsToStuctsExternal() {
+    SinkRecord record =
+        new SinkRecord(
+            TOPIC,
+            PARTITION,
+            KEY_SCHEMA,
+            KEY_VALUE,
+            SCHEMA,
+            VALUE_STRUCT,
+            OFFSET,
+            TIMESTAMP,
+            TimestampType.CREATE_TIME);
+    try (KafkaMetadataTransform smt = new KafkaMetadataTransform()) {
+      smt.configure(ImmutableMap.of("external_field", "external,value"));
       SinkRecord result = smt.apply(record);
       assertThat(result.value()).isInstanceOf(Struct.class);
       Struct value = (Struct) result.value();
@@ -112,9 +173,17 @@ public class KafkaMetadataTransformTest {
       assertThat(value.get("_kafka_metadata_partition")).isEqualTo(result.kafkaPartition());
       assertThat(value.get("_kafka_metadata_offset")).isEqualTo(result.kafkaOffset());
       assertThat(value.get("_kafka_metadata_record_timestamp")).isEqualTo(result.timestamp());
-      assertThat(result.timestampType()).isEqualTo(record.timestampType());
-      assertThat(result.key()).isEqualTo(record.key());
-      assertThat(result.keySchema()).isEqualTo(record.keySchema());
+      assertThat(value.get("_kafka_metadata_external")).isEqualTo("value");
+    }
+  }
+
+  @Test
+  @DisplayName("throw if external field cannot be parsed")
+  public void testAppendsToStuctsExternalShouldThrowIfInvalid() {
+    try (KafkaMetadataTransform smt = new KafkaMetadataTransform()) {
+      assertThrows(
+          RuntimeException.class,
+          () -> smt.configure(ImmutableMap.of("external_field", "external,*,,,value")));
     }
   }
 
@@ -132,16 +201,47 @@ public class KafkaMetadataTransformTest {
             OFFSET,
             TIMESTAMP,
             TimestampType.CREATE_TIME);
-    try (KafkaMetadataTransform<SinkRecord> smt = new KafkaMetadataTransform<>()) {
+    try (KafkaMetadataTransform smt = new KafkaMetadataTransform()) {
       smt.configure(ImmutableMap.of());
       SinkRecord result = smt.apply(record);
       assertThat(result.value()).isInstanceOf(Map.class);
-      Map<String, Object> value = (Map<String, Object>) result.value();
+      Map<?, ?> value = (Map<?, ?>) result.value();
       assertThat(value.get("id")).isEqualTo("value");
       assertThat(value.get("_kafka_metadata_topic")).isEqualTo(result.topic());
       assertThat(value.get("_kafka_metadata_partition")).isEqualTo(result.kafkaPartition());
       assertThat(value.get("_kafka_metadata_offset")).isEqualTo(result.kafkaOffset());
       assertThat(value.get("_kafka_metadata_record_timestamp")).isEqualTo(result.timestamp());
+      assertThat(result.timestampType()).isEqualTo(record.timestampType());
+      assertThat(result.key()).isEqualTo(record.key());
+      assertThat(result.keySchema()).isEqualTo(record.keySchema());
+    }
+  }
+
+  @Test
+  @DisplayName("should append kafka metadata to maps as nested")
+  public void testAppendToMapsNested() {
+    SinkRecord record =
+        new SinkRecord(
+            TOPIC,
+            PARTITION,
+            null,
+            null,
+            null,
+            VALUE_MAP,
+            OFFSET,
+            TIMESTAMP,
+            TimestampType.CREATE_TIME);
+    try (KafkaMetadataTransform smt = new KafkaMetadataTransform()) {
+      smt.configure(ImmutableMap.of("nested", "true"));
+      SinkRecord result = smt.apply(record);
+      assertThat(result.value()).isInstanceOf(Map.class);
+      Map<?, ?> value = (Map<?, ?>) result.value();
+      assertThat(value.get("_kafka_metadata")).isInstanceOf(Map.class);
+      Map<?, ?> metadata = (Map<?, ?>) value.get("_kafka_metadata");
+      assertThat(metadata.get("topic")).isEqualTo(result.topic());
+      assertThat(metadata.get("partition")).isEqualTo(result.kafkaPartition());
+      assertThat(metadata.get("offset")).isEqualTo(result.kafkaOffset());
+      assertThat(metadata.get("record_timestamp")).isEqualTo(result.timestamp());
       assertThat(result.timestampType()).isEqualTo(record.timestampType());
       assertThat(result.key()).isEqualTo(record.key());
       assertThat(result.keySchema()).isEqualTo(record.keySchema());

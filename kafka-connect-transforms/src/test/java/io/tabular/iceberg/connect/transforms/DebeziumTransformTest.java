@@ -19,9 +19,7 @@
 package io.tabular.iceberg.connect.transforms;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import io.tabular.iceberg.connect.transforms.util.KafkaMetadataAppender;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
@@ -30,7 +28,6 @@ import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.Test;
 
@@ -92,35 +89,6 @@ public class DebeziumTransformTest {
       assertThat(cdcMetadata.get("source")).isEqualTo("schema.tbl");
       assertThat(cdcMetadata.get("target")).isEqualTo("schema_x.tbl_x");
       assertThat(cdcMetadata.get("key")).isInstanceOf(Map.class);
-      assertThat(value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME)).isNull();
-    }
-  }
-
-  @Test
-  @SuppressWarnings("unchecked")
-  public void testDebeziumTransformSchemalessAndKafkaMetadata() {
-    try (DebeziumTransform<SinkRecord> smt = new DebeziumTransform<>()) {
-      smt.configure(
-          ImmutableMap.of(
-              "cdc.target.pattern",
-              "{db}_x.{table}_x",
-              KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
-              true,
-              KafkaMetadataAppender.KEY_METADATA_IS_NESTED,
-              true));
-
-      Map<String, Object> event = createDebeziumEventMap("u");
-      Map<String, Object> key = ImmutableMap.of("account_id", 1L);
-      SinkRecord record = new SinkRecord("topic", 0, null, key, null, event, 0);
-
-      SinkRecord result = smt.apply(record);
-      assertThat(result.value()).isInstanceOf(Map.class);
-      Map<String, Object> value = (Map<String, Object>) result.value();
-
-      assertThat(value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME)).isNotNull();
-      Map<String, Object> metadata =
-          (Map<String, Object>) value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME);
-      assertThat(metadata.get("topic")).isEqualTo("topic");
     }
   }
 
@@ -138,41 +106,12 @@ public class DebeziumTransformTest {
       Struct value = (Struct) result.value();
 
       assertThat(value.get("account_id")).isEqualTo(1L);
-      assertThrows(
-          DataException.class, () -> value.get(KafkaMetadataAppender.INCLUDE_KAFKA_METADATA));
 
       Struct cdcMetadata = value.getStruct("_cdc");
       assertThat(cdcMetadata.get("op")).isEqualTo("U");
       assertThat(cdcMetadata.get("source")).isEqualTo("schema.tbl");
       assertThat(cdcMetadata.get("target")).isEqualTo("schema_x.tbl_x");
       assertThat(cdcMetadata.get("key")).isInstanceOf(Struct.class);
-    }
-  }
-
-  @Test
-  public void testDebeziumTransformWithSchemaAndKafkaMetadata() {
-    try (DebeziumTransform<SinkRecord> smt = new DebeziumTransform<>()) {
-      smt.configure(
-          ImmutableMap.of(
-              "cdc.target.pattern",
-              "{db}_x.{table}_x",
-              KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
-              true,
-              KafkaMetadataAppender.KEY_METADATA_IS_NESTED,
-              true));
-
-      Struct event = createDebeziumEventStruct("u");
-      Struct key = new Struct(KEY_SCHEMA).put("account_id", 1L);
-      SinkRecord record = new SinkRecord("topic", 0, KEY_SCHEMA, key, VALUE_SCHEMA, event, 0);
-
-      SinkRecord result = smt.apply(record);
-      assertThat(result.value()).isInstanceOf(Struct.class);
-      Struct value = (Struct) result.value();
-
-      assertThat(value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME))
-          .isInstanceOf(Struct.class);
-      Struct metadata = (Struct) value.get(KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME);
-      assertThat(metadata.get("topic")).isEqualTo(record.topic());
     }
   }
 

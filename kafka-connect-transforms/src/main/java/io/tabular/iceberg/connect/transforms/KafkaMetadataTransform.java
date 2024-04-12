@@ -18,52 +18,230 @@
  */
 package io.tabular.iceberg.connect.transforms;
 
-import io.tabular.iceberg.connect.transforms.util.KafkaMetadataAppender;
-import io.tabular.iceberg.connect.transforms.util.RecordAppender;
 import java.util.Map;
+import java.util.function.Function;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.Requirements;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
+import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
-public class KafkaMetadataTransform<R extends ConnectRecord<R>> implements Transformation<R> {
-  private RecordAppender<R> kafkaAppender;
+public class KafkaMetadataTransform implements Transformation<SinkRecord> {
 
-  public static final ConfigDef CONFIG_DEF =
+  private interface RecordAppender {
+
+    SchemaBuilder addToSchema(SchemaBuilder builder);
+
+    Struct addToStruct(SinkRecord record, Struct struct);
+
+    Map<String, Object> addToMap(SinkRecord record, Map<String, Object> map);
+  }
+
+  private static class NoOpRecordAppender implements RecordAppender {
+
+    @Override
+    public SchemaBuilder addToSchema(SchemaBuilder builder) {
+      return builder;
+    }
+
+    @Override
+    public Struct addToStruct(SinkRecord record, Struct struct) {
+      return struct;
+    }
+
+    @Override
+    public Map<String, Object> addToMap(SinkRecord record, Map<String, Object> map) {
+      return map;
+    }
+  }
+
+  private static RecordAppender getExternalFieldAppender(
+      String field, Function<String, String> fieldNamer) {
+    if (field == null) {
+      return new NoOpRecordAppender();
+    }
+    String[] parts = field.split(",");
+    if (parts.length != 2) {
+      throw new ConfigException(
+          String.format("Could not parse %s for %s", field, EXTERNAL_KAFKA_METADATA));
+    }
+    String fieldName = fieldNamer.apply(parts[0]);
+    String fieldValue = parts[1];
+    return new RecordAppender() {
+
+      @Override
+      public SchemaBuilder addToSchema(SchemaBuilder builder) {
+        return builder.field(fieldName, Schema.STRING_SCHEMA);
+      }
+
+      @Override
+      public Struct addToStruct(SinkRecord record, Struct struct) {
+        return struct.put(fieldName, fieldValue);
+      }
+
+      @Override
+      public Map<String, Object> addToMap(SinkRecord record, Map<String, Object> map) {
+        map.put(fieldName, fieldValue);
+        return map;
+      }
+    };
+  }
+
+  private static final String TOPIC = "topic";
+  private static final String PARTITION = "partition";
+
+  private static final String OFFSET = "offset";
+
+  private static final String TIMESTAMP = "record_timestamp";
+
+  private static final String EXTERNAL_KAFKA_METADATA = "external_field";
+  private static final String KEY_METADATA_FIELD_NAME = "field_name";
+  private static final String KEY_METADATA_IS_NESTED = "nested";
+  private static final String DEFAULT_METADATA_FIELD_NAME = "_kafka_metadata";
+
+  private static RecordAppender recordAppender;
+
+  private static final ConfigDef CONFIG_DEF =
       new ConfigDef()
           .define(
-              KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
-              ConfigDef.Type.BOOLEAN,
-              false,
-              ConfigDef.Importance.LOW,
-              "Include appending of Kafka metadata to SinkRecord")
-          .define(
-              KafkaMetadataAppender.KEY_METADATA_FIELD_NAME,
+              KEY_METADATA_FIELD_NAME,
               ConfigDef.Type.STRING,
-              KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME,
+              DEFAULT_METADATA_FIELD_NAME,
               ConfigDef.Importance.LOW,
-              "field to append Kafka metadata under")
+              "the field to append Kafka metadata under (or prefix fields with)")
           .define(
-              KafkaMetadataAppender.KEY_METADATA_IS_NESTED,
+              KEY_METADATA_IS_NESTED,
               ConfigDef.Type.BOOLEAN,
               false,
               ConfigDef.Importance.LOW,
               "(true/false) to make a nested record under name or prefix names on the top level")
           .define(
-              KafkaMetadataAppender.EXTERNAL_KAFKA_METADATA,
+              EXTERNAL_KAFKA_METADATA,
               ConfigDef.Type.STRING,
-              "none",
+              null,
               ConfigDef.Importance.LOW,
               "key,value representing a String to be injected on Kafka metadata (e.g. Cluster)");
 
+  private static RecordAppender getRecordAppender(Map<String, ?> props) {
+    SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
+    return getRecordAppender(config);
+  }
+
+  private static RecordAppender getRecordAppender(SimpleConfig config) {
+    RecordAppender externalFieldAppender;
+    String metadataFieldName = config.getString(KEY_METADATA_FIELD_NAME);
+    Boolean nestedMetadata = config.getBoolean(KEY_METADATA_IS_NESTED);
+
+    String topicFieldName;
+    String partitionFieldName;
+    String offsetFieldName;
+    String timestampFieldName;
+
+    if (nestedMetadata) {
+      externalFieldAppender =
+          getExternalFieldAppender(config.getString(EXTERNAL_KAFKA_METADATA), name -> name);
+
+      SchemaBuilder nestedSchemaBuilder = SchemaBuilder.struct();
+      nestedSchemaBuilder
+          .field(TOPIC, Schema.STRING_SCHEMA)
+          .field(PARTITION, Schema.INT32_SCHEMA)
+          .field(OFFSET, Schema.OPTIONAL_INT64_SCHEMA)
+          .field(TIMESTAMP, Schema.OPTIONAL_INT64_SCHEMA);
+      externalFieldAppender.addToSchema(nestedSchemaBuilder);
+
+      Schema nestedSchema = nestedSchemaBuilder.build();
+
+      return new RecordAppender() {
+        @Override
+        public SchemaBuilder addToSchema(SchemaBuilder builder) {
+          return builder.field(metadataFieldName, nestedSchema);
+        }
+
+        @Override
+        public Struct addToStruct(SinkRecord record, Struct struct) {
+          Struct nested = new Struct(nestedSchema);
+          nested.put(TOPIC, record.topic());
+          nested.put(PARTITION, record.kafkaPartition());
+          nested.put(OFFSET, record.kafkaOffset());
+          if (record.timestamp() != null) {
+            nested.put(TIMESTAMP, record.timestamp());
+          }
+          externalFieldAppender.addToStruct(record, nested);
+          struct.put(metadataFieldName, nested);
+          return struct;
+        }
+
+        @Override
+        public Map<String, Object> addToMap(SinkRecord record, Map<String, Object> map) {
+          Map<String, Object> nested = Maps.newHashMap();
+          nested.put(TOPIC, record.topic());
+          nested.put(PARTITION, record.kafkaPartition());
+          nested.put(OFFSET, record.kafkaOffset());
+          if (record.timestamp() != null) {
+            nested.put(TIMESTAMP, record.timestamp());
+          }
+          externalFieldAppender.addToMap(record, nested);
+          map.put(metadataFieldName, nested);
+          return map;
+        }
+      };
+
+    } else {
+      Function<String, String> namer = name -> String.format("%s_%s", metadataFieldName, name);
+      topicFieldName = namer.apply(TOPIC);
+      partitionFieldName = namer.apply(PARTITION);
+      offsetFieldName = namer.apply(OFFSET);
+      timestampFieldName = namer.apply(TIMESTAMP);
+
+      externalFieldAppender =
+          getExternalFieldAppender(config.getString(EXTERNAL_KAFKA_METADATA), namer);
+      return new RecordAppender() {
+        @Override
+        public SchemaBuilder addToSchema(SchemaBuilder builder) {
+          builder
+              .field(topicFieldName, Schema.STRING_SCHEMA)
+              .field(partitionFieldName, Schema.INT32_SCHEMA)
+              .field(offsetFieldName, Schema.OPTIONAL_INT64_SCHEMA)
+              .field(timestampFieldName, Schema.OPTIONAL_INT64_SCHEMA);
+          return externalFieldAppender.addToSchema(builder);
+        }
+
+        @Override
+        public Struct addToStruct(SinkRecord record, Struct struct) {
+          struct.put(topicFieldName, record.topic());
+          struct.put(partitionFieldName, record.kafkaPartition());
+          struct.put(offsetFieldName, record.kafkaOffset());
+          if (record.timestamp() != null) {
+            struct.put(timestampFieldName, record.timestamp());
+          }
+          externalFieldAppender.addToStruct(record, struct);
+          return struct;
+        }
+
+        @Override
+        public Map<String, Object> addToMap(SinkRecord record, Map<String, Object> map) {
+          map.put(topicFieldName, record.topic());
+          map.put(partitionFieldName, record.kafkaPartition());
+          map.put(offsetFieldName, record.kafkaOffset());
+          if (record.timestamp() != null) {
+            map.put(timestampFieldName, record.timestamp());
+          }
+          externalFieldAppender.addToMap(record, map);
+          return map;
+        }
+      };
+    }
+  }
+
   @Override
-  public R apply(R record) {
+  public SinkRecord apply(SinkRecord record) {
     if (record.value() == null) {
       return record;
     } else if (record.valueSchema() == null) {
@@ -73,14 +251,14 @@ public class KafkaMetadataTransform<R extends ConnectRecord<R>> implements Trans
     }
   }
 
-  private R applyWithSchema(R record) {
+  private SinkRecord applyWithSchema(SinkRecord record) {
     Struct value = Requirements.requireStruct(record.value(), "KafkaMetadata transform");
     Schema newSchema = makeUpdatedSchema(record.valueSchema());
     Struct newValue = new Struct(newSchema);
     for (Field field : record.valueSchema().fields()) {
       newValue.put(field.name(), value.get(field));
     }
-    kafkaAppender.addToStruct(record, newValue);
+    recordAppender.addToStruct(record, newValue);
     return record.newRecord(
         record.topic(),
         record.kafkaPartition(),
@@ -92,10 +270,19 @@ public class KafkaMetadataTransform<R extends ConnectRecord<R>> implements Trans
         record.headers());
   }
 
-  private R applySchemaless(R record) {
+  private Schema makeUpdatedSchema(Schema schema) {
+    SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
+    for (Field field : schema.fields()) {
+      builder.field(field.name(), field.schema());
+    }
+    recordAppender.addToSchema(builder);
+    return builder.build();
+  }
+
+  private SinkRecord applySchemaless(SinkRecord record) {
     Map<String, Object> value = Requirements.requireMap(record.value(), "KafkaMetadata transform");
     Map<String, Object> newValue = Maps.newHashMap(value);
-    kafkaAppender.addToMap(record, newValue);
+    recordAppender.addToMap(record, newValue);
 
     return record.newRecord(
         record.topic(),
@@ -108,15 +295,6 @@ public class KafkaMetadataTransform<R extends ConnectRecord<R>> implements Trans
         record.headers());
   }
 
-  private Schema makeUpdatedSchema(Schema schema) {
-    SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
-    for (Field field : schema.fields()) {
-      builder.field(field.name(), field.schema());
-    }
-    kafkaAppender.addToSchema(builder);
-    return builder.build();
-  }
-
   @Override
   public ConfigDef config() {
     return CONFIG_DEF;
@@ -127,6 +305,6 @@ public class KafkaMetadataTransform<R extends ConnectRecord<R>> implements Trans
 
   @Override
   public void configure(Map<String, ?> configs) {
-    kafkaAppender = KafkaMetadataAppender.from(configs);
+    recordAppender = getRecordAppender(configs);
   }
 }

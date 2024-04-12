@@ -18,8 +18,6 @@
  */
 package io.tabular.iceberg.connect.transforms;
 
-import io.tabular.iceberg.connect.transforms.util.KafkaMetadataAppender;
-import io.tabular.iceberg.connect.transforms.util.RecordAppender;
 import java.util.Map;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.config.ConfigDef;
@@ -32,33 +30,7 @@ import org.slf4j.LoggerFactory;
 public class DmsTransform<R extends ConnectRecord<R>> implements Transformation<R> {
 
   private static final Logger LOG = LoggerFactory.getLogger(DmsTransform.class.getName());
-  public static final ConfigDef CONFIG_DEF =
-      new ConfigDef()
-          .define(
-              KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
-              ConfigDef.Type.BOOLEAN,
-              false,
-              ConfigDef.Importance.LOW,
-              "Include appending of Kafka metadata to SinkRecord")
-          .define(
-              KafkaMetadataAppender.KEY_METADATA_FIELD_NAME,
-              ConfigDef.Type.STRING,
-              KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME,
-              ConfigDef.Importance.LOW,
-              "field to append Kafka metadata under")
-          .define(
-              KafkaMetadataAppender.KEY_METADATA_IS_NESTED,
-              ConfigDef.Type.BOOLEAN,
-              false,
-              ConfigDef.Importance.LOW,
-              "(true/false) to make a nested record under name or prefix names on the top level")
-          .define(
-              KafkaMetadataAppender.EXTERNAL_KAFKA_METADATA,
-              ConfigDef.Type.STRING,
-              "none",
-              ConfigDef.Importance.LOW,
-              "key,value representing a String to be injected on Kafka metadata (e.g. Cluster)");
-  private RecordAppender<R> kafkaAppender = null;
+  private static final ConfigDef EMPTY_CONFIG = new ConfigDef();
 
   @Override
   public R apply(R record) {
@@ -110,8 +82,6 @@ public class DmsTransform<R extends ConnectRecord<R>> implements Transformation<
     Map<String, Object> newValue = Maps.newHashMap((Map<String, Object>) dataObj);
     newValue.put(CdcConstants.COL_CDC, cdcMetadata);
 
-    this.kafkaAppender.addToMap(record, newValue);
-
     return record.newRecord(
         record.topic(),
         record.kafkaPartition(),
@@ -124,14 +94,12 @@ public class DmsTransform<R extends ConnectRecord<R>> implements Transformation<
 
   @Override
   public ConfigDef config() {
-    return CONFIG_DEF;
+    return EMPTY_CONFIG;
   }
 
   @Override
   public void close() {}
 
   @Override
-  public void configure(Map<String, ?> configs) {
-    this.kafkaAppender = KafkaMetadataAppender.from(configs);
-  }
+  public void configure(Map<String, ?> configs) {}
 }

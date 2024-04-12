@@ -18,8 +18,6 @@
  */
 package io.tabular.iceberg.connect.transforms;
 
-import io.tabular.iceberg.connect.transforms.util.KafkaMetadataAppender;
-import io.tabular.iceberg.connect.transforms.util.RecordAppender;
 import java.util.Map;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.config.ConfigDef;
@@ -45,7 +43,6 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
   private static final String CDC_TARGET_PATTERN = "cdc.target.pattern";
   private static final String DB_PLACEHOLDER = "{db}";
   private static final String TABLE_PLACEHOLDER = "{table}";
-  private RecordAppender<R> kafkaAppender;
 
   public static final ConfigDef CONFIG_DEF =
       new ConfigDef()
@@ -54,31 +51,7 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
               ConfigDef.Type.STRING,
               null,
               Importance.MEDIUM,
-              "Pattern to use for setting the CDC target field value.")
-          .define(
-              KafkaMetadataAppender.INCLUDE_KAFKA_METADATA,
-              ConfigDef.Type.BOOLEAN,
-              false,
-              ConfigDef.Importance.LOW,
-              "Include appending of Kafka metadata to SinkRecord")
-          .define(
-              KafkaMetadataAppender.KEY_METADATA_FIELD_NAME,
-              ConfigDef.Type.STRING,
-              KafkaMetadataAppender.DEFAULT_METADATA_FIELD_NAME,
-              ConfigDef.Importance.LOW,
-              "field to append Kafka metadata under")
-          .define(
-              KafkaMetadataAppender.KEY_METADATA_IS_NESTED,
-              ConfigDef.Type.BOOLEAN,
-              false,
-              ConfigDef.Importance.LOW,
-              "(true/false) to make a nested record under name or prefix names on the top level")
-          .define(
-              KafkaMetadataAppender.EXTERNAL_KAFKA_METADATA,
-              ConfigDef.Type.STRING,
-              "none",
-              ConfigDef.Importance.LOW,
-              "key,value representing a String to be injected on Kafka metadata (e.g. Cluster)");
+              "Pattern to use for setting the CDC target field value.");
 
   private String cdcTargetPattern;
 
@@ -86,7 +59,6 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
   public void configure(Map<String, ?> props) {
     SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
     cdcTargetPattern = config.getString(CDC_TARGET_PATTERN);
-    kafkaAppender = KafkaMetadataAppender.from(props);
   }
 
   @Override
@@ -138,8 +110,6 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
     }
     newValue.put(CdcConstants.COL_CDC, cdcMetadata);
 
-    kafkaAppender.addToStruct(record, newValue);
-
     return record.newRecord(
         record.topic(),
         record.kafkaPartition(),
@@ -168,9 +138,6 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
       return null;
     }
 
-    // create the new value
-    Map<String, Object> newValue = Maps.newHashMap((Map<String, Object>) payload);
-
     // create the CDC metadata
     Map<String, Object> cdcMetadata = Maps.newHashMap();
     cdcMetadata.put(CdcConstants.COL_OP, op);
@@ -178,13 +145,14 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
     if (record instanceof SinkRecord) {
       cdcMetadata.put(CdcConstants.COL_OFFSET, ((SinkRecord) record).kafkaOffset());
     }
-    kafkaAppender.addToMap(record, newValue);
     setTableAndTargetFromSourceMap(value.get("source"), cdcMetadata);
 
     if (record.key() instanceof Map) {
       cdcMetadata.put(CdcConstants.COL_KEY, record.key());
     }
 
+    // create the new value
+    Map<String, Object> newValue = Maps.newHashMap((Map<String, Object>) payload);
     newValue.put(CdcConstants.COL_CDC, cdcMetadata);
 
     return record.newRecord(
@@ -269,7 +237,6 @@ public class DebeziumTransform<R extends ConnectRecord<R>> implements Transforma
     }
 
     builder.field(CdcConstants.COL_CDC, cdcSchema);
-    kafkaAppender.addToSchema(builder);
 
     return builder.build();
   }
