@@ -24,26 +24,6 @@ The `CopyValue` SMT copies a value from one field to a new field.
 "transforms.copyId.target.field": "id_copy",
 ```
 
-# KafkaMetadataTransform
-_(Experimental)_
-
-The `KafkaMetadata` injects `topic`, `partition`, `offset`, `timestamp` which are properties are the Kafka message.
-
-## Configuration
-
-| Property       | Description (default value)                                                       |
-|----------------|-----------------------------------------------------------------------------------|
-| field_name     | (_kafka_metadata) prefix for fields                                               | 
-| nested         | (false) if true, nests data on a struct else adds to top level as prefixed fields |
-| external_field | (none) appends a constant `key,value` to the metadata (e.g. cluster name)         | 
-
-If `nested` is on: 
-
-`_kafka_metadata.topic`, `_kafka_metadata.partition`, `_kafka_metadata.offset`, `_kafka_metadata.timestamp`
-
-If `nested` is off:
-`_kafka_metdata_topic`, `_kafka_metadata_partition`, `_kafka_metadata_offset`, `_kafka_metadata_timestamp`
-
 # DmsTransform
 _(Experimental)_
 
@@ -68,7 +48,6 @@ It will promote the `before` or `after` element fields to top level and add the 
 |---------------------|-----------------------------------------------------------------------------------|
 | cdc.target.pattern  | Pattern to use for setting the CDC target field value, default is `{db}.{table}`  |
 
-
 # JsonToMapTransform
 _(Experimental)_
 
@@ -85,14 +64,14 @@ Map (String) columns for the JSON objects.
 Note:
 
 - You must use the `stringConverter` as the `value.converter` setting for your connector, not `jsonConverter`
-    - It expects JSON objects (`{...}`) in those strings.
+  - It expects JSON objects (`{...}`) in those strings.
 - Message keys, tombstones, and headers are not transformed and are passed along as-is by the SMT
 
 ## Configuration
 
-| Property    | Description  (default value)             |
-|-------------|------------------------------------------|
-| json.root   | (false) Boolean value to start at root   |
+| Property             | Description  (default value)             |
+|----------------------|------------------------------------------|
+| json.root | (false) Boolean value to start at root   |
 
 The `transforms.IDENTIFIER_HERE.json.root` is meant for the most inconsistent data.  It will construct a Struct with a single field
 called `payload` with a Schema of `Map<String, String>`.
@@ -142,3 +121,23 @@ SinkRecord.value (Struct):
  "array" ["1", "two", "3"] 
  "nested_object" Map ("some_key" : "["one", "two"]") 
 ```
+
+# KafkaMetadataTransform
+_(Experimental)_
+
+The `KafkaMetadata` injects `topic`, `partition`, `offset`, `timestamp` which are properties are the Kafka message.
+
+## Configuration
+
+| Property       | Description (default value)                                                       |
+|----------------|-----------------------------------------------------------------------------------|
+| field_name     | (_kafka_metadata) prefix for fields                                               | 
+| nested         | (false) if true, nests data on a struct else adds to top level as prefixed fields |
+| external_field | (none) appends a constant `key,value` to the metadata (e.g. cluster name)         | 
+
+If `nested` is on:
+
+`_kafka_metadata.topic`, `_kafka_metadata.partition`, `_kafka_metadata.offset`, `_kafka_metadata.timestamp`
+
+If `nested` is off:
+`_kafka_metdata_topic`, `_kafka_metadata_partition`, `_kafka_metadata_offset`, `_kafka_metadata_timestamp`
