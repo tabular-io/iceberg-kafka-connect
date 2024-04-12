@@ -96,11 +96,8 @@ public class KafkaMetadataTransform implements Transformation<SinkRecord> {
 
   private static final String TOPIC = "topic";
   private static final String PARTITION = "partition";
-
   private static final String OFFSET = "offset";
-
   private static final String TIMESTAMP = "timestamp";
-
   private static final String EXTERNAL_KAFKA_METADATA = "external_field";
   private static final String KEY_METADATA_FIELD_NAME = "field_name";
   private static final String KEY_METADATA_IS_NESTED = "nested";
@@ -152,7 +149,7 @@ public class KafkaMetadataTransform implements Transformation<SinkRecord> {
       nestedSchemaBuilder
           .field(TOPIC, Schema.STRING_SCHEMA)
           .field(PARTITION, Schema.INT32_SCHEMA)
-          .field(OFFSET, Schema.OPTIONAL_INT64_SCHEMA)
+          .field(OFFSET, Schema.INT64_SCHEMA)
           .field(TIMESTAMP, Schema.OPTIONAL_INT64_SCHEMA);
       externalFieldAppender.addToSchema(nestedSchemaBuilder);
 
@@ -252,7 +249,7 @@ public class KafkaMetadataTransform implements Transformation<SinkRecord> {
   }
 
   private SinkRecord applyWithSchema(SinkRecord record) {
-    Struct value = Requirements.requireStruct(record.value(), "KafkaMetadata transform");
+    Struct value = Requirements.requireStruct(record.value(), "KafkaMetadataTransform");
     Schema newSchema = makeUpdatedSchema(record.valueSchema());
     Struct newValue = new Struct(newSchema);
     for (Field field : record.valueSchema().fields()) {
