@@ -257,7 +257,7 @@ public class Coordinator extends Channel {
               config.controlGroupId(),
               new CommitToTable(
                   commitState.currentCommitId(),
-                  TableReference.of(catalog.name(), tableIdentifier),
+                  TableReference.of(config.catalogName(), tableIdentifier),
                   snapshotId,
                   vtts));
       send(event);

@@ -39,10 +39,6 @@ public class Offset implements Comparable<Offset> {
     return offset;
   }
 
-  //  public Long timestamp() {
-  //    return timestamp;
-  //  }
-
   public OffsetDateTime timestamp() {
     if (timestamp == null) {
       return null;
