@@ -16,18 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.transforms.util;
+package io.tabular.iceberg.connect.transforms;
 
-import java.util.Map;
-import org.apache.kafka.connect.connector.ConnectRecord;
-import org.apache.kafka.connect.data.SchemaBuilder;
-import org.apache.kafka.connect.data.Struct;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
-public interface RecordAppender<R extends ConnectRecord<R>> {
-
-  SchemaBuilder addToSchema(SchemaBuilder builder);
-
-  Struct addToStruct(R record, Struct struct);
-
-  Map<String, Object> addToMap(R record, Map<String, Object> map);
+public abstract class FileLoads {
+  protected static final String getFile(String fileName) throws IOException, URISyntaxException {
+    URL jsonResource = FileLoads.class.getClassLoader().getResource(fileName);
+    return new String(Files.readAllBytes(Paths.get(jsonResource.toURI())), StandardCharsets.UTF_8);
+  }
 }

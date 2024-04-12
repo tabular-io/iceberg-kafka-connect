@@ -31,19 +31,18 @@ The `KafkaMetadata` injects `topic`, `partition`, `offset`, `record timestamp`.
 
 ## Configuration
 
-| Property                      | Description (default value)                                                       |
-|-------------------------------|-----------------------------------------------------------------------------------|
-| kafka_metadata.include        | (true) includes kafka metadata.  False becomes a no-op                            | 
-| kafka_metadata.field_name     | (_kafka_metadata) prefix for fields                                               | 
-| kafka_metadata.nested         | (false) if true, nests data on a struct else adds to top level as prefixed fields |
-| kafka_metadata.external_field | (none) appends a constant `key,value` to the metadata (e.g. cluster name)         | 
+| Property       | Description (default value)                                                       |
+|----------------|-----------------------------------------------------------------------------------|
+| field_name     | (_kafka_metadata) prefix for fields                                               | 
+| nested         | (false) if true, nests data on a struct else adds to top level as prefixed fields |
+| external_field | (none) appends a constant `key,value` to the metadata (e.g. cluster name)         | 
 
 If `nested` is on: 
 
 `_kafka_metadata.topic`, `_kafka_metadata.partition`, `kafka_metadata.offset`, `kafka_metadata.record_timestamp`
 
 If `nested` is off:
-`_kafka_metdata_topic`, `kafka_metadata_partition`, `kafka_metadata_offset`, `kafka_metadata_record_timestamp`
+`_kafka_metdata_topic`, `_kafka_metadata_partition`, `_kafka_metadata_offset`, `kafka_metadata_record_timestamp`
 
 # DmsTransform
 _(Experimental)_
@@ -54,16 +53,7 @@ It will promote the `data` element fields to top level and add the following met
 
 ## Configuration
 
-The DMS transform can also append Kafka Metadata without an additional record copy as per the `KafkaMetadataTransform` with the following
-configuration:
-
-| Property                      | Description (default value)                                                       |
-|-------------------------------|-----------------------------------------------------------------------------------|
-| kafka_metadata.include        | (true) includes kafka metadata.  False becomes a no-op                            |
-| kafka_metadata.field_name     | (_kafka_metadata) prefix for fields                                               |
-| kafka_metadata.nested         | (false) if true, nests data on a struct else adds to top level as prefixed fields |
-| kafka_metadata.external_field | (none) appends a constant `key,value` to the metadata (e.g. cluster name)         |
-
+The SMT currently has no configuration.
 
 # DebeziumTransform
 _(Experimental)_
@@ -74,16 +64,6 @@ It will promote the `before` or `after` element fields to top level and add the 
 
 ## Configuration
 
-| Property                     | Description                                                                                             |
-|:-----------------------------|:--------------------------------------------------------------------------------------------------------|
-| cdc.target.pattern           | Pattern to use for setting the CDC target field value, default is `{db}.{table}`                        |
-
-The Debezium transform can also append Kafka Metadata without an additional record copy as per the `KafkaMetadataTransform` with the following
-configuration:
-
-| Property                      | Description (default value)                                                       |
-|-------------------------------|-----------------------------------------------------------------------------------|
-| kafka_metadata.include        | (true) includes kafka metadata.  False becomes a no-op                            |
-| kafka_metadata.field_name     | (_kafka_metadata) prefix for fields                                               |
-| kafka_metadata.nested         | (false) if true, nests data on a struct else adds to top level as prefixed fields |
-| kafka_metadata.external_field | (none) appends a constant `key,value` to the metadata (e.g. cluster name)         | 
+| Property            | Description                                                                       |
+|---------------------|-----------------------------------------------------------------------------------|
+| cdc.target.pattern  | Pattern to use for setting the CDC target field value, default is `{db}.{table}`  |
