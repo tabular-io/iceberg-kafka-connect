@@ -195,8 +195,9 @@ public class KafkaMetadataTransform implements Transformation<SinkRecord> {
           builder
               .field(topicFieldName, Schema.STRING_SCHEMA)
               .field(partitionFieldName, Schema.INT32_SCHEMA)
-              .field(offsetFieldName, Schema.OPTIONAL_INT64_SCHEMA)
+              .field(offsetFieldName, Schema.INT64_SCHEMA)
               .field(timestampFieldName, Schema.OPTIONAL_INT64_SCHEMA);
+          externalFieldAppender.addToSchema(builder);
         }
 
         @Override
