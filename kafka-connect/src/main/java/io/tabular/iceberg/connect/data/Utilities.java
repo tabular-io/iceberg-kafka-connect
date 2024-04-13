@@ -35,6 +35,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.iceberg.CatalogUtil;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.Table;
@@ -55,6 +57,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.relocated.com.google.common.primitives.Ints;
 import org.apache.iceberg.types.TypeUtil;
 import org.apache.iceberg.util.PropertyUtil;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.data.Struct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,8 +69,15 @@ public class Utilities {
       ImmutableList.of("core-site.xml", "hdfs-site.xml", "hive-site.xml");
 
   public static Catalog loadCatalog(IcebergSinkConfig config) {
-    return CatalogUtil.buildIcebergCatalog(
-        config.catalogName(), config.catalogProps(), loadHadoopConfig(config));
+    Object hadoopConf = loadHadoopConfig(config);
+    if (config.kerberosAuthentication()) {
+      configureKerberosAuthentication(
+          hadoopConf,
+          config.connectHdfsPrincipal(),
+          config.connectHdfsKeytab(),
+          config.kerberosTicketRenewPeriodMs());
+    }
+    return CatalogUtil.buildIcebergCatalog(config.catalogName(), config.catalogProps(), hadoopConf);
   }
 
   // use reflection here to avoid requiring Hadoop as a dependency
@@ -118,6 +128,42 @@ public class Utilities {
           "Hadoop found on classpath but could not create config, proceeding without config", e);
     }
     return null;
+  }
+
+  private static void configureKerberosAuthentication(
+      Object hadoopConf, String principal, String keytabPath, long renewPeriod) {
+    if (principal == null || keytabPath == null) {
+      throw new ConfigException(
+          "Hadoop is using Kerberos for authentication, you need to provide both a connect "
+              + "principal and the path to the keytab of the principal.");
+    }
+    try {
+      UserGroupInformation.setConfiguration((Configuration) hadoopConf);
+      UserGroupInformation.loginUserFromKeytab(principal, keytabPath);
+      final UserGroupInformation ugi = UserGroupInformation.getLoginUser();
+      LOG.info("login as: " + ugi.getUserName());
+
+      Thread ticketRenewThread = new Thread(() -> renewKerberosTicket(ugi, renewPeriod));
+      ticketRenewThread.setDaemon(true);
+      LOG.info("Starting the Kerberos ticket renew with period {} ms.", renewPeriod);
+      ticketRenewThread.start();
+    } catch (IOException e) {
+      throw new RuntimeException("Could not authenticate with Kerberos: " + e.getMessage());
+    }
+  }
+
+  private static synchronized void renewKerberosTicket(UserGroupInformation ugi, long renewPeriod) {
+    while (true) {
+      try {
+        Thread.sleep(renewPeriod);
+        LOG.info("Attempting to re-login from keytab for user {}", ugi.getUserName());
+        ugi.reloginFromKeytab();
+      } catch (IOException e) {
+        LOG.error("Error renewing the ticket", e);
+      } catch (InterruptedException e) {
+        // ignored
+      }
+    }
   }
 
   public static Object extractFromRecordValue(Object recordValue, String fieldName) {
