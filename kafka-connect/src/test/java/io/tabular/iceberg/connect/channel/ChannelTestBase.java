@@ -52,7 +52,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
-class ChannelTestBase {
+public class ChannelTestBase {
   protected static final String SRC_TOPIC_NAME = "src-topic";
   protected static final String CTL_TOPIC_NAME = "ctl-topic";
   protected static final TopicPartition CTL_TOPIC_PARTITION = new TopicPartition(CTL_TOPIC_NAME, 0);
@@ -60,7 +60,7 @@ class ChannelTestBase {
   protected InMemoryCatalog catalog;
   protected Table table;
   protected IcebergSinkConfig config;
-  protected KafkaClientFactory kafkaClientFactory;
+  protected KafkaClientFactory clientFactory;
   protected UUID producerId;
   protected MockProducer<String, byte[]> producer;
   protected MockConsumer<String, byte[]> consumer;
@@ -117,10 +117,10 @@ class ChannelTestBase {
 
     consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
 
-    kafkaClientFactory = mock(KafkaClientFactory.class);
-    when(kafkaClientFactory.createConsumer(any())).thenReturn(consumer);
-    when(kafkaClientFactory.createProducer(any())).thenReturn(Pair.of(producerId, producer));
-    when(kafkaClientFactory.createAdmin()).thenReturn(admin);
+    clientFactory = mock(KafkaClientFactory.class);
+    when(clientFactory.createConsumer(any())).thenReturn(consumer);
+    when(clientFactory.createProducer(any())).thenReturn(Pair.of(producerId, producer));
+    when(clientFactory.createAdmin()).thenReturn(admin);
   }
 
   @AfterEach

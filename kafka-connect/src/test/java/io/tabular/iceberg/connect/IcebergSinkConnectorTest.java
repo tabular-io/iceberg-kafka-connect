@@ -18,7 +18,7 @@
  */
 package io.tabular.iceberg.connect;
 
-import static io.tabular.iceberg.connect.IcebergSinkConfig.INTERNAL_TASK_ID;
+import static io.tabular.iceberg.connect.IcebergSinkConfig.INTERNAL_TRANSACTIONAL_SUFFIX_PROP;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
@@ -35,6 +35,6 @@ public class IcebergSinkConnectorTest {
     connector.start(ImmutableMap.of());
     List<Map<String, String>> configs = connector.taskConfigs(3);
     assertThat(configs).hasSize(3);
-    configs.forEach(map -> assertThat(map).containsKey(INTERNAL_TASK_ID));
+    configs.forEach(map -> assertThat(map).containsKey(INTERNAL_TRANSACTIONAL_SUFFIX_PROP));
   }
 }

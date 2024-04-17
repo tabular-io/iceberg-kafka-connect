@@ -42,11 +42,11 @@ public class IcebergWriterFactory implements AutoCloseable {
   private final IcebergSinkConfig config;
 
   public IcebergWriterFactory(IcebergSinkConfig config) {
-    this(config, Utilities.loadCatalog(config));
+    this(Utilities.loadCatalog(config), config);
   }
 
   @VisibleForTesting
-  IcebergWriterFactory(IcebergSinkConfig config, Catalog catalog) {
+  IcebergWriterFactory(Catalog catalog, IcebergSinkConfig config) {
     this.catalog = catalog;
     this.config = config;
   }

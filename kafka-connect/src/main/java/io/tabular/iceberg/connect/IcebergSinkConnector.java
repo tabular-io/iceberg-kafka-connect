@@ -22,6 +22,7 @@ import static java.util.stream.Collectors.toList;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.IntStream;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.config.ConfigDef;
@@ -49,11 +50,12 @@ public class IcebergSinkConnector extends SinkConnector {
 
   @Override
   public List<Map<String, String>> taskConfigs(int maxTasks) {
+    String txnSuffix = "-txn-" + UUID.randomUUID() + "-";
     return IntStream.range(0, maxTasks)
         .mapToObj(
             i -> {
               Map<String, String> map = Maps.newHashMap(props);
-              map.put(IcebergSinkConfig.INTERNAL_TASK_ID, Integer.toString(i));
+              map.put(IcebergSinkConfig.INTERNAL_TRANSACTIONAL_SUFFIX_PROP, txnSuffix + i);
               return map;
             })
         .collect(toList());

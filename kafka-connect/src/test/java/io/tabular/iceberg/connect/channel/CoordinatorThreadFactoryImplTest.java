@@ -20,6 +20,7 @@ package io.tabular.iceberg.connect.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -45,8 +46,12 @@ import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkTaskContext;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class CoordinatorThreadFactoryImplTest {
@@ -54,6 +59,8 @@ class CoordinatorThreadFactoryImplTest {
   private static final String CONNECTOR_NAME = "connector-name";
   private static final String TABLE_1_NAME = "db.tbl1";
   private static final String CONTROL_TOPIC = "control-topic-name";
+  private static final TopicPartition CONTROL_TOPIC_PARTITION =
+      new TopicPartition(CONTROL_TOPIC, 0);
   private static final IcebergSinkConfig BASIC_CONFIGS =
       new IcebergSinkConfig(
           ImmutableMap.of(
@@ -65,8 +72,8 @@ class CoordinatorThreadFactoryImplTest {
               TABLE_1_NAME,
               "iceberg.control.topic",
               CONTROL_TOPIC,
-              IcebergSinkConfig.INTERNAL_TASK_ID,
-              "0"));
+              IcebergSinkConfig.INTERNAL_TRANSACTIONAL_SUFFIX_PROP,
+              "-txn-" + UUID.randomUUID() + "-" + 0));
 
   private static final String TOPIC_0 = "source-topic-name-0";
   private static final String TOPIC_1 = "source-topic-name-1";
@@ -81,10 +88,37 @@ class CoordinatorThreadFactoryImplTest {
           new MemberDescription(null, null, null, new MemberAssignment(LEADER_ASSIGNMENT)),
           new MemberDescription(null, null, null, new MemberAssignment(NON_LEADER_ASSIGNMENT)));
 
-  private static Admin mockAdmin(
-      ConsumerGroupState consumerGroupState, List<MemberDescription> memberDescriptions) {
-    Admin admin = mock(Admin.class);
+  private KafkaClientFactory kafkaClientFactory;
+  private UUID producerId;
+  private MockProducer<String, byte[]> producer;
+  private MockConsumer<String, byte[]> consumer;
+  private Admin admin;
 
+  @BeforeEach
+  public void before() {
+    admin = mock(Admin.class);
+
+    producerId = UUID.randomUUID();
+    producer = new MockProducer<>(false, new StringSerializer(), new ByteArraySerializer());
+    producer.initTransactions();
+
+    consumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
+
+    kafkaClientFactory = mock(KafkaClientFactory.class);
+    when(kafkaClientFactory.createConsumer(any())).thenReturn(consumer);
+    when(kafkaClientFactory.createProducer(any())).thenReturn(Pair.of(producerId, producer));
+    when(kafkaClientFactory.createAdmin()).thenReturn(admin);
+  }
+
+  @AfterEach
+  public void after() {
+    producer.close();
+    consumer.close();
+    admin.close();
+  }
+
+  private void whenAdminDescribeConsumerGroupThenReturn(
+      ConsumerGroupState consumerGroupState, List<MemberDescription> memberDescriptions) {
     String connectGroupId = BASIC_CONFIGS.connectGroupId();
 
     when(admin.describeConsumerGroups(eq(ImmutableList.of(connectGroupId))))
@@ -100,25 +134,18 @@ class CoordinatorThreadFactoryImplTest {
                             null,
                             consumerGroupState,
                             mock(Node.class))))));
-
-    return admin;
   }
 
-  private static Admin mockAdmin(ConsumerGroupState consumerGroupState) {
-    return mockAdmin(consumerGroupState, MEMBER_DESCRIPTIONS);
+  private void whenAdminDescribeConsumerGroupThenReturn(ConsumerGroupState consumerGroupState) {
+    whenAdminDescribeConsumerGroupThenReturn(consumerGroupState, MEMBER_DESCRIPTIONS);
   }
-
-  private final MockConsumer<String, byte[]> consumer =
-      new MockConsumer<>(OffsetResetStrategy.LATEST);
-  private final Pair<UUID, MockProducer<String, byte[]>> producerPair =
-      Pair.of(UUID.randomUUID(), new MockProducer<>());
 
   @Test
   public void testShouldReturnEmptyIfNotLeader() {
+    whenAdminDescribeConsumerGroupThenReturn(ConsumerGroupState.STABLE);
+
     CoordinatorThreadFactoryImpl coordinatorThreadFactory =
-        new CoordinatorThreadFactoryImpl(
-            new MockKafkaClientFactory(
-                consumer, producerPair, mockAdmin(ConsumerGroupState.STABLE)));
+        new CoordinatorThreadFactoryImpl(kafkaClientFactory);
 
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);
     when(sinkTaskContext.assignment()).thenReturn(NON_LEADER_ASSIGNMENT);
@@ -134,10 +161,10 @@ class CoordinatorThreadFactoryImplTest {
 
   @Test
   public void testShouldReturnEmptyIfLeaderButGroupIsNotStable() {
+    whenAdminDescribeConsumerGroupThenReturn(ConsumerGroupState.UNKNOWN);
+
     CoordinatorThreadFactoryImpl coordinatorThreadFactory =
-        new CoordinatorThreadFactoryImpl(
-            new MockKafkaClientFactory(
-                consumer, producerPair, mockAdmin(ConsumerGroupState.UNKNOWN)));
+        new CoordinatorThreadFactoryImpl(kafkaClientFactory);
 
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);
     when(sinkTaskContext.assignment()).thenReturn(LEADER_ASSIGNMENT);
@@ -153,10 +180,10 @@ class CoordinatorThreadFactoryImplTest {
 
   @Test
   public void testShouldReturnThreadIfLeaderAndGroupIsStable() {
+    whenAdminDescribeConsumerGroupThenReturn(ConsumerGroupState.STABLE);
+
     CoordinatorThreadFactoryImpl coordinatorThreadFactory =
-        new CoordinatorThreadFactoryImpl(
-            new MockKafkaClientFactory(
-                consumer, producerPair, mockAdmin(ConsumerGroupState.STABLE)));
+        new CoordinatorThreadFactoryImpl(kafkaClientFactory);
 
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);
     when(sinkTaskContext.assignment()).thenReturn(LEADER_ASSIGNMENT);
@@ -175,18 +202,14 @@ class CoordinatorThreadFactoryImplTest {
     // This could happen if a connector is configured with a topics.regex that doesn't match any
     // topics in cluster
 
+    whenAdminDescribeConsumerGroupThenReturn(
+        ConsumerGroupState.STABLE,
+        ImmutableList.of(
+            new MemberDescription(null, null, null, new MemberAssignment(ImmutableSet.of())),
+            new MemberDescription(null, null, null, new MemberAssignment(ImmutableSet.of()))));
+
     CoordinatorThreadFactoryImpl coordinatorThreadFactory =
-        new CoordinatorThreadFactoryImpl(
-            new MockKafkaClientFactory(
-                consumer,
-                producerPair,
-                mockAdmin(
-                    ConsumerGroupState.STABLE,
-                    ImmutableList.of(
-                        new MemberDescription(
-                            null, null, null, new MemberAssignment(ImmutableSet.of())),
-                        new MemberDescription(
-                            null, null, null, new MemberAssignment(ImmutableSet.of()))))));
+        new CoordinatorThreadFactoryImpl(kafkaClientFactory);
 
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);
     when(sinkTaskContext.assignment()).thenReturn(ImmutableSet.of());
