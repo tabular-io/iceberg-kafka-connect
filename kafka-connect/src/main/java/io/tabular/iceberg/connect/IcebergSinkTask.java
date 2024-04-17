@@ -18,27 +18,14 @@
  */
 package io.tabular.iceberg.connect;
 
-import io.tabular.iceberg.connect.channel.Coordinator;
-import io.tabular.iceberg.connect.channel.CoordinatorThread;
-import io.tabular.iceberg.connect.channel.KafkaClientFactory;
-import io.tabular.iceberg.connect.channel.KafkaUtils;
-import io.tabular.iceberg.connect.channel.NotRunningException;
-import io.tabular.iceberg.connect.channel.Worker;
-import io.tabular.iceberg.connect.data.IcebergWriterFactory;
+import io.tabular.iceberg.connect.channel.CommitterImpl;
 import io.tabular.iceberg.connect.data.Utilities;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.Map;
 import org.apache.iceberg.catalog.Catalog;
-import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.ConsumerGroupDescription;
-import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.slf4j.Logger;
@@ -50,20 +37,7 @@ public class IcebergSinkTask extends SinkTask {
 
   private IcebergSinkConfig config;
   private Catalog catalog;
-  private CoordinatorThread coordinatorThread;
-  private Worker worker;
-
-  static class TopicPartitionComparator implements Comparator<TopicPartition> {
-
-    @Override
-    public int compare(TopicPartition o1, TopicPartition o2) {
-      int result = o1.topic().compareTo(o2.topic());
-      if (result == 0) {
-        result = Integer.compare(o1.partition(), o2.partition());
-      }
-      return result;
-    }
-  }
+  private Committer committer;
 
   @Override
   public String version() {
@@ -78,41 +52,8 @@ public class IcebergSinkTask extends SinkTask {
   @Override
   public void open(Collection<TopicPartition> partitions) {
     catalog = Utilities.loadCatalog(config);
-    KafkaClientFactory clientFactory = new KafkaClientFactory(config.kafkaProps());
-
-    ConsumerGroupDescription groupDesc;
-    try (Admin admin = clientFactory.createAdmin()) {
-      groupDesc = KafkaUtils.consumerGroupDescription(config.connectGroupId(), admin);
-    }
-
-    if (groupDesc.state() == ConsumerGroupState.STABLE) {
-      Collection<MemberDescription> members = groupDesc.members();
-      if (isLeader(members, partitions)) {
-        LOG.info("Task elected leader, starting commit coordinator");
-        Coordinator coordinator = new Coordinator(catalog, config, members, clientFactory, context);
-        coordinatorThread = new CoordinatorThread(coordinator);
-        coordinatorThread.start();
-      }
-    }
-
-    LOG.info("Starting commit worker");
-    IcebergWriterFactory writerFactory = new IcebergWriterFactory(catalog, config);
-    worker = new Worker(config, clientFactory, writerFactory, context);
-    worker.start();
-  }
-
-  @VisibleForTesting
-  boolean isLeader(Collection<MemberDescription> members, Collection<TopicPartition> partitions) {
-    // there should only be one task assigned partition 0 of the first topic,
-    // so elect that one the leader
-    TopicPartition firstTopicPartition =
-        members.stream()
-            .flatMap(member -> member.assignment().topicPartitions().stream())
-            .min(new TopicPartitionComparator())
-            .orElseThrow(
-                () -> new ConnectException("No partitions assigned, cannot determine leader"));
-
-    return partitions.contains(firstTopicPartition);
+    committer = new CommitterImpl();
+    committer.init(catalog, config, context, partitions);
   }
 
   @Override
@@ -121,14 +62,8 @@ public class IcebergSinkTask extends SinkTask {
   }
 
   private void close() {
-    if (worker != null) {
-      worker.stop();
-      worker = null;
-    }
-
-    if (coordinatorThread != null) {
-      coordinatorThread.terminate();
-      coordinatorThread = null;
+    if (committer != null) {
+      committer.stop();
     }
 
     if (catalog != null) {
@@ -145,24 +80,14 @@ public class IcebergSinkTask extends SinkTask {
 
   @Override
   public void put(Collection<SinkRecord> sinkRecords) {
-    if (sinkRecords != null && !sinkRecords.isEmpty() && worker != null) {
-      worker.save(sinkRecords);
+    if (committer != null) {
+      committer.save(sinkRecords);
     }
-    processControlEvents();
   }
 
   @Override
   public void flush(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
-    processControlEvents();
-  }
-
-  private void processControlEvents() {
-    if (coordinatorThread != null && coordinatorThread.isTerminated()) {
-      throw new NotRunningException("Coordinator unexpectedly terminated");
-    }
-    if (worker != null) {
-      worker.process();
-    }
+    committer.save(null);
   }
 
   @Override

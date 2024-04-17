@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect;
+package io.tabular.iceberg.connect.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,11 +29,11 @@ import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 
-public class IcebergSinkTaskTest {
+public class CommitterImplTest {
 
   @Test
   public void testIsLeader() {
-    IcebergSinkTask task = new IcebergSinkTask();
+    CommitterImpl committer = new CommitterImpl();
 
     MemberAssignment assignment1 =
         new MemberAssignment(
@@ -51,10 +51,10 @@ public class IcebergSinkTaskTest {
 
     List<TopicPartition> assignments =
         ImmutableList.of(new TopicPartition("topic2", 1), new TopicPartition("topic1", 0));
-    assertThat(task.isLeader(members, assignments)).isTrue();
+    assertThat(committer.isLeader(members, assignments)).isTrue();
 
     assignments =
         ImmutableList.of(new TopicPartition("topic2", 0), new TopicPartition("topic1", 1));
-    assertThat(task.isLeader(members, assignments)).isFalse();
+    assertThat(committer.isLeader(members, assignments)).isFalse();
   }
 }
