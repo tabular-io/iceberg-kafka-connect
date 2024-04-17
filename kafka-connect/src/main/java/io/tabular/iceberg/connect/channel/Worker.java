@@ -44,7 +44,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 
-public class Worker extends Channel {
+class Worker extends Channel {
 
   private final IcebergSinkConfig config;
   private final IcebergWriterFactory writerFactory;
@@ -52,7 +52,7 @@ public class Worker extends Channel {
   private final Map<String, RecordWriter> writers;
   private final Map<TopicPartition, Offset> sourceOffsets;
 
-  public Worker(
+  Worker(
       IcebergSinkConfig config,
       KafkaClientFactory clientFactory,
       IcebergWriterFactory writerFactory,
@@ -72,7 +72,7 @@ public class Worker extends Channel {
     this.sourceOffsets = Maps.newHashMap();
   }
 
-  public void process() {
+  void process() {
     consumeAvailable(Duration.ZERO);
   }
 
@@ -137,16 +137,16 @@ public class Worker extends Channel {
   }
 
   @Override
-  public void stop() {
+  void stop() {
     super.stop();
     writers.values().forEach(RecordWriter::close);
   }
 
-  public void save(Collection<SinkRecord> sinkRecords) {
+  void save(Collection<SinkRecord> sinkRecords) {
     sinkRecords.forEach(this::save);
   }
 
-  private void save(SinkRecord record) {
+  void save(SinkRecord record) {
     // the consumer stores the offsets that corresponds to the next record to consume,
     // so increment the record offset by one
     sourceOffsets.put(

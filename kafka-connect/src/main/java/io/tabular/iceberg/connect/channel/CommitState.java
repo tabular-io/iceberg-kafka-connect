@@ -32,7 +32,7 @@ import org.apache.iceberg.catalog.TableIdentifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CommitState {
+class CommitState {
   private static final Logger LOG = LoggerFactory.getLogger(CommitState.class);
 
   private final List<Envelope> commitBuffer = new LinkedList<>();
@@ -41,11 +41,11 @@ public class CommitState {
   private UUID currentCommitId;
   private final IcebergSinkConfig config;
 
-  public CommitState(IcebergSinkConfig config) {
+  CommitState(IcebergSinkConfig config) {
     this.config = config;
   }
 
-  public void addResponse(Envelope envelope) {
+  void addResponse(Envelope envelope) {
     commitBuffer.add(envelope);
     if (!isCommitInProgress()) {
       LOG.warn(
@@ -53,22 +53,22 @@ public class CommitState {
     }
   }
 
-  public void addReady(Envelope envelope) {
+  void addReady(Envelope envelope) {
     readyBuffer.add((CommitReadyPayload) envelope.event().payload());
     if (!isCommitInProgress()) {
       LOG.warn("Received commit ready when no commit in progress, this can happen during recovery");
     }
   }
 
-  public UUID currentCommitId() {
+  UUID currentCommitId() {
     return currentCommitId;
   }
 
-  public boolean isCommitInProgress() {
+  boolean isCommitInProgress() {
     return currentCommitId != null;
   }
 
-  public boolean isCommitIntervalReached() {
+  boolean isCommitIntervalReached() {
     if (startTime == 0) {
       startTime = System.currentTimeMillis();
     }
@@ -77,21 +77,21 @@ public class CommitState {
         && System.currentTimeMillis() - startTime >= config.commitIntervalMs());
   }
 
-  public void startNewCommit() {
+  void startNewCommit() {
     currentCommitId = UUID.randomUUID();
     startTime = System.currentTimeMillis();
   }
 
-  public void endCurrentCommit() {
+  void endCurrentCommit() {
     readyBuffer.clear();
     currentCommitId = null;
   }
 
-  public void clearResponses() {
+  void clearResponses() {
     commitBuffer.clear();
   }
 
-  public boolean isCommitTimedOut() {
+  boolean isCommitTimedOut() {
     if (!isCommitInProgress()) {
       return false;
     }
@@ -103,7 +103,7 @@ public class CommitState {
     return false;
   }
 
-  public boolean isCommitReady(int expectedPartitionCount) {
+  boolean isCommitReady(int expectedPartitionCount) {
     if (!isCommitInProgress()) {
       return false;
     }
@@ -131,7 +131,7 @@ public class CommitState {
     return false;
   }
 
-  public Map<TableIdentifier, List<Envelope>> tableCommitMap() {
+  Map<TableIdentifier, List<Envelope>> tableCommitMap() {
     return commitBuffer.stream()
         .collect(
             groupingBy(
@@ -141,7 +141,7 @@ public class CommitState {
                         .toIdentifier()));
   }
 
-  public Long vtts(boolean partialCommit) {
+  Long vtts(boolean partialCommit) {
     boolean validVtts =
         !partialCommit
             && readyBuffer.stream()

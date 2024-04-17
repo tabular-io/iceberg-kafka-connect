@@ -25,7 +25,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 
 public interface Committer {
-  void init(
+  void start(
       Catalog catalog,
       IcebergSinkConfig config,
       SinkTaskContext context,

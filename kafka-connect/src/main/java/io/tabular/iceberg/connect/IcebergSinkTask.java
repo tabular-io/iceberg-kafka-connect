@@ -53,7 +53,7 @@ public class IcebergSinkTask extends SinkTask {
   public void open(Collection<TopicPartition> partitions) {
     catalog = Utilities.loadCatalog(config);
     committer = new CommitterImpl();
-    committer.init(catalog, config, context, partitions);
+    committer.start(catalog, config, context, partitions);
   }
 
   @Override
