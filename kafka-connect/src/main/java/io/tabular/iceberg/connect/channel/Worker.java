@@ -21,11 +21,9 @@ package io.tabular.iceberg.connect.channel;
 import static java.util.stream.Collectors.toList;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import io.tabular.iceberg.connect.WorkerHelper;
 import io.tabular.iceberg.connect.data.IcebergWriterFactory;
 import io.tabular.iceberg.connect.data.Offset;
-import io.tabular.iceberg.connect.data.RecordWriter;
-import io.tabular.iceberg.connect.data.Utilities;
-import io.tabular.iceberg.connect.data.WriterResult;
 import io.tabular.iceberg.connect.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.events.CommitResponsePayload;
@@ -36,21 +34,15 @@ import io.tabular.iceberg.connect.events.TopicPartitionOffset;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
-import org.apache.iceberg.relocated.com.google.common.collect.Maps;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 
 class Worker extends Channel {
 
   private final IcebergSinkConfig config;
-  private final IcebergWriterFactory writerFactory;
   private final SinkTaskContext context;
-  private final Map<String, RecordWriter> writers;
-  private final Map<TopicPartition, Offset> sourceOffsets;
+  private final WorkerHelper helper;
 
   Worker(
       IcebergSinkConfig config,
@@ -66,10 +58,8 @@ class Worker extends Channel {
         context);
 
     this.config = config;
-    this.writerFactory = writerFactory;
     this.context = context;
-    this.writers = Maps.newHashMap();
-    this.sourceOffsets = Maps.newHashMap();
+    this.helper = new WorkerHelper(config, writerFactory);
   }
 
   void process() {
@@ -83,12 +73,7 @@ class Worker extends Channel {
       return false;
     }
 
-    List<WriterResult> writeResults =
-        writers.values().stream().flatMap(writer -> writer.complete().stream()).collect(toList());
-    Map<TopicPartition, Offset> offsets = Maps.newHashMap(sourceOffsets);
-
-    writers.clear();
-    sourceOffsets.clear();
+    WorkerHelper.Result results = helper.completeWrite();
 
     // include all assigned topic partitions even if no messages were read
     // from a partition, as the coordinator will use that to determine
@@ -97,7 +82,7 @@ class Worker extends Channel {
         context.assignment().stream()
             .map(
                 tp -> {
-                  Offset offset = offsets.get(tp);
+                  Offset offset = results.sourceOffsets().get(tp);
                   if (offset == null) {
                     offset = Offset.NULL_OFFSET;
                   }
@@ -109,7 +94,7 @@ class Worker extends Channel {
     UUID commitId = ((CommitRequestPayload) event.payload()).commitId();
 
     List<Event> events =
-        writeResults.stream()
+        results.writerResults().stream()
             .map(
                 writeResult ->
                     new Event(
@@ -130,7 +115,7 @@ class Worker extends Channel {
             new CommitReadyPayload(commitId, assignments));
     events.add(readyEvent);
 
-    send(events, offsets);
+    send(events, results.sourceOffsets());
     context.requestCommit();
 
     return true;
@@ -139,81 +124,10 @@ class Worker extends Channel {
   @Override
   void stop() {
     super.stop();
-    writers.values().forEach(RecordWriter::close);
+    helper.close();
   }
 
   void save(Collection<SinkRecord> sinkRecords) {
-    sinkRecords.forEach(this::save);
-  }
-
-  void save(SinkRecord record) {
-    // the consumer stores the offsets that corresponds to the next record to consume,
-    // so increment the record offset by one
-    sourceOffsets.put(
-        new TopicPartition(record.topic(), record.kafkaPartition()),
-        new Offset(record.kafkaOffset() + 1, record.timestamp()));
-
-    if (config.dynamicTablesEnabled()) {
-      routeRecordDynamically(record);
-    } else {
-      routeRecordStatically(record);
-    }
-  }
-
-  private void routeRecordStatically(SinkRecord record) {
-    String routeField = config.tablesRouteField();
-
-    if (routeField == null) {
-      // route to all tables
-      config
-          .tables()
-          .forEach(
-              tableName -> {
-                writerForTable(tableName, record, false).write(record);
-              });
-
-    } else {
-      String routeValue = extractRouteValue(record.value(), routeField);
-      if (routeValue != null) {
-        config
-            .tables()
-            .forEach(
-                tableName ->
-                    config
-                        .tableConfig(tableName)
-                        .routeRegex()
-                        .ifPresent(
-                            regex -> {
-                              if (regex.matcher(routeValue).matches()) {
-                                writerForTable(tableName, record, false).write(record);
-                              }
-                            }));
-      }
-    }
-  }
-
-  private void routeRecordDynamically(SinkRecord record) {
-    String routeField = config.tablesRouteField();
-    Preconditions.checkNotNull(routeField, "Route field cannot be null with dynamic routing");
-
-    String routeValue = extractRouteValue(record.value(), routeField);
-    if (routeValue != null) {
-      String tableName = routeValue.toLowerCase();
-      writerForTable(tableName, record, true).write(record);
-    }
-  }
-
-  private String extractRouteValue(Object recordValue, String routeField) {
-    if (recordValue == null) {
-      return null;
-    }
-    Object routeValue = Utilities.extractFromRecordValue(recordValue, routeField);
-    return routeValue == null ? null : routeValue.toString();
-  }
-
-  private RecordWriter writerForTable(
-      String tableName, SinkRecord sample, boolean ignoreMissingTable) {
-    return writers.computeIfAbsent(
-        tableName, notUsed -> writerFactory.createWriter(tableName, sample, ignoreMissingTable));
+    helper.save(sinkRecords);
   }
 }
