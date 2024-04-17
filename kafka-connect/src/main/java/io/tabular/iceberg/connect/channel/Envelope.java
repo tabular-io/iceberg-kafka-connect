@@ -20,26 +20,26 @@ package io.tabular.iceberg.connect.channel;
 
 import io.tabular.iceberg.connect.events.Event;
 
-public class Envelope {
+class Envelope {
   private final Event event;
   private final int partition;
   private final long offset;
 
-  public Envelope(Event event, int partition, long offset) {
+  Envelope(Event event, int partition, long offset) {
     this.event = event;
     this.partition = partition;
     this.offset = offset;
   }
 
-  public Event event() {
+  Event event() {
     return event;
   }
 
-  public int partition() {
+  int partition() {
     return partition;
   }
 
-  public long offset() {
+  long offset() {
     return offset;
   }
 }

@@ -29,13 +29,12 @@ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 
-public class KafkaUtils {
+class KafkaUtils {
 
   private static final String CONTEXT_CLASS_NAME =
       "org.apache.kafka.connect.runtime.WorkerSinkTaskContext";
 
-  public static ConsumerGroupDescription consumerGroupDescription(
-      String consumerGroupId, Admin admin) {
+  static ConsumerGroupDescription consumerGroupDescription(String consumerGroupId, Admin admin) {
     try {
       DescribeConsumerGroupsResult result =
           admin.describeConsumerGroups(ImmutableList.of(consumerGroupId));
@@ -48,7 +47,7 @@ public class KafkaUtils {
   }
 
   @SuppressWarnings("unchecked")
-  public static ConsumerGroupMetadata getConsumerGroupMetadata(
+  static ConsumerGroupMetadata getConsumerGroupMetadata(
       SinkTaskContext context, String connectGroupId) {
     if (CONTEXT_CLASS_NAME.equals(context.getClass().getName())) {
       return ((Consumer<byte[], byte[]>)

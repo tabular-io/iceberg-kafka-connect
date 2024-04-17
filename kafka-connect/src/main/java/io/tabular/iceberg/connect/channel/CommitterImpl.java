@@ -55,7 +55,8 @@ public class CommitterImpl implements Committer {
     }
   }
 
-  public void init(
+  @Override
+  public void start(
       Catalog catalog,
       IcebergSinkConfig config,
       SinkTaskContext context,
@@ -83,6 +84,7 @@ public class CommitterImpl implements Committer {
     worker.start();
   }
 
+  @Override
   public void save(Collection<SinkRecord> sinkRecords) {
     if (sinkRecords != null && !sinkRecords.isEmpty()) {
       worker.save(sinkRecords);
@@ -90,6 +92,7 @@ public class CommitterImpl implements Committer {
     processControlEvents();
   }
 
+  @Override
   public void stop() {
     if (worker != null) {
       worker.stop();

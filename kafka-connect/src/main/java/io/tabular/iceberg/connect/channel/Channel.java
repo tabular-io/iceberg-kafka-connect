@@ -41,7 +41,7 @@ import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public abstract class Channel {
+abstract class Channel {
 
   private static final Logger LOG = LoggerFactory.getLogger(Channel.class);
 
@@ -54,7 +54,7 @@ public abstract class Channel {
   private final Map<Integer, Long> controlTopicOffsets = Maps.newHashMap();
   private final String producerId;
 
-  public Channel(
+  Channel(
       String name,
       String consumerGroupId,
       IcebergSinkConfig config,
@@ -148,18 +148,14 @@ public abstract class Channel {
     consumer.commitSync(offsetsToCommit);
   }
 
-  protected Admin admin() {
-    return admin;
-  }
-
-  public void start() {
+  void start() {
     consumer.subscribe(ImmutableList.of(controlTopic));
 
     // initial poll with longer duration so the consumer will initialize...
     consumeAvailable(Duration.ofMillis(1000));
   }
 
-  public void stop() {
+  void stop() {
     LOG.info("Channel stopping");
     producer.close();
     consumer.close();

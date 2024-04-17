@@ -55,7 +55,7 @@ import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Coordinator extends Channel {
+class Coordinator extends Channel {
 
   private static final Logger LOG = LoggerFactory.getLogger(Coordinator.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -71,7 +71,7 @@ public class Coordinator extends Channel {
   private final ExecutorService exec;
   private final CommitState commitState;
 
-  public Coordinator(
+  Coordinator(
       Catalog catalog,
       IcebergSinkConfig config,
       Collection<MemberDescription> members,
@@ -90,7 +90,7 @@ public class Coordinator extends Channel {
     this.commitState = new CommitState(config);
   }
 
-  public void process() {
+  void process() {
     if (commitState.isCommitIntervalReached()) {
       // send out begin commit
       commitState.startNewCommit();

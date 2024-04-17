@@ -21,14 +21,14 @@ package io.tabular.iceberg.connect.channel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CoordinatorThread extends Thread {
+class CoordinatorThread extends Thread {
   private static final Logger LOG = LoggerFactory.getLogger(CoordinatorThread.class);
   private static final String THREAD_NAME = "iceberg-coord";
 
   private Coordinator coordinator;
   private volatile boolean terminated;
 
-  public CoordinatorThread(Coordinator coordinator) {
+  CoordinatorThread(Coordinator coordinator) {
     super(THREAD_NAME);
     this.coordinator = coordinator;
   }
@@ -59,11 +59,11 @@ public class CoordinatorThread extends Thread {
     coordinator = null;
   }
 
-  public boolean isTerminated() {
+  boolean isTerminated() {
     return terminated;
   }
 
-  public void terminate() {
+  void terminate() {
     terminated = true;
   }
 }
