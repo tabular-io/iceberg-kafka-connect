@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.data;
+package io.tabular.iceberg.connect.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -27,6 +27,9 @@ import static org.mockito.Mockito.when;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.api.Committable;
 import io.tabular.iceberg.connect.api.Writer;
+import io.tabular.iceberg.connect.data.IcebergWriter;
+import io.tabular.iceberg.connect.data.IcebergWriterFactory;
+import io.tabular.iceberg.connect.data.WriterResult;
 import io.tabular.iceberg.connect.events.EventTestUtil;
 import java.util.Map;
 import org.apache.iceberg.catalog.TableIdentifier;
@@ -36,7 +39,7 @@ import org.apache.iceberg.types.Types.StructType;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.Test;
 
-public class WriterTest {
+public class WorkerTest {
   private static final String SRC_TOPIC_NAME = "src-topic";
   private static final String TABLE_NAME = "db.tbl";
   private static final String FIELD_NAME = "fld";
@@ -92,7 +95,7 @@ public class WriterTest {
     IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
     when(writerFactory.createWriter(any(), any(), anyBoolean())).thenReturn(icebergWriter);
 
-    Writer writer = new WriterImpl(config, writerFactory);
+    Writer writer = new Worker(config, writerFactory);
 
     // save a record
     SinkRecord rec = new SinkRecord(SRC_TOPIC_NAME, 0, null, "key", null, value, 0L);
