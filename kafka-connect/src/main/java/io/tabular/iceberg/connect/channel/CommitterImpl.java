@@ -42,7 +42,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
-import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.util.Pair;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
@@ -50,7 +49,6 @@ import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -68,27 +66,17 @@ public class CommitterImpl implements Committer, AutoCloseable {
   private final Producer<String, byte[]> producer;
 
   public CommitterImpl(SinkTaskContext context, IcebergSinkConfig config) {
-    this(
-        context,
-        config,
-        new ConsumerFactoryImpl(),
-        new AdminFactoryImpl(),
-        new ProducerFactoryImpl());
+    this(context, config, new KafkaClientFactory(config.kafkaProps()));
   }
 
   private CommitterImpl(
-      SinkTaskContext context,
-      IcebergSinkConfig config,
-      ConsumerFactory consumerFactory,
-      AdminFactory adminFactory,
-      ProducerFactory producerFactory) {
+      SinkTaskContext context, IcebergSinkConfig config, KafkaClientFactory kafkaClientFactory) {
     this(
         context,
         config,
-        new ControlTopicCommitRequestListener(config, consumerFactory),
-        adminFactory,
-        producerFactory,
-        new CoordinatorThreadFactoryImpl(adminFactory, consumerFactory, producerFactory));
+        new ControlTopicCommitRequestListener(config, kafkaClientFactory),
+        kafkaClientFactory,
+        new CoordinatorThreadFactoryImpl(kafkaClientFactory));
   }
 
   @VisibleForTesting
@@ -96,8 +84,7 @@ public class CommitterImpl implements Committer, AutoCloseable {
       SinkTaskContext context,
       IcebergSinkConfig config,
       CommitRequestListener commitRequestListener,
-      AdminFactory adminFactory,
-      ProducerFactory producerFactory,
+      KafkaClientFactory kafkaClientFactory,
       CoordinatorThreadFactory coordinatorThreadFactory) {
     this.context = context;
     this.config = config;
@@ -105,30 +92,28 @@ public class CommitterImpl implements Committer, AutoCloseable {
     this.maybeCoordinatorThread = coordinatorThreadFactory.create(context, config);
     this.commitRequestListener = commitRequestListener;
 
-    Map<String, String> producerProps = Maps.newHashMap(config.kafkaProps());
     // use a random transactional-id to avoid producer generation based fencing
-    producerProps.put(
-        ProducerConfig.TRANSACTIONAL_ID_CONFIG,
+    String transactionalId =
         String.join(
             "-",
             config.connectGroupId(),
             config.taskId().toString(),
             "committer",
-            UUID.randomUUID().toString()));
-    Pair<UUID, Producer<String, byte[]>> pair = producerFactory.create(producerProps);
+            UUID.randomUUID().toString());
+    Pair<UUID, Producer<String, byte[]>> pair = kafkaClientFactory.createProducer(transactionalId);
     this.producerId = pair.first();
     this.producer = pair.second();
-    producer.initTransactions();
 
     // The source-of-truth for source-topic offsets is the control-group-id
     Map<TopicPartition, Long> committedOffsets =
-        committedOffsets(adminFactory, config.controlGroupId());
+        committedOffsets(kafkaClientFactory, config.controlGroupId());
     // Rewind kafka connect consumer to avoid duplicates
     context.offset(committedOffsets);
   }
 
-  private Map<TopicPartition, Long> committedOffsets(AdminFactory adminFactory, String groupId) {
-    try (Admin admin = adminFactory.create(config.kafkaProps())) {
+  private Map<TopicPartition, Long> committedOffsets(
+      KafkaClientFactory kafkaClientFactory, String groupId) {
+    try (Admin admin = kafkaClientFactory.createAdmin()) {
       ListConsumerGroupOffsetsResult response =
           admin.listConsumerGroupOffsets(
               groupId, new ListConsumerGroupOffsetsOptions().requireStable(true));

@@ -60,10 +60,8 @@ import org.apache.iceberg.util.Tasks;
 import org.apache.iceberg.util.ThreadPools;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,9 +89,8 @@ class Coordinator implements AutoCloseable {
   Coordinator(
       IcebergSinkConfig config,
       Collection<MemberDescription> members,
-      ConsumerFactory consumerFactory,
-      ProducerFactory producerFactory) {
-    this(config, members, Utilities.loadCatalog(config), consumerFactory, producerFactory);
+      KafkaClientFactory kafkaClientFactory) {
+    this(config, members, Utilities.loadCatalog(config), kafkaClientFactory);
   }
 
   @VisibleForTesting
@@ -101,33 +98,29 @@ class Coordinator implements AutoCloseable {
       IcebergSinkConfig config,
       Collection<MemberDescription> members,
       Catalog catalog,
-      ConsumerFactory consumerFactory,
-      ProducerFactory producerFactory) {
+      KafkaClientFactory kafkaClientFactory) {
 
     this.config = config;
     this.catalog = catalog;
     this.totalPartitionCount =
         members.stream().mapToInt(desc -> desc.assignment().topicPartitions().size()).sum();
 
-    Map<String, String> producerProps = Maps.newHashMap(config.kafkaProps());
     // use a random transactional-id to avoid producer generation based fencing
-    producerProps.put(
-        ProducerConfig.TRANSACTIONAL_ID_CONFIG,
+    String transactionalId =
         String.join(
             "-",
             config.connectGroupId(),
             config.taskId().toString(),
             "coordinator",
-            UUID.randomUUID().toString()));
-    Pair<UUID, Producer<String, byte[]>> uuidProducerPair = producerFactory.create(producerProps);
+            UUID.randomUUID().toString());
+    Pair<UUID, Producer<String, byte[]>> uuidProducerPair =
+        kafkaClientFactory.createProducer(transactionalId);
     this.producerId = uuidProducerPair.first();
     this.producer = uuidProducerPair.second();
-    producer.initTransactions();
 
-    Map<String, String> consumerProps = Maps.newHashMap(config.kafkaProps());
     // use consumer group ID to which we commit low watermark offsets
-    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, config.controlGroupId() + "-coord");
-    this.consumer = consumerFactory.create(consumerProps);
+    String consumerGroupId = config.controlGroupId() + "-coord";
+    this.consumer = kafkaClientFactory.createConsumer(consumerGroupId);
     consumer.subscribe(ImmutableList.of(config.controlTopic()));
 
     this.snapshotOffsetsProp =

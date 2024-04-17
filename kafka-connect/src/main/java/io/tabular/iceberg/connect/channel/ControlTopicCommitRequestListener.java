@@ -24,14 +24,11 @@ import io.tabular.iceberg.connect.events.Event;
 import io.tabular.iceberg.connect.events.EventType;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
-import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,15 +41,13 @@ class ControlTopicCommitRequestListener implements CommitRequestListener, AutoCl
   private final Consumer<String, byte[]> consumer;
   private boolean isFirstPoll = true;
 
-  ControlTopicCommitRequestListener(IcebergSinkConfig config, ConsumerFactory consumerFactory) {
+  ControlTopicCommitRequestListener(
+      IcebergSinkConfig config, KafkaClientFactory kafkaClientFactory) {
     this.config = config;
-
-    Map<String, String> consumerProps = Maps.newHashMap(config.kafkaProps());
     // use a transient consumer group ID to which we never commit offsets
-    consumerProps.put(
-        ConsumerConfig.GROUP_ID_CONFIG,
-        IcebergSinkConfig.DEFAULT_CONTROL_GROUP_PREFIX + UUID.randomUUID());
-    this.consumer = consumerFactory.create(consumerProps);
+    this.consumer =
+        kafkaClientFactory.createConsumer(
+            IcebergSinkConfig.DEFAULT_CONTROL_GROUP_PREFIX + UUID.randomUUID());
     consumer.subscribe(ImmutableList.of(config.controlTopic()));
   }
 

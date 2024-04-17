@@ -62,9 +62,9 @@ class ControlTopicCommitRequestListenerTest {
   @Test
   public void testReturnsEmptyWhenThereAreNoMessages() throws IOException {
     final MockConsumer<String, byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
-    final ConsumerFactory consumerFactory = consumerGroupId -> consumer;
+    final KafkaClientFactory kafkaClientFactory = new MockKafkaClientFactory(consumer, null, null);
     try (ControlTopicCommitRequestListener commitRequestListener =
-        new ControlTopicCommitRequestListener(BASIC_CONFIGS, consumerFactory)) {
+        new ControlTopicCommitRequestListener(BASIC_CONFIGS, kafkaClientFactory)) {
       initMockConsumerAfterSubscribe(consumer);
 
       assertThat(commitRequestListener.getCommitId()).isEmpty();
@@ -74,9 +74,9 @@ class ControlTopicCommitRequestListenerTest {
   @Test
   public void testReturnsEmptyWhenThereAreNoCommitRequests() throws IOException {
     final MockConsumer<String, byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
-    final ConsumerFactory consumerFactory = consumerGroupId -> consumer;
+    final KafkaClientFactory kafkaClientFactory = new MockKafkaClientFactory(consumer, null, null);
     try (ControlTopicCommitRequestListener commitRequestListener =
-        new ControlTopicCommitRequestListener(BASIC_CONFIGS, consumerFactory)) {
+        new ControlTopicCommitRequestListener(BASIC_CONFIGS, kafkaClientFactory)) {
       initMockConsumerAfterSubscribe(consumer);
 
       consumer.addRecord(
@@ -98,9 +98,9 @@ class ControlTopicCommitRequestListenerTest {
   @Test
   public void testReturnsCommitIdWhenThereIsACommitRequest() throws IOException {
     final MockConsumer<String, byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
-    final ConsumerFactory consumerFactory = consumerGroupId -> consumer;
+    final KafkaClientFactory kafkaClientFactory = new MockKafkaClientFactory(consumer, null, null);
     try (ControlTopicCommitRequestListener commitRequestListener =
-        new ControlTopicCommitRequestListener(BASIC_CONFIGS, consumerFactory)) {
+        new ControlTopicCommitRequestListener(BASIC_CONFIGS, kafkaClientFactory)) {
       initMockConsumerAfterSubscribe(consumer);
 
       final UUID commitId = UUID.randomUUID();
@@ -124,9 +124,9 @@ class ControlTopicCommitRequestListenerTest {
   public void testReturnsLatestCommitIdWhenThereAreMultipleCommitRequestsAvailable()
       throws IOException {
     final MockConsumer<String, byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
-    final ConsumerFactory consumerFactory = consumerGroupId -> consumer;
+    final KafkaClientFactory kafkaClientFactory = new MockKafkaClientFactory(consumer, null, null);
     try (ControlTopicCommitRequestListener commitRequestListener =
-        new ControlTopicCommitRequestListener(BASIC_CONFIGS, consumerFactory)) {
+        new ControlTopicCommitRequestListener(BASIC_CONFIGS, kafkaClientFactory)) {
       initMockConsumerAfterSubscribe(consumer);
 
       final UUID firstCommitId = UUID.randomUUID();
@@ -155,9 +155,9 @@ class ControlTopicCommitRequestListenerTest {
   @Test
   public void testClosesUnderlyingConsumer() throws IOException {
     final MockConsumer<String, byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
-    final ConsumerFactory consumerFactory = consumerGroupId -> consumer;
+    final KafkaClientFactory kafkaClientFactory = new MockKafkaClientFactory(consumer, null, null);
     final ControlTopicCommitRequestListener commitRequestListener =
-        new ControlTopicCommitRequestListener(BASIC_CONFIGS, consumerFactory);
+        new ControlTopicCommitRequestListener(BASIC_CONFIGS, kafkaClientFactory);
     initMockConsumerAfterSubscribe(consumer);
 
     assertThat(consumer.closed()).isFalse();

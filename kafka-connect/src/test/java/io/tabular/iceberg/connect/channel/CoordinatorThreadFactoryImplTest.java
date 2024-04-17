@@ -81,7 +81,7 @@ class CoordinatorThreadFactoryImplTest {
           new MemberDescription(null, null, null, new MemberAssignment(LEADER_ASSIGNMENT)),
           new MemberDescription(null, null, null, new MemberAssignment(NON_LEADER_ASSIGNMENT)));
 
-  private static AdminFactory mockAdminFactory(
+  private static Admin mockAdmin(
       ConsumerGroupState consumerGroupState, List<MemberDescription> memberDescriptions) {
     Admin admin = mock(Admin.class);
 
@@ -101,23 +101,24 @@ class CoordinatorThreadFactoryImplTest {
                             consumerGroupState,
                             mock(Node.class))))));
 
-    return ignored -> admin;
+    return admin;
   }
 
-  private static AdminFactory mockAdminFactory(ConsumerGroupState consumerGroupState) {
-    return mockAdminFactory(consumerGroupState, MEMBER_DESCRIPTIONS);
+  private static Admin mockAdmin(ConsumerGroupState consumerGroupState) {
+    return mockAdmin(consumerGroupState, MEMBER_DESCRIPTIONS);
   }
 
-  private final ConsumerFactory consumerFactory =
-      ignored -> new MockConsumer<>(OffsetResetStrategy.LATEST);
-  private final ProducerFactory producerFactory =
-      ignored -> Pair.of(UUID.randomUUID(), new MockProducer<>());
+  private final MockConsumer<String, byte[]> consumer =
+      new MockConsumer<>(OffsetResetStrategy.LATEST);
+  private final Pair<UUID, MockProducer<String, byte[]>> producerPair =
+      Pair.of(UUID.randomUUID(), new MockProducer<>());
 
   @Test
   public void testShouldReturnEmptyIfNotLeader() {
     CoordinatorThreadFactoryImpl coordinatorThreadFactory =
         new CoordinatorThreadFactoryImpl(
-            mockAdminFactory(ConsumerGroupState.STABLE), consumerFactory, producerFactory);
+            new MockKafkaClientFactory(
+                consumer, producerPair, mockAdmin(ConsumerGroupState.STABLE)));
 
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);
     when(sinkTaskContext.assignment()).thenReturn(NON_LEADER_ASSIGNMENT);
@@ -135,7 +136,8 @@ class CoordinatorThreadFactoryImplTest {
   public void testShouldReturnEmptyIfLeaderButGroupIsNotStable() {
     CoordinatorThreadFactoryImpl coordinatorThreadFactory =
         new CoordinatorThreadFactoryImpl(
-            mockAdminFactory(ConsumerGroupState.UNKNOWN), consumerFactory, producerFactory);
+            new MockKafkaClientFactory(
+                consumer, producerPair, mockAdmin(ConsumerGroupState.UNKNOWN)));
 
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);
     when(sinkTaskContext.assignment()).thenReturn(LEADER_ASSIGNMENT);
@@ -153,7 +155,8 @@ class CoordinatorThreadFactoryImplTest {
   public void testShouldReturnThreadIfLeaderAndGroupIsStable() {
     CoordinatorThreadFactoryImpl coordinatorThreadFactory =
         new CoordinatorThreadFactoryImpl(
-            mockAdminFactory(ConsumerGroupState.STABLE), consumerFactory, producerFactory);
+            new MockKafkaClientFactory(
+                consumer, producerPair, mockAdmin(ConsumerGroupState.STABLE)));
 
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);
     when(sinkTaskContext.assignment()).thenReturn(LEADER_ASSIGNMENT);
@@ -172,15 +175,18 @@ class CoordinatorThreadFactoryImplTest {
     // This could happen if a connector is configured with a topics.regex that doesn't match any
     // topics in cluster
 
-    AdminFactory mockAdminFactory =
-        mockAdminFactory(
-            ConsumerGroupState.STABLE,
-            ImmutableList.of(
-                new MemberDescription(null, null, null, new MemberAssignment(ImmutableSet.of())),
-                new MemberDescription(null, null, null, new MemberAssignment(ImmutableSet.of()))));
-
     CoordinatorThreadFactoryImpl coordinatorThreadFactory =
-        new CoordinatorThreadFactoryImpl(mockAdminFactory, consumerFactory, producerFactory);
+        new CoordinatorThreadFactoryImpl(
+            new MockKafkaClientFactory(
+                consumer,
+                producerPair,
+                mockAdmin(
+                    ConsumerGroupState.STABLE,
+                    ImmutableList.of(
+                        new MemberDescription(
+                            null, null, null, new MemberAssignment(ImmutableSet.of())),
+                        new MemberDescription(
+                            null, null, null, new MemberAssignment(ImmutableSet.of()))))));
 
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);
     when(sinkTaskContext.assignment()).thenReturn(ImmutableSet.of());

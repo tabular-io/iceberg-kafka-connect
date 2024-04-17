@@ -68,8 +68,6 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.connect.sink.SinkTaskContext;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -102,6 +100,12 @@ class CommitterImplTest {
   }
 
   private static final IcebergSinkConfig CONFIG = makeConfig(1);
+
+  private SinkTaskContext mockContext() {
+    SinkTaskContext mockContext = mock(SinkTaskContext.class);
+    when(mockContext.assignment()).thenReturn(ASSIGNED_SOURCE_TOPIC_PARTITIONS);
+    return mockContext;
+  }
 
   private static DynConstructors.Ctor<CoordinatorKey> ctorCoordinatorKey() {
     return DynConstructors.builder(CoordinatorKey.class)
@@ -140,7 +144,7 @@ class CommitterImplTest {
                                 Map.Entry::getKey, e -> new OffsetAndMetadata(e.getValue()))))));
   }
 
-  private AdminFactory mockAdminFactory(Map<String, Map<TopicPartition, Long>> consumersOffsets) {
+  private Admin mockAdmin(Map<String, Map<TopicPartition, Long>> consumersOffsets) {
     Admin admin = mock(Admin.class);
 
     consumersOffsets.forEach(
@@ -149,36 +153,7 @@ class CommitterImplTest {
               .thenReturn(listConsumerGroupOffsetsResult(consumerOffsets));
         });
 
-    return ignored -> admin;
-  }
-
-  private SinkTaskContext mockContext;
-  private UUID producerId;
-  private MockProducer<String, byte[]> producer;
-  private final ProducerFactory producerFactory = ignored -> Pair.of(producerId, producer);
-
-  private AdminFactory adminFactory;
-
-  @BeforeEach
-  public void before() {
-    mockContext = mock(SinkTaskContext.class);
-    when(mockContext.assignment()).thenReturn(ASSIGNED_SOURCE_TOPIC_PARTITIONS);
-    adminFactory =
-        mockAdminFactory(
-            ImmutableMap.of(
-                makeConfig(0).controlGroupId(), ImmutableMap.of(SOURCE_TP0, 10L, SOURCE_TP1, 11L),
-                makeConfig(0).connectGroupId(), ImmutableMap.of(SOURCE_TP0, 0L, SOURCE_TP1, 1L)));
-
-    producerId = UUID.randomUUID();
-    producer = new MockProducer<>(true, new StringSerializer(), new ByteArraySerializer());
-  }
-
-  @AfterEach
-  public void after() {
-    mockContext = null;
-    adminFactory = null;
-    producerId = null;
-    producer.close();
+    return admin;
   }
 
   private static class NoOpCoordinatorThreadFactory implements CoordinatorThreadFactory {
@@ -265,17 +240,27 @@ class CommitterImplTest {
   public void
       testShouldRewindOffsetsToStableControlGroupConsumerOffsetsForAssignedPartitionsOnConstruction()
           throws IOException {
+    SinkTaskContext mockContext = mockContext();
+
     ArgumentCaptor<Map<TopicPartition, Long>> offsetArgumentCaptor =
         ArgumentCaptor.forClass(Map.class);
 
     IcebergSinkConfig config = makeConfig(1);
 
     NoOpCoordinatorThreadFactory coordinatorThreadFactory = new NoOpCoordinatorThreadFactory();
-    AdminFactory mockAdminFactory =
-        mockAdminFactory(
-            ImmutableMap.of(
-                config.controlGroupId(), ImmutableMap.of(SOURCE_TP0, 110L, SOURCE_TP1, 100L),
-                config.connectGroupId(), ImmutableMap.of(SOURCE_TP0, 90L, SOURCE_TP1, 80L)));
+
+    MockProducer<String, byte[]> producer =
+        new MockProducer<>(true, new StringSerializer(), new ByteArraySerializer());
+    producer.initTransactions();
+    MockKafkaClientFactory kafkaClientFactory =
+        new MockKafkaClientFactory(
+            null,
+            Pair.of(UUID.randomUUID(), producer),
+            mockAdmin(
+                ImmutableMap.of(
+                    config.controlGroupId(), ImmutableMap.of(SOURCE_TP0, 110L, SOURCE_TP1, 100L),
+                    config.connectGroupId(), ImmutableMap.of(SOURCE_TP0, 90L, SOURCE_TP1, 80L))));
+
     CommitRequestListener commitRequestListener = Optional::empty;
 
     try (CommitterImpl committerImpl =
@@ -283,8 +268,7 @@ class CommitterImplTest {
             mockContext,
             config,
             commitRequestListener,
-            mockAdminFactory,
-            producerFactory,
+            kafkaClientFactory,
             coordinatorThreadFactory)) {
       verify(mockContext).offset(offsetArgumentCaptor.capture());
       assertThat(offsetArgumentCaptor.getAllValues())
@@ -294,17 +278,33 @@ class CommitterImplTest {
 
   @Test
   public void testCommitShouldThrowExceptionIfCoordinatorIsTerminated() throws IOException {
+    SinkTaskContext mockContext = mockContext();
+    IcebergSinkConfig config = makeConfig(0);
+
+    UUID producerId = UUID.randomUUID();
+    MockProducer<String, byte[]> producer =
+        new MockProducer<>(true, new StringSerializer(), new ByteArraySerializer());
+    producer.initTransactions();
+    MockKafkaClientFactory kafkaClientFactory =
+        new MockKafkaClientFactory(
+            null,
+            Pair.of(producerId, producer),
+            mockAdmin(
+                ImmutableMap.of(
+                    config.controlGroupId(), ImmutableMap.of(SOURCE_TP0, 110L, SOURCE_TP1, 100L),
+                    config.connectGroupId(), ImmutableMap.of(SOURCE_TP0, 90L, SOURCE_TP1, 80L))));
+
     TerminatedCoordinatorThreadFactory coordinatorThreadFactory =
         new TerminatedCoordinatorThreadFactory();
+
     CommitRequestListener commitRequestListener = Optional::empty;
 
     try (CommitterImpl committerImpl =
         new CommitterImpl(
             mockContext,
-            makeConfig(0),
+            config,
             commitRequestListener,
-            adminFactory,
-            producerFactory,
+            kafkaClientFactory,
             coordinatorThreadFactory)) {
       Committer committer = committerImpl;
 
@@ -324,16 +324,30 @@ class CommitterImplTest {
 
   @Test
   public void testCommitShouldDoNothingIfNoCommitRequestIsAvailable() throws IOException {
+    SinkTaskContext mockContext = mockContext();
+
     NoOpCoordinatorThreadFactory coordinatorThreadFactory = new NoOpCoordinatorThreadFactory();
     CommitRequestListener commitRequestListener = Optional::empty;
+
+    UUID producerId = UUID.randomUUID();
+    MockProducer<String, byte[]> producer =
+        new MockProducer<>(true, new StringSerializer(), new ByteArraySerializer());
+    producer.initTransactions();
+    MockKafkaClientFactory kafkaClientFactory =
+        new MockKafkaClientFactory(
+            null,
+            Pair.of(producerId, producer),
+            mockAdmin(
+                ImmutableMap.of(
+                    CONFIG.controlGroupId(), ImmutableMap.of(SOURCE_TP0, 110L, SOURCE_TP1, 100L),
+                    CONFIG.connectGroupId(), ImmutableMap.of(SOURCE_TP0, 90L, SOURCE_TP1, 80L))));
 
     try (CommitterImpl committerImpl =
         new CommitterImpl(
             mockContext,
             CONFIG,
             commitRequestListener,
-            adminFactory,
-            producerFactory,
+            kafkaClientFactory,
             coordinatorThreadFactory)) {
       Committer committer = committerImpl;
 
@@ -351,17 +365,31 @@ class CommitterImplTest {
 
   @Test
   public void testCommitShouldRespondToCommitRequest() throws IOException {
+    SinkTaskContext mockContext = mockContext();
+
     NoOpCoordinatorThreadFactory coordinatorThreadFactory = new NoOpCoordinatorThreadFactory();
     UUID commitId = UUID.randomUUID();
     CommitRequestListener commitRequestListener = () -> Optional.of(commitId);
+
+    UUID producerId = UUID.randomUUID();
+    MockProducer<String, byte[]> producer =
+        new MockProducer<>(true, new StringSerializer(), new ByteArraySerializer());
+    producer.initTransactions();
+    MockKafkaClientFactory kafkaClientFactory =
+        new MockKafkaClientFactory(
+            null,
+            Pair.of(producerId, producer),
+            mockAdmin(
+                ImmutableMap.of(
+                    CONFIG.controlGroupId(), ImmutableMap.of(SOURCE_TP0, 110L, SOURCE_TP1, 100L),
+                    CONFIG.connectGroupId(), ImmutableMap.of(SOURCE_TP0, 90L, SOURCE_TP1, 80L))));
 
     try (CommitterImpl committerImpl =
         new CommitterImpl(
             mockContext,
             CONFIG,
             commitRequestListener,
-            adminFactory,
-            producerFactory,
+            kafkaClientFactory,
             coordinatorThreadFactory)) {
       Committer committer = committerImpl;
 
@@ -408,18 +436,32 @@ class CommitterImplTest {
 
   @Test
   public void testCommitWhenNoMessagesWereWritten() throws IOException {
+    SinkTaskContext mockContext = mockContext();
+
     NoOpCoordinatorThreadFactory coordinatorThreadFactory = new NoOpCoordinatorThreadFactory();
 
     UUID commitId = UUID.randomUUID();
     CommitRequestListener commitRequestListener = () -> Optional.of(commitId);
+
+    UUID producerId = UUID.randomUUID();
+    MockProducer<String, byte[]> producer =
+        new MockProducer<>(true, new StringSerializer(), new ByteArraySerializer());
+    producer.initTransactions();
+    MockKafkaClientFactory kafkaClientFactory =
+        new MockKafkaClientFactory(
+            null,
+            Pair.of(producerId, producer),
+            mockAdmin(
+                ImmutableMap.of(
+                    CONFIG.controlGroupId(), ImmutableMap.of(SOURCE_TP0, 110L, SOURCE_TP1, 100L),
+                    CONFIG.connectGroupId(), ImmutableMap.of(SOURCE_TP0, 90L, SOURCE_TP1, 80L))));
 
     try (CommitterImpl committerImpl =
         new CommitterImpl(
             mockContext,
             CONFIG,
             commitRequestListener,
-            adminFactory,
-            producerFactory,
+            kafkaClientFactory,
             coordinatorThreadFactory)) {
       Committer committer = committerImpl;
 
@@ -442,6 +484,8 @@ class CommitterImplTest {
 
   @Test
   public void testCommitShouldCommitOffsetsOnlyForPartitionsWeMadeProgressOn() throws IOException {
+    SinkTaskContext mockContext = mockContext();
+
     NoOpCoordinatorThreadFactory coordinatorThreadFactory = new NoOpCoordinatorThreadFactory();
 
     TopicPartition sourceTp0 = new TopicPartition(SOURCE_TOPIC, 0);
@@ -453,13 +497,25 @@ class CommitterImplTest {
     UUID commitId = UUID.randomUUID();
     CommitRequestListener commitRequestListener = () -> Optional.of(commitId);
 
+    UUID producerId = UUID.randomUUID();
+    MockProducer<String, byte[]> producer =
+        new MockProducer<>(true, new StringSerializer(), new ByteArraySerializer());
+    producer.initTransactions();
+    MockKafkaClientFactory kafkaClientFactory =
+        new MockKafkaClientFactory(
+            null,
+            Pair.of(producerId, producer),
+            mockAdmin(
+                ImmutableMap.of(
+                    CONFIG.controlGroupId(), ImmutableMap.of(SOURCE_TP0, 110L, SOURCE_TP1, 100L),
+                    CONFIG.connectGroupId(), ImmutableMap.of(SOURCE_TP0, 90L, SOURCE_TP1, 80L))));
+
     try (CommitterImpl committerImpl =
         new CommitterImpl(
             mockContext,
             CONFIG,
             commitRequestListener,
-            adminFactory,
-            producerFactory,
+            kafkaClientFactory,
             coordinatorThreadFactory)) {
       Committer committer = committerImpl;
 

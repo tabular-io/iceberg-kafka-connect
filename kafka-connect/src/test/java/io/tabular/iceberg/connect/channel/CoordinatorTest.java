@@ -292,8 +292,7 @@ public class CoordinatorTest extends ChannelTestBase {
               new MemberAssignment(ImmutableSet.of(new TopicPartition(SRC_TOPIC_NAME, i)))));
     }
 
-    final Coordinator coordinator =
-        new Coordinator(config, members, catalog, consumerFactory, producerFactory);
+    final Coordinator coordinator = new Coordinator(config, members, catalog, kafkaClientFactory);
     initConsumer();
 
     // start a new commit immediately and wait for all workers to respond infinitely
@@ -451,7 +450,7 @@ public class CoordinatorTest extends ChannelTestBase {
     when(config.commitTimeoutMs()).thenReturn(Integer.MAX_VALUE);
 
     Coordinator coordinator =
-        new Coordinator(config, ImmutableList.of(), catalog, consumerFactory, producerFactory);
+        new Coordinator(config, ImmutableList.of(), catalog, kafkaClientFactory);
     // init consumer after subscribe()
     initConsumer();
 

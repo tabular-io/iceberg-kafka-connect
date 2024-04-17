@@ -60,9 +60,7 @@ class ChannelTestBase {
   protected InMemoryCatalog catalog;
   protected Table table;
   protected IcebergSinkConfig config;
-  protected ConsumerFactory consumerFactory;
-  protected ProducerFactory producerFactory;
-  protected AdminFactory adminFactory;
+  protected KafkaClientFactory kafkaClientFactory;
   protected UUID producerId;
   protected MockProducer<String, byte[]> producer;
   protected MockConsumer<String, byte[]> consumer;
@@ -115,17 +113,14 @@ class ChannelTestBase {
 
     producerId = UUID.randomUUID();
     producer = new MockProducer<>(false, new StringSerializer(), new ByteArraySerializer());
+    producer.initTransactions();
 
     consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
 
-    consumerFactory = mock(ConsumerFactory.class);
-    when(consumerFactory.create(any())).thenReturn(consumer);
-
-    producerFactory = mock(ProducerFactory.class);
-    when(producerFactory.create(any())).thenReturn(Pair.of(producerId, producer));
-
-    adminFactory = mock(AdminFactory.class);
-    when(adminFactory.create(any())).thenReturn(admin);
+    kafkaClientFactory = mock(KafkaClientFactory.class);
+    when(kafkaClientFactory.createConsumer(any())).thenReturn(consumer);
+    when(kafkaClientFactory.createProducer(any())).thenReturn(Pair.of(producerId, producer));
+    when(kafkaClientFactory.createAdmin()).thenReturn(admin);
   }
 
   @AfterEach

@@ -34,15 +34,10 @@ import org.slf4j.LoggerFactory;
 
 class CoordinatorThreadFactoryImpl implements CoordinatorThreadFactory {
   private static final Logger LOG = LoggerFactory.getLogger(CoordinatorThreadFactoryImpl.class);
-  private final AdminFactory adminFactory;
-  private final ConsumerFactory consumerFactory;
-  private final ProducerFactory producerFactory;
+  private final KafkaClientFactory kafkaClientFactory;
 
-  CoordinatorThreadFactoryImpl(
-      AdminFactory adminFactory, ConsumerFactory consumerFactory, ProducerFactory producerFactory) {
-    this.adminFactory = adminFactory;
-    this.consumerFactory = consumerFactory;
-    this.producerFactory = producerFactory;
+  CoordinatorThreadFactoryImpl(KafkaClientFactory kafkaClientFactory) {
+    this.kafkaClientFactory = kafkaClientFactory;
   }
 
   private static class TopicPartitionComparator implements Comparator<TopicPartition> {
@@ -74,14 +69,13 @@ class CoordinatorThreadFactoryImpl implements CoordinatorThreadFactory {
   public Optional<CoordinatorThread> create(SinkTaskContext context, IcebergSinkConfig config) {
     final CoordinatorThread thread;
 
-    try (Admin admin = adminFactory.create(config.kafkaProps())) {
+    try (Admin admin = kafkaClientFactory.createAdmin()) {
       ConsumerGroupDescription groupDesc =
           KafkaUtils.consumerGroupDescription(config.connectGroupId(), admin);
       Collection<MemberDescription> members = groupDesc.members();
       if (isLeader(members, context.assignment())
           && groupDesc.state() == ConsumerGroupState.STABLE) {
-        Coordinator coordinator =
-            new Coordinator(config, members, consumerFactory, producerFactory);
+        Coordinator coordinator = new Coordinator(config, members, kafkaClientFactory);
         thread = new CoordinatorThread(coordinator);
         thread.start();
         LOG.info("Started commit coordinator");
