@@ -28,9 +28,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.api.Committable;
-import io.tabular.iceberg.connect.api.CommittableSupplier;
-import io.tabular.iceberg.connect.api.Committer;
 import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.data.WriterResult;
 import io.tabular.iceberg.connect.events.CommitCompletePayload;

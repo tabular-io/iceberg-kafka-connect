@@ -16,8 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.api;
+package io.tabular.iceberg.connect.channel;
 
-public interface CommittableSupplier {
-  Committable committable();
+import java.util.Collection;
+import org.apache.kafka.connect.sink.SinkRecord;
+
+public interface Task {
+  void put(Collection<SinkRecord> sinkRecords);
 }

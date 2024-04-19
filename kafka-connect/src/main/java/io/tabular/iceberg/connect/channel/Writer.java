@@ -16,11 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.api;
+package io.tabular.iceberg.connect.channel;
 
 import java.util.Collection;
 import org.apache.kafka.connect.sink.SinkRecord;
 
-public interface Writer extends CommittableSupplier {
+interface Writer extends CommittableSupplier {
   void write(Collection<SinkRecord> sinkRecords);
 }

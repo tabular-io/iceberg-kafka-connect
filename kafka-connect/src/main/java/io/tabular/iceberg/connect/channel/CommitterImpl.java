@@ -22,9 +22,6 @@ import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.api.Committable;
-import io.tabular.iceberg.connect.api.CommittableSupplier;
-import io.tabular.iceberg.connect.api.Committer;
 import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.events.CommitRequestPayload;

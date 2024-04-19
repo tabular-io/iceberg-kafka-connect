@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.api;
+package io.tabular.iceberg.connect.channel;
 
 import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.data.WriterResult;
@@ -26,12 +26,12 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.kafka.common.TopicPartition;
 
-public class Committable {
+class Committable {
 
   private final ImmutableMap<TopicPartition, Offset> offsetsByTopicPartition;
   private final ImmutableList<WriterResult> writerResults;
 
-  public Committable(
+  Committable(
       Map<TopicPartition, Offset> offsetsByTopicPartition, List<WriterResult> writerResults) {
     this.offsetsByTopicPartition = ImmutableMap.copyOf(offsetsByTopicPartition);
     this.writerResults = ImmutableList.copyOf(writerResults);

@@ -16,8 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.api;
+package io.tabular.iceberg.connect.channel;
 
-public interface Committer {
+interface Committer {
   void commit(CommittableSupplier committableSupplier);
 }

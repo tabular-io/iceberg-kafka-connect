@@ -18,10 +18,8 @@
  */
 package io.tabular.iceberg.connect;
 
-import io.tabular.iceberg.connect.api.Committer;
-import io.tabular.iceberg.connect.api.Writer;
-import io.tabular.iceberg.connect.channel.CommitterImpl;
-import io.tabular.iceberg.connect.channel.Worker;
+import io.tabular.iceberg.connect.channel.Task;
+import io.tabular.iceberg.connect.channel.TaskImpl;
 import io.tabular.iceberg.connect.data.Utilities;
 import java.util.Collection;
 import java.util.Map;
@@ -38,8 +36,7 @@ public class IcebergSinkTask extends SinkTask {
   private static final Logger LOG = LoggerFactory.getLogger(IcebergSinkTask.class);
 
   private IcebergSinkConfig config;
-  private Writer worker;
-  private Committer committer;
+  private Task task;
 
   @Override
   public String version() {
@@ -52,11 +49,8 @@ public class IcebergSinkTask extends SinkTask {
   }
 
   private void clearState() {
-    Utilities.close(worker);
-    worker = null;
-
-    Utilities.close(committer);
-    committer = null;
+    Utilities.close(task);
+    task = null;
   }
 
   @Override
@@ -64,15 +58,13 @@ public class IcebergSinkTask extends SinkTask {
     // destroy any state if KC re-uses object
     clearState();
 
-    this.worker = new Worker(config);
-    this.committer = new CommitterImpl(context, config);
+    this.task = new TaskImpl(context, config);
   }
 
   @Override
   public void put(Collection<SinkRecord> sinkRecords) {
-    if (worker != null && committer != null) {
-      worker.write(sinkRecords);
-      committer.commit(worker);
+    if (task != null) {
+      task.put(sinkRecords);
     }
   }
 

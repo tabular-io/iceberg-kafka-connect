@@ -19,8 +19,6 @@
 package io.tabular.iceberg.connect.channel;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.api.Committable;
-import io.tabular.iceberg.connect.api.Writer;
 import io.tabular.iceberg.connect.data.IcebergWriterFactory;
 import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.data.RecordWriter;
