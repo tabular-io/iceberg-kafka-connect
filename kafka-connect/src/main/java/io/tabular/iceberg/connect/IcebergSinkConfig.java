@@ -96,6 +96,9 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String NAME_PROP = "name";
   private static final String BOOTSTRAP_SERVERS_PROP = "bootstrap.servers";
 
+  private static final String WRITE_EXCEPTION_HANDLER_CLASS_PROP =
+      "experimental.write-exception-handler.class";
+
   private static final String DEFAULT_CATALOG_NAME = "iceberg";
   private static final String DEFAULT_CONTROL_TOPIC = "control-iceberg";
   public static final String DEFAULT_CONTROL_GROUP_PREFIX = "cg-control-";
@@ -237,6 +240,12 @@ public class IcebergSinkConfig extends AbstractConfig {
         null,
         Importance.MEDIUM,
         "Coordinator threads to use for table commits, default is (cores * 2)");
+    configDef.define(
+        WRITE_EXCEPTION_HANDLER_CLASS_PROP,
+        Type.STRING,
+        null,
+        Importance.MEDIUM,
+        "The WriteExceptionHandler implementation to use to handle exceptions when writing records to files");
     return configDef;
   }
 
@@ -449,6 +458,10 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public JsonConverter jsonConverter() {
     return jsonConverter;
+  }
+
+  public String writeExceptionHandlerClassName() {
+    return getString(WRITE_EXCEPTION_HANDLER_CLASS_PROP);
   }
 
   private Map<String, String> loadWorkerProps() {

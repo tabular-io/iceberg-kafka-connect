@@ -33,7 +33,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 
-public class IcebergWriter implements RecordWriter {
+public class IcebergWriter implements RecordWriter, AutoCloseable {
   private final Table table;
   private final String tableName;
   private final IcebergSinkConfig config;

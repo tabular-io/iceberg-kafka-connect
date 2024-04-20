@@ -16,17 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.data;
+package io.tabular.iceberg.connect.channel;
 
+import io.tabular.iceberg.connect.data.WriterResult;
 import java.util.List;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.kafka.connect.sink.SinkRecord;
 
-public interface RecordWriter {
+interface TableWriter {
+  void write(SinkRecord sinkRecord, String tableName, boolean ignoreMissingTable);
 
-  default void write(SinkRecord record) {}
-
-  default List<WriterResult> complete() {
-    return ImmutableList.of();
-  }
+  List<WriterResult> committable();
 }

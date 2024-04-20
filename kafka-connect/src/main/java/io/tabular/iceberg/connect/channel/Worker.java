@@ -24,7 +24,6 @@ import static java.util.stream.Collectors.toMap;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.IcebergWriterFactory;
 import io.tabular.iceberg.connect.data.Offset;
-import io.tabular.iceberg.connect.data.RecordWriter;
 import io.tabular.iceberg.connect.data.Utilities;
 import io.tabular.iceberg.connect.data.WriterResult;
 import io.tabular.iceberg.connect.events.CommitReadyPayload;
@@ -53,11 +52,10 @@ import org.apache.kafka.connect.sink.SinkTaskContext;
 public class Worker extends Channel {
 
   private final IcebergSinkConfig config;
-  private final IcebergWriterFactory writerFactory;
   private final SinkTaskContext context;
   private final String controlGroupId;
-  private final Map<String, RecordWriter> writers;
   private final Map<TopicPartition, Offset> sourceOffsets;
+  private final TableWriterImpl tableWriter;
 
   public Worker(
       IcebergSinkConfig config,
@@ -72,11 +70,10 @@ public class Worker extends Channel {
         clientFactory);
 
     this.config = config;
-    this.writerFactory = writerFactory;
     this.context = context;
     this.controlGroupId = config.controlGroupId();
-    this.writers = Maps.newHashMap();
     this.sourceOffsets = Maps.newHashMap();
+    this.tableWriter = new TableWriterImpl(context, config, writerFactory);
   }
 
   public void syncCommitOffsets() {
@@ -108,11 +105,8 @@ public class Worker extends Channel {
       return false;
     }
 
-    List<WriterResult> writeResults =
-        writers.values().stream().flatMap(writer -> writer.complete().stream()).collect(toList());
+    List<WriterResult> writeResults = tableWriter.committable();
     Map<TopicPartition, Offset> offsets = Maps.newHashMap(sourceOffsets);
-
-    writers.clear();
     sourceOffsets.clear();
 
     // include all assigned topic partitions even if no messages were read
@@ -164,7 +158,7 @@ public class Worker extends Channel {
   @Override
   public void stop() {
     super.stop();
-    writers.values().forEach(RecordWriter::close);
+    Utilities.close(tableWriter);
   }
 
   public void save(Collection<SinkRecord> sinkRecords) {
@@ -194,7 +188,7 @@ public class Worker extends Channel {
           .tables()
           .forEach(
               tableName -> {
-                writerForTable(tableName, record, false).write(record);
+                tableWriter.write(record, tableName, false);
               });
 
     } else {
@@ -210,7 +204,7 @@ public class Worker extends Channel {
                         .ifPresent(
                             regex -> {
                               if (regex.matcher(routeValue).matches()) {
-                                writerForTable(tableName, record, false).write(record);
+                                tableWriter.write(record, tableName, false);
                               }
                             }));
       }
@@ -224,7 +218,7 @@ public class Worker extends Channel {
     String routeValue = extractRouteValue(record.value(), routeField);
     if (routeValue != null) {
       String tableName = routeValue.toLowerCase();
-      writerForTable(tableName, record, true).write(record);
+      tableWriter.write(record, tableName, true);
     }
   }
 
@@ -234,11 +228,5 @@ public class Worker extends Channel {
     }
     Object routeValue = Utilities.extractFromRecordValue(recordValue, routeField);
     return routeValue == null ? null : routeValue.toString();
-  }
-
-  private RecordWriter writerForTable(
-      String tableName, SinkRecord sample, boolean ignoreMissingTable) {
-    return writers.computeIfAbsent(
-        tableName, notUsed -> writerFactory.createWriter(tableName, sample, ignoreMissingTable));
   }
 }
