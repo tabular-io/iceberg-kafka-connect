@@ -83,7 +83,7 @@ public abstract class Channel {
         events.stream()
             .map(
                 event -> {
-                  LOG.info("Sending event of type: {}", event.type().name());
+                  LOG.debug("Sending event of type: {}", event.type().name());
                   byte[] data = Event.encode(event);
                   // key by producer ID to keep event order
                   return new ProducerRecord<>(controlTopic, producerId, data);
@@ -127,7 +127,7 @@ public abstract class Channel {
             if (event.groupId().equals(groupId)) {
               LOG.debug("Received event of type: {}", event.type().name());
               if (receive(new Envelope(event, record.partition(), record.offset()))) {
-                LOG.info("Handled event of type: {}", event.type().name());
+                LOG.debug("Handled event of type: {}", event.type().name());
               }
             }
           });
