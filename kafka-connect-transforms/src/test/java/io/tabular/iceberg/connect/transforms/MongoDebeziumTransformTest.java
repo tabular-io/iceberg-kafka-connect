@@ -61,8 +61,8 @@ public class MongoDebeziumTransformTest {
     return new String(Files.readAllBytes(Paths.get(jsonResource.toURI())), StandardCharsets.UTF_8);
   }
 
-  private MongoDebeziumTransform<SinkRecord> getTransformer(String mode) {
-    MongoDebeziumTransform<SinkRecord> transform = new MongoDebeziumTransform<>();
+  private MongoDebeziumTransform getTransformer(String mode) {
+    MongoDebeziumTransform transform = new MongoDebeziumTransform();
     transform.configure(Collections.singletonMap(MongoDebeziumTransform.ARRAY_HANDLING_MODE_KEY, mode));
     return transform;
   }
@@ -212,7 +212,7 @@ public class MongoDebeziumTransformTest {
   @Test
   @DisplayName("Tombstone records are returned as-is")
   public void shouldConvertHeartbeatMessagesToTombstones() {
-    MongoDebeziumTransform<SinkRecord> smt = getTransformer("array");
+    MongoDebeziumTransform smt = getTransformer("array");
 
     final SinkRecord record =
         new SinkRecord(TEST_TOPIC, TEST_PARTITION, null, null, null, null, 0L);
@@ -223,7 +223,7 @@ public class MongoDebeziumTransformTest {
   @DisplayName("Records with incorrect key are converted to null values")
   public void shouldConvertRecordsWithIncorrectKey() {
 
-    MongoDebeziumTransform<SinkRecord> smt = getTransformer("array");
+    MongoDebeziumTransform smt = getTransformer("array");
 
     // name should end with .Key according to the spec
     Schema valueSchema =
@@ -254,7 +254,7 @@ public class MongoDebeziumTransformTest {
   @Test
   @DisplayName("Records with incorrect envelope are converted to null values")
   public void shouldConvertRecordsWithIncorrectEnvelope() {
-    MongoDebeziumTransform<SinkRecord> smt = getTransformer("array");
+    MongoDebeziumTransform smt = getTransformer("array");
 
     Schema valueSchema =
         SchemaBuilder.struct()
@@ -303,7 +303,7 @@ public class MongoDebeziumTransformTest {
             DEFAULT_TS_MS,
             TimestampType.CREATE_TIME);
 
-    MongoDebeziumTransform<SinkRecord> smt = getTransformer("array");
+    MongoDebeziumTransform smt = getTransformer("array");
 
     SinkRecord result = smt.apply(record);
     Struct keyResult = (Struct) result.key();
@@ -336,7 +336,7 @@ public class MongoDebeziumTransformTest {
             DEFAULT_TS_MS,
             TimestampType.CREATE_TIME);
 
-    MongoDebeziumTransform<SinkRecord> smt = getTransformer("array");
+    MongoDebeziumTransform smt = getTransformer("array");
 
     SinkRecord result = smt.apply(record);
     assertThat(result).isNotSameAs(record);
@@ -376,7 +376,7 @@ public class MongoDebeziumTransformTest {
             DEFAULT_TS_MS,
             TimestampType.CREATE_TIME);
 
-    MongoDebeziumTransform<SinkRecord> smt = getTransformer("array");
+    MongoDebeziumTransform smt = getTransformer("array");
 
     SinkRecord result = smt.apply(record);
     assertThat(result).isNotSameAs(record);
@@ -409,7 +409,7 @@ public class MongoDebeziumTransformTest {
             DEFAULT_TS_MS,
             TimestampType.CREATE_TIME);
 
-    MongoDebeziumTransform<SinkRecord> smt = getTransformer("array");
+    MongoDebeziumTransform smt = getTransformer("array");
     SinkRecord result = smt.apply(record);
 
     assertThat(extractStringAt(result.value(), "op")).isEqualTo("u");
@@ -448,7 +448,7 @@ public class MongoDebeziumTransformTest {
             DEFAULT_TS_MS,
             TimestampType.CREATE_TIME);
 
-    MongoDebeziumTransform<SinkRecord> smt = getTransformer("array");
+    MongoDebeziumTransform smt = getTransformer("array");
     SinkRecord result = smt.apply(record);
 
     assertThat(extractStringAt(result.value(), "op")).isEqualTo("u");
@@ -489,7 +489,7 @@ public class MongoDebeziumTransformTest {
             DEFAULT_TS_MS,
             TimestampType.CREATE_TIME);
 
-    MongoDebeziumTransform<SinkRecord> smt = getTransformer("array");
+    MongoDebeziumTransform smt = getTransformer("array");
     SinkRecord result = smt.apply(record);
 
     assertThat(extractStringAt(result.value(), "op")).isEqualTo("u");
@@ -527,7 +527,7 @@ public class MongoDebeziumTransformTest {
             DEFAULT_TS_MS,
             TimestampType.CREATE_TIME);
 
-    MongoDebeziumTransform<SinkRecord> smt = getTransformer("array");
+    MongoDebeziumTransform smt = getTransformer("array");
     SinkRecord result = smt.apply(record);
 
     assertFieldNotExists(result.value(), "before");
@@ -561,7 +561,7 @@ public class MongoDebeziumTransformTest {
             DEFAULT_TS_MS,
             TimestampType.CREATE_TIME);
 
-    MongoDebeziumTransform<SinkRecord> smt = getTransformer("array");
+    MongoDebeziumTransform smt = getTransformer("array");
     assertThrows(IllegalArgumentException.class, () -> smt.apply(record));
   }
 }

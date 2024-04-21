@@ -48,10 +48,10 @@ It will promote the `before` or `after` element fields to top level and add the 
 |---------------------|-----------------------------------------------------------------------------------|
 | cdc.target.pattern  | Pattern to use for setting the CDC target field value, default is `{db}.{table}`  |
 
-# MongoDebeziumTransformer
+# MongoDebeziumTransform
 _(Experimental)_ 
 
-The `MongoDebeziumTransform`SMT transforms a Mongo Debezium formatted message with `before`/`after` BSON
+The `MongoDebeziumTransform` SMT transforms a Mongo Debezium formatted message with `before`/`after` BSON
 strings into `before`/`after` typed Structs that the `DebeziumTransform` SMT expects. 
 
 It does not (yet) support renaming columns if mongodb column is not supported by your underlying 

@@ -43,10 +43,8 @@ import org.slf4j.LoggerFactory;
  * Debezium Mongo Connector generates the CDC before/after fields as BSON strings. This SMT converts
  * those strings into typed SinkRecord Structs by inferring the schema from the BSON node types.
  *
- * @param <R> the subtype of {@link ConnectRecord} on which this transformation will operate, most
- *     likely SinkRecord
  */
-public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Transformation<R> {
+public class MongoDebeziumTransform implements Transformation<SinkRecord> {
 
   public static final String ARRAY_HANDLING_MODE_KEY = "array_handling_mode";
 
@@ -61,14 +59,14 @@ public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Trans
 
   private static final String AFTER_FIELD_NAME = "after";
   private static final String BEFORE_FIELD_NAME = "before";
-  private final ExtractField<R> updateDescriptionExtractor =
+  private final ExtractField<SinkRecord> updateDescriptionExtractor =
       extractorValueField(UPDATE_DESCRIPTION);
 
-  private final ExtractField<R> afterExtractor = extractorValueField(AFTER_FIELD_NAME);
+  private final ExtractField<SinkRecord> afterExtractor = extractorValueField(AFTER_FIELD_NAME);
 
-  private final ExtractField<R> beforeExtractor = extractorValueField(BEFORE_FIELD_NAME);
+  private final ExtractField<SinkRecord> beforeExtractor = extractorValueField(BEFORE_FIELD_NAME);
 
-  private final ExtractField<R> keyIdExtractor = extractorForKeyField("id");
+  private final ExtractField<SinkRecord> keyIdExtractor = extractorForKeyField("id");
 
   private MongoDataConverter converter;
 
@@ -84,7 +82,7 @@ public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Trans
               "array or document handling for mongodb arrays");
 
   @Override
-  public R apply(R record) {
+  public SinkRecord apply(SinkRecord record) {
     // pass tombstones as-is
     if (record.value() == null) {
       return record;
@@ -92,6 +90,7 @@ public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Trans
 
     // if they don't contain key/envelope convert to tombstone
     if (!isValidKey(record) || !isValidValue(record)) {
+      LOG.debug("Expected Key Schema/Envelope for transformation, converting to tombstone. Message key: \"{}\"", record.key());
       return record.newRecord(
           record.topic(),
           record.kafkaPartition(),
@@ -103,16 +102,16 @@ public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Trans
           record.headers());
     }
 
-    final R keyIdRecord = keyIdExtractor.apply(record);
-    final R afterRecord = afterExtractor.apply(record);
-    final R beforeRecord = beforeExtractor.apply(record);
-    final R updateDescriptionRecord = updateDescriptionExtractor.apply(record);
+    final SinkRecord keyIdRecord = keyIdExtractor.apply(record);
+    final SinkRecord afterRecord = afterExtractor.apply(record);
+    final SinkRecord beforeRecord = beforeExtractor.apply(record);
+    final SinkRecord updateDescriptionRecord = updateDescriptionExtractor.apply(record);
 
     if (beforeRecord.value() == null
         && afterRecord.value() == null
         && updateDescriptionRecord.value() == null) {
       throw new IllegalArgumentException(
-          String.format("malformed record %s", kafkaMetadataForException(record)));
+          String.format("malformed record topic: %s, partition: %s, offset: %s",record.topic(), record.kafkaPartition(), record.kafkaOffset()));
     }
 
     BsonDocument afterBson = null;
@@ -162,7 +161,7 @@ public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Trans
    * @return Bson representing the After fields
    */
   private BsonDocument buildAfterBsonFromPartials(
-      R updateDescriptionRecord, BsonDocument initialDocument, BsonDocument keyBson) {
+      SinkRecord updateDescriptionRecord, BsonDocument initialDocument, BsonDocument keyBson) {
 
     Struct updateAsStruct =
         Requirements.requireStruct(updateDescriptionRecord.value(), UPDATE_DESCRIPTION);
@@ -189,8 +188,8 @@ public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Trans
     return initialDocument;
   }
 
-  private R newRecord(
-      R record, BsonDocument keyDocument, BsonDocument beforeBson, BsonDocument afterBson) {
+  private SinkRecord newRecord(
+      SinkRecord record, BsonDocument keyDocument, BsonDocument beforeBson, BsonDocument afterBson) {
     SchemaBuilder keySchemaBuilder = SchemaBuilder.struct();
     Set<Map.Entry<String, BsonValue>> keyPairs = keyDocument.entrySet();
     for (Map.Entry<String, BsonValue> keyPairsForSchema : keyPairs) {
@@ -257,7 +256,7 @@ public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Trans
         record.headers());
   }
 
-  private SchemaBuilder mutateBuilderFromBson(
+  private void mutateBuilderFromBson(
       SchemaBuilder builder, BsonDocument bson, String fieldName) {
     SchemaBuilder innerBuilder = SchemaBuilder.struct();
     Set<Map.Entry<String, BsonValue>> pairs = bson.entrySet();
@@ -265,7 +264,6 @@ public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Trans
       converter.addFieldSchema(pairsForSchema, innerBuilder);
     }
     builder.field(fieldName, innerBuilder.optional().build());
-    return builder;
   }
 
   private Struct fillStructFromBson(Schema schema, BsonDocument bson) {
@@ -277,30 +275,15 @@ public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Trans
     return struct;
   }
 
-  private boolean isValidKey(final R record) {
-    if (record.keySchema() == null
-        || record.keySchema().name() == null
-        || !record.keySchema().name().endsWith(RECORD_ENVELOPE_KEY_SCHEMA_NAME_SUFFIX)) {
-      LOG.debug(
-          "Expected Key Schema for transformation, converting to tombstone. Message key: \"{}\"",
-          record.key());
-      return false;
-    }
-    return true;
+  private boolean isValidKey(final SinkRecord record) {
+    return record.keySchema() != null
+            && record.keySchema().name() != null
+            && record.keySchema().name().endsWith(RECORD_ENVELOPE_KEY_SCHEMA_NAME_SUFFIX);
   }
-
-  private boolean isValidValue(final R record) {
-    if (record.valueSchema() == null
-        || record.valueSchema().name() == null
-        || !containsEnvelopePrefix(record.valueSchema())) {
-      LOG.debug("Expected Envelope for transformation, converting to tombstone");
-      return false;
-    }
-    return true;
-  }
-
-  private boolean containsEnvelopePrefix(Schema schema) {
-    return schema.name().endsWith(SCHEMA_NAME_SUFFIX);
+  private boolean isValidValue(final SinkRecord record) {
+    return record.valueSchema() != null
+            && record.valueSchema().name() != null
+            && record.valueSchema().name().endsWith(SCHEMA_NAME_SUFFIX);
   }
 
   private static <R extends ConnectRecord<R>> ExtractField<R> extractorValueField(String field) {
@@ -311,24 +294,17 @@ public class MongoDebeziumTransform<R extends ConnectRecord<R>> implements Trans
     return extractField;
   }
 
-  private static <R extends ConnectRecord<R>> ExtractField<R> extractorForKeyField(String field) {
-    ExtractField<R> extractField = new ExtractField.Key<>();
+  private static ExtractField<SinkRecord> extractorForKeyField(String field) {
+    ExtractField<SinkRecord> extractField = new ExtractField.Key<>();
     Map<String, String> target = Maps.newHashMap();
     target.put("field", field);
     extractField.configure(target);
     return extractField;
   }
 
-  private String kafkaMetadataForException(R record) {
-    Long kafkaOffset = null;
-    try {
-      SinkRecord sinkrecord = (SinkRecord) record;
-      kafkaOffset = sinkrecord.kafkaOffset();
-    } catch (Exception ignored) {
-      return String.format("topic %s, partition: %s", record.topic(), record.kafkaPartition());
-    }
+  private String kafkaMetadataForException(SinkRecord record) {
     return String.format(
         "topic: %s, partition: %s, offset: %s",
-        record.topic(), record.kafkaPartition(), kafkaOffset);
+        record.topic(), record.kafkaPartition(), record.kafkaOffset());
   }
 }
