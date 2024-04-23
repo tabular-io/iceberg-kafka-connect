@@ -100,7 +100,9 @@ public class Worker implements Writer, AutoCloseable {
 
   @Override
   public void write(Collection<SinkRecord> sinkRecords) {
-    sinkRecords.forEach(this::save);
+    if (sinkRecords != null && !sinkRecords.isEmpty()) {
+      sinkRecords.forEach(this::save);
+    }
   }
 
   private void save(SinkRecord record) {
