@@ -9,3 +9,6 @@ project(":iceberg-kafka-connect-transforms").projectDir = file("kafka-connect-tr
 
 include "iceberg-kafka-connect-runtime"
 project(":iceberg-kafka-connect-runtime").projectDir = file("kafka-connect-runtime")
+
+include "iceberg-kafka-connect-exception-handlers"
+project(":iceberg-kafka-connect-exception-handlers").projectDir = file("kafka-connect-exception-handlers")

@@ -1,0 +1,21 @@
+plugins {
+    id "java-test-fixtures"
+}
+
+dependencies {
+    compileOnly project(":iceberg-kafka-connect")
+    compileOnly libs.bundles.kafka.connect
+
+    testImplementation libs.junit.api
+    testRuntimeOnly libs.junit.engine
+
+    testImplementation libs.assertj
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
+}
