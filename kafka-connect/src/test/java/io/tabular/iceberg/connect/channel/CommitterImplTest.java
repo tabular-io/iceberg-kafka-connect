@@ -292,12 +292,7 @@ class CommitterImplTest {
             config.controlGroupId(), ImmutableMap.of(SOURCE_TP0, 110L, SOURCE_TP1, 100L),
             config.connectGroupId(), ImmutableMap.of(SOURCE_TP0, 90L, SOURCE_TP1, 80L)));
 
-    CommittableSupplier committableSupplier =
-        () -> {
-          throw new NotImplementedException("Should not be called");
-        };
-
-    try (CommitterImpl committerImpl =
+    try (CommitterImpl ignored =
         new CommitterImpl(mockContext, config, kafkaClientFactory, coordinatorThreadFactory)) {
       initConsumer();
 
@@ -366,7 +361,7 @@ class CommitterImplTest {
   }
 
   @Test
-  public void testCommitShouldDoNothingIfNoCommitRequestIsAvailable() throws IOException {
+  public void testCommitShouldDoNothingIfThereIsNoCommitRequestMessage() throws IOException {
     SinkTaskContext mockContext = mockContext();
 
     NoOpCoordinatorThreadFactory coordinatorThreadFactory = new NoOpCoordinatorThreadFactory();
@@ -471,7 +466,7 @@ class CommitterImplTest {
   }
 
   @Test
-  public void testCommitWhenNoMessagesWereWritten() throws IOException {
+  public void testCommitWhenCommittableIsEmpty() throws IOException {
     SinkTaskContext mockContext = mockContext();
 
     NoOpCoordinatorThreadFactory coordinatorThreadFactory = new NoOpCoordinatorThreadFactory();
@@ -589,6 +584,4 @@ class CommitterImplTest {
           .isEqualTo(ImmutableMap.of(CONFIG.connectGroupId(), expectedConsumerOffset));
     }
   }
-
-  // TODO: responds to multiple commit requests?
 }

@@ -60,8 +60,6 @@ class CoordinatorThreadFactoryImplTest {
   private static final String CONNECTOR_NAME = "connector-name";
   private static final String TABLE_1_NAME = "db.tbl1";
   private static final String CONTROL_TOPIC = "control-topic-name";
-  private static final TopicPartition CONTROL_TOPIC_PARTITION =
-      new TopicPartition(CONTROL_TOPIC, 0);
   private static final IcebergSinkConfig BASIC_CONFIGS =
       new IcebergSinkConfig(
           ImmutableMap.of(
