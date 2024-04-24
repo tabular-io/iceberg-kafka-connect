@@ -23,7 +23,6 @@ import io.tabular.iceberg.connect.channel.TaskImpl;
 import io.tabular.iceberg.connect.data.Utilities;
 import java.util.Collection;
 import java.util.Map;
-import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -37,7 +36,6 @@ public class IcebergSinkTask extends SinkTask {
   private static final Logger LOG = LoggerFactory.getLogger(IcebergSinkTask.class);
 
   private IcebergSinkConfig config;
-  private Catalog catalog;
   private Task task;
 
   @Override
@@ -55,8 +53,7 @@ public class IcebergSinkTask extends SinkTask {
     // destroy any state if KC re-uses object
     clearObjectState();
 
-    catalog = Utilities.loadCatalog(config);
-    task = new TaskImpl(context, config, catalog);
+    task = new TaskImpl(context, config);
   }
 
   @Override
@@ -71,9 +68,6 @@ public class IcebergSinkTask extends SinkTask {
   private void clearObjectState() {
     Utilities.close(task);
     task = null;
-
-    Utilities.close(catalog);
-    catalog = null;
   }
 
   @Override
