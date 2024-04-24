@@ -41,65 +41,44 @@ public class WorkerTest {
   private static final String SRC_TOPIC_NAME = "src-topic";
   private static final String TABLE_NAME = "db.tbl";
   private static final String FIELD_NAME = "fld";
-  private static final String CONTROL_TOPIC = "control-topic-name";
 
   @Test
   public void testStaticRoute() {
-    IcebergSinkConfig config =
-        new IcebergSinkConfig(
-            ImmutableMap.of(
-                "iceberg.catalog.catalog-impl",
-                "org.apache.iceberg.inmemory.InMemoryCatalog",
-                "iceberg.tables",
-                TABLE_NAME,
-                "iceberg.control.topic",
-                CONTROL_TOPIC,
-                "iceberg.control.commit.threads",
-                "1"));
+    IcebergSinkConfig config = mock(IcebergSinkConfig.class);
+    when(config.tables()).thenReturn(ImmutableList.of(TABLE_NAME));
     Map<String, Object> value = ImmutableMap.of(FIELD_NAME, "val");
-    writerTest(config, value);
+    workerTest(config, value);
   }
 
   @Test
   public void testDynamicRoute() {
-    IcebergSinkConfig config =
-        new IcebergSinkConfig(
-            ImmutableMap.of(
-                "iceberg.catalog.catalog-impl",
-                "org.apache.iceberg.inmemory.InMemoryCatalog",
-                "iceberg.tables.dynamic-enabled",
-                "true",
-                "iceberg.tables.route-field",
-                FIELD_NAME,
-                "iceberg.control.topic",
-                CONTROL_TOPIC,
-                "iceberg.control.commit.threads",
-                "1"));
-
+    IcebergSinkConfig config = mock(IcebergSinkConfig.class);
+    when(config.dynamicTablesEnabled()).thenReturn(true);
+    when(config.tablesRouteField()).thenReturn(FIELD_NAME);
     Map<String, Object> value = ImmutableMap.of(FIELD_NAME, TABLE_NAME);
-    writerTest(config, value);
+    workerTest(config, value);
   }
 
-  private void writerTest(IcebergSinkConfig config, Map<String, Object> value) {
+  private void workerTest(IcebergSinkConfig config, Map<String, Object> value) {
     WriterResult writeResult =
         new WriterResult(
             TableIdentifier.parse(TABLE_NAME),
             ImmutableList.of(EventTestUtil.createDataFile()),
             ImmutableList.of(),
             StructType.of());
-    IcebergWriter icebergWriter = mock(IcebergWriter.class);
-    when(icebergWriter.complete()).thenReturn(ImmutableList.of(writeResult));
+    IcebergWriter writer = mock(IcebergWriter.class);
+    when(writer.complete()).thenReturn(ImmutableList.of(writeResult));
 
     IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
-    when(writerFactory.createWriter(any(), any(), anyBoolean())).thenReturn(icebergWriter);
+    when(writerFactory.createWriter(any(), any(), anyBoolean())).thenReturn(writer);
 
-    Writer writer = new Worker(config, writerFactory);
+    Writer worker = new Worker(config, writerFactory);
 
     // save a record
     SinkRecord rec = new SinkRecord(SRC_TOPIC_NAME, 0, null, "key", null, value, 0L);
-    writer.write(ImmutableList.of(rec));
+    worker.write(ImmutableList.of(rec));
 
-    Committable committable = writer.committable();
+    Committable committable = worker.committable();
 
     assertThat(committable.offsetsByTopicPartition()).hasSize(1);
     // offset should be one more than the record offset

@@ -18,15 +18,18 @@
  */
 package io.tabular.iceberg.connect.channel;
 
+import static java.util.stream.Collectors.toList;
+
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.IcebergWriterFactory;
 import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.data.RecordWriter;
 import io.tabular.iceberg.connect.data.Utilities;
+import io.tabular.iceberg.connect.data.WriterResult;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
@@ -37,7 +40,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 // TODO: rename to WriterImpl later, minimize changes for clearer commit history for now
-public class Worker implements Writer, AutoCloseable {
+class Worker implements Writer, AutoCloseable {
 
   private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
   private final IcebergSinkConfig config;
@@ -45,7 +48,7 @@ public class Worker implements Writer, AutoCloseable {
   private final Map<String, RecordWriter> writers;
   private final Map<TopicPartition, Offset> sourceOffsets;
 
-  public Worker(IcebergSinkConfig config, Catalog catalog) {
+  Worker(IcebergSinkConfig config, Catalog catalog) {
     this(config, new IcebergWriterFactory(catalog, config));
   }
 
@@ -59,43 +62,21 @@ public class Worker implements Writer, AutoCloseable {
 
   @Override
   public Committable committable() {
-    Committable committable =
-        new Committable(
-            sourceOffsets,
-            writers.values().stream()
-                .flatMap(writer -> writer.complete().stream())
-                .collect(Collectors.toList()));
+    List<WriterResult> writeResults =
+        writers.values().stream().flatMap(writer -> writer.complete().stream()).collect(toList());
+    Map<TopicPartition, Offset> offsets = Maps.newHashMap(sourceOffsets);
 
-    clearWriters();
-    clearOffsets();
-
-    return committable;
-  }
-
-  private void clearWriters() {
-    for (Map.Entry<String, RecordWriter> entry : writers.entrySet()) {
-      String tableName = entry.getKey();
-      RecordWriter writer = entry.getValue();
-      try {
-        writer.close();
-      } catch (Exception e) {
-        LOG.warn(
-            "An error occurred closing RecordWriter instance for table={}, ignoring...",
-            tableName,
-            e);
-      }
-    }
     writers.clear();
-  }
-
-  private void clearOffsets() {
     sourceOffsets.clear();
+
+    return new Committable(offsets, writeResults);
   }
 
   @Override
   public void close() throws IOException {
-    clearWriters();
-    clearOffsets();
+    writers.values().forEach(RecordWriter::close);
+    writers.clear();
+    sourceOffsets.clear();
   }
 
   @Override
