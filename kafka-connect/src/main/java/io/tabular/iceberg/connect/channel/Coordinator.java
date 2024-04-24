@@ -48,7 +48,6 @@ import org.apache.iceberg.Transaction;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.NoSuchTableException;
-import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.util.Tasks;
@@ -74,15 +73,6 @@ public class Coordinator extends Channel implements AutoCloseable {
   private final CommitState commitState;
 
   public Coordinator(
-      IcebergSinkConfig config,
-      Catalog catalog,
-      Collection<MemberDescription> members,
-      KafkaClientFactory kafkaClientFactory) {
-    this(catalog, config, members, kafkaClientFactory);
-  }
-
-  @VisibleForTesting
-  Coordinator(
       Catalog catalog,
       IcebergSinkConfig config,
       Collection<MemberDescription> members,

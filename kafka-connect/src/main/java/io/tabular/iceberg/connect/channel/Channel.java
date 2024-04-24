@@ -18,13 +18,16 @@
  */
 package io.tabular.iceberg.connect.channel;
 
+import static java.util.stream.Collectors.toList;
+
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.events.Event;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
+import java.util.function.Function;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
@@ -76,9 +79,12 @@ public abstract class Channel {
 
   protected void send(
       List<Event> events,
-      Map<TopicPartition, OffsetAndMetadata> consumerOffsets,
+      Map<TopicPartition, Offset> sourceOffsets,
       ConsumerGroupMetadata consumerGroupMetadata) {
-    sendAndCommitOffsets(
+    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = Maps.newHashMap();
+    sourceOffsets.forEach((k, v) -> offsetsToCommit.put(k, new OffsetAndMetadata(v.offset())));
+
+    List<ProducerRecord<String, byte[]>> recordList =
         events.stream()
             .map(
                 event -> {
@@ -87,22 +93,15 @@ public abstract class Channel {
                   // key by producer ID to keep event order
                   return new ProducerRecord<>(controlTopic, producerId, data);
                 })
-            .collect(Collectors.toList()),
-        consumerOffsets,
-        consumerGroupMetadata);
-  }
+            .collect(toList());
 
-  private void sendAndCommitOffsets(
-      List<ProducerRecord<String, byte[]>> producerRecords,
-      Map<TopicPartition, OffsetAndMetadata> consumerOffsets,
-      ConsumerGroupMetadata consumerGroupMetadata) {
     synchronized (producer) {
       producer.beginTransaction();
       try {
-        producerRecords.forEach(producer::send);
+        recordList.forEach(producer::send);
         producer.flush();
-        if (!consumerOffsets.isEmpty()) {
-          producer.sendOffsetsToTransaction(consumerOffsets, consumerGroupMetadata);
+        if (!sourceOffsets.isEmpty()) {
+          producer.sendOffsetsToTransaction(offsetsToCommit, consumerGroupMetadata);
         }
         producer.commitTransaction();
       } catch (Exception e) {
@@ -116,8 +115,7 @@ public abstract class Channel {
     }
   }
 
-  protected void consumeAvailable(
-      Duration pollDuration, java.util.function.Function<Envelope, Boolean> receiveFn) {
+  protected void consumeAvailable(Duration pollDuration, Function<Envelope, Boolean> receiveFn) {
     ConsumerRecords<String, byte[]> records = consumer.poll(pollDuration);
     while (!records.isEmpty()) {
       records.forEach(

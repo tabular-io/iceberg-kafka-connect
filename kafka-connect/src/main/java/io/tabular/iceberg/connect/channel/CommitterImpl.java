@@ -37,7 +37,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
@@ -46,7 +45,6 @@ import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -186,14 +184,9 @@ public class CommitterImpl extends Channel implements Committer, AutoCloseable {
             new CommitReadyPayload(commitId, assignments));
     events.add(commitReady);
 
-    Map<TopicPartition, OffsetAndMetadata> offsetsToCommit =
-        committable.offsetsByTopicPartition().entrySet().stream()
-            .collect(
-                Collectors.toMap(
-                    Map.Entry::getKey, e -> new OffsetAndMetadata(e.getValue().offset())));
-
-    send(events, offsetsToCommit, new ConsumerGroupMetadata(config.controlGroupId()));
-    send(ImmutableList.of(), offsetsToCommit, new ConsumerGroupMetadata(config.connectGroupId()));
+    Map<TopicPartition, Offset> offsets = committable.offsetsByTopicPartition();
+    send(events, offsets, new ConsumerGroupMetadata(config.controlGroupId()));
+    send(ImmutableList.of(), offsets, new ConsumerGroupMetadata(config.connectGroupId()));
   }
 
   @Override
