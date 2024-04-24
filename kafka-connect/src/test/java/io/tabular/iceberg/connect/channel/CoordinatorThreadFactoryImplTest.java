@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
@@ -145,7 +146,7 @@ class CoordinatorThreadFactoryImplTest {
     whenAdminDescribeConsumerGroupThenReturn(ConsumerGroupState.STABLE);
 
     CoordinatorThreadFactoryImpl coordinatorThreadFactory =
-        new CoordinatorThreadFactoryImpl(kafkaClientFactory);
+        new CoordinatorThreadFactoryImpl(mock(Catalog.class), kafkaClientFactory);
 
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);
     when(sinkTaskContext.assignment()).thenReturn(NON_LEADER_ASSIGNMENT);
@@ -164,7 +165,7 @@ class CoordinatorThreadFactoryImplTest {
     whenAdminDescribeConsumerGroupThenReturn(ConsumerGroupState.UNKNOWN);
 
     CoordinatorThreadFactoryImpl coordinatorThreadFactory =
-        new CoordinatorThreadFactoryImpl(kafkaClientFactory);
+        new CoordinatorThreadFactoryImpl(mock(Catalog.class), kafkaClientFactory);
 
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);
     when(sinkTaskContext.assignment()).thenReturn(LEADER_ASSIGNMENT);
@@ -183,7 +184,7 @@ class CoordinatorThreadFactoryImplTest {
     whenAdminDescribeConsumerGroupThenReturn(ConsumerGroupState.STABLE);
 
     CoordinatorThreadFactoryImpl coordinatorThreadFactory =
-        new CoordinatorThreadFactoryImpl(kafkaClientFactory);
+        new CoordinatorThreadFactoryImpl(mock(Catalog.class), kafkaClientFactory);
 
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);
     when(sinkTaskContext.assignment()).thenReturn(LEADER_ASSIGNMENT);
@@ -209,7 +210,7 @@ class CoordinatorThreadFactoryImplTest {
             new MemberDescription(null, null, null, new MemberAssignment(ImmutableSet.of()))));
 
     CoordinatorThreadFactoryImpl coordinatorThreadFactory =
-        new CoordinatorThreadFactoryImpl(kafkaClientFactory);
+        new CoordinatorThreadFactoryImpl(mock(Catalog.class), kafkaClientFactory);
 
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);
     when(sinkTaskContext.assignment()).thenReturn(ImmutableSet.of());

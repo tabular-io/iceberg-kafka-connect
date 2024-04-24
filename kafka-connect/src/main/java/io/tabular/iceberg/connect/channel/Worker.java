@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
@@ -44,8 +45,8 @@ public class Worker implements Writer, AutoCloseable {
   private final Map<String, RecordWriter> writers;
   private final Map<TopicPartition, Offset> sourceOffsets;
 
-  public Worker(IcebergSinkConfig config) {
-    this(config, new IcebergWriterFactory(config));
+  public Worker(IcebergSinkConfig config, Catalog catalog) {
+    this(config, new IcebergWriterFactory(catalog, config));
   }
 
   @VisibleForTesting
@@ -95,7 +96,6 @@ public class Worker implements Writer, AutoCloseable {
   public void close() throws IOException {
     clearWriters();
     clearOffsets();
-    Utilities.close(writerFactory);
   }
 
   @Override

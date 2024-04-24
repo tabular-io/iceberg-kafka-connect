@@ -23,7 +23,6 @@ import static java.util.stream.Collectors.toList;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.data.Utilities;
 import io.tabular.iceberg.connect.events.CommitCompletePayload;
 import io.tabular.iceberg.connect.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.events.CommitTablePayload;
@@ -76,9 +75,10 @@ public class Coordinator extends Channel implements AutoCloseable {
 
   public Coordinator(
       IcebergSinkConfig config,
+      Catalog catalog,
       Collection<MemberDescription> members,
       KafkaClientFactory kafkaClientFactory) {
-    this(Utilities.loadCatalog(config), config, members, kafkaClientFactory);
+    this(catalog, config, members, kafkaClientFactory);
   }
 
   @VisibleForTesting
@@ -310,12 +310,9 @@ public class Coordinator extends Channel implements AutoCloseable {
     return ImmutableMap.of();
   }
 
-  // TODO: maybe rename to stop and call super.stop
   @Override
   public void close() throws IOException {
-    LOG.info("Closing Coordinator");
     exec.shutdownNow();
     stop();
-    Utilities.close(catalog);
   }
 }

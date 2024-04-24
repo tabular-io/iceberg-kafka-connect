@@ -34,19 +34,14 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class IcebergWriterFactory implements AutoCloseable {
+public class IcebergWriterFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(IcebergWriterFactory.class);
 
   private final Catalog catalog;
   private final IcebergSinkConfig config;
 
-  public IcebergWriterFactory(IcebergSinkConfig config) {
-    this(Utilities.loadCatalog(config), config);
-  }
-
-  @VisibleForTesting
-  IcebergWriterFactory(Catalog catalog, IcebergSinkConfig config) {
+  public IcebergWriterFactory(Catalog catalog, IcebergSinkConfig config) {
     this.catalog = catalog;
     this.config = config;
   }
@@ -113,10 +108,5 @@ public class IcebergWriterFactory implements AutoCloseable {
               }
             });
     return result.get();
-  }
-
-  @Override
-  public void close() throws Exception {
-    Utilities.close(catalog);
   }
 }

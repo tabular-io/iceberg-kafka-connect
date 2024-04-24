@@ -23,6 +23,7 @@ import io.tabular.iceberg.connect.channel.TaskImpl;
 import io.tabular.iceberg.connect.data.Utilities;
 import java.util.Collection;
 import java.util.Map;
+import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -36,6 +37,7 @@ public class IcebergSinkTask extends SinkTask {
   private static final Logger LOG = LoggerFactory.getLogger(IcebergSinkTask.class);
 
   private IcebergSinkConfig config;
+  private Catalog catalog;
   private Task task;
 
   @Override
@@ -48,17 +50,30 @@ public class IcebergSinkTask extends SinkTask {
     this.config = new IcebergSinkConfig(props);
   }
 
-  private void clearState() {
-    Utilities.close(task);
-    task = null;
-  }
-
   @Override
   public void open(Collection<TopicPartition> partitions) {
     // destroy any state if KC re-uses object
-    clearState();
+    clearObjectState();
 
-    this.task = new TaskImpl(context, config);
+    catalog = Utilities.loadCatalog(config);
+    task = new TaskImpl(context, config, catalog);
+  }
+
+  @Override
+  public void close(Collection<TopicPartition> partitions) {
+    close();
+  }
+
+  private void close() {
+    clearObjectState();
+  }
+
+  private void clearObjectState() {
+    Utilities.close(task);
+    task = null;
+
+    Utilities.close(catalog);
+    catalog = null;
   }
 
   @Override
@@ -75,12 +90,7 @@ public class IcebergSinkTask extends SinkTask {
   }
 
   @Override
-  public void close(Collection<TopicPartition> partitions) {
-    clearState();
-  }
-
-  @Override
   public void stop() {
-    clearState();
+    close();
   }
 }

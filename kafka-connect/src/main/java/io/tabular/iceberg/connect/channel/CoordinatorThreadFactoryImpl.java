@@ -22,6 +22,7 @@ import io.tabular.iceberg.connect.IcebergSinkConfig;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Optional;
+import org.apache.iceberg.catalog.Catalog;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.MemberDescription;
@@ -35,9 +36,11 @@ import org.slf4j.LoggerFactory;
 class CoordinatorThreadFactoryImpl implements CoordinatorThreadFactory {
   private static final Logger LOG = LoggerFactory.getLogger(CoordinatorThreadFactoryImpl.class);
   private final KafkaClientFactory kafkaClientFactory;
+  private final Catalog catalog;
 
-  CoordinatorThreadFactoryImpl(KafkaClientFactory kafkaClientFactory) {
+  CoordinatorThreadFactoryImpl(Catalog catalog, KafkaClientFactory kafkaClientFactory) {
     this.kafkaClientFactory = kafkaClientFactory;
+    this.catalog = catalog;
   }
 
   private static class TopicPartitionComparator implements Comparator<TopicPartition> {
@@ -75,7 +78,7 @@ class CoordinatorThreadFactoryImpl implements CoordinatorThreadFactory {
       Collection<MemberDescription> members = groupDesc.members();
       if (isLeader(members, context.assignment())
           && groupDesc.state() == ConsumerGroupState.STABLE) {
-        Coordinator coordinator = new Coordinator(config, members, kafkaClientFactory);
+        Coordinator coordinator = new Coordinator(catalog, config, members, kafkaClientFactory);
         thread = new CoordinatorThread(coordinator);
         thread.start();
         LOG.info("Started commit coordinator");

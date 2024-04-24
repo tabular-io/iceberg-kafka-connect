@@ -38,6 +38,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
@@ -59,13 +60,20 @@ public class CommitterImpl extends Channel implements Committer, AutoCloseable {
   private final IcebergSinkConfig config;
   private final Optional<CoordinatorThread> maybeCoordinatorThread;
 
-  public CommitterImpl(SinkTaskContext context, IcebergSinkConfig config) {
-    this(context, config, new KafkaClientFactory(config.kafkaProps()));
+  public CommitterImpl(SinkTaskContext context, IcebergSinkConfig config, Catalog catalog) {
+    this(context, config, catalog, new KafkaClientFactory(config.kafkaProps()));
   }
 
   private CommitterImpl(
-      SinkTaskContext context, IcebergSinkConfig config, KafkaClientFactory kafkaClientFactory) {
-    this(context, config, kafkaClientFactory, new CoordinatorThreadFactoryImpl(kafkaClientFactory));
+      SinkTaskContext context,
+      IcebergSinkConfig config,
+      Catalog catalog,
+      KafkaClientFactory kafkaClientFactory) {
+    this(
+        context,
+        config,
+        kafkaClientFactory,
+        new CoordinatorThreadFactoryImpl(catalog, kafkaClientFactory));
   }
 
   @VisibleForTesting

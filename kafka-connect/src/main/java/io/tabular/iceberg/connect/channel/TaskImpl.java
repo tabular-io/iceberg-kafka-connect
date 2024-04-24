@@ -21,6 +21,7 @@ package io.tabular.iceberg.connect.channel;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.Utilities;
 import java.util.Collection;
+import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -30,8 +31,8 @@ public class TaskImpl implements Task, AutoCloseable {
   private final Writer writer;
   private final Committer committer;
 
-  public TaskImpl(SinkTaskContext context, IcebergSinkConfig config) {
-    this(new io.tabular.iceberg.connect.channel.Worker(config), new CommitterImpl(context, config));
+  public TaskImpl(SinkTaskContext context, IcebergSinkConfig config, Catalog catalog) {
+    this(new Worker(config, catalog), new CommitterImpl(context, config, catalog));
   }
 
   @VisibleForTesting
