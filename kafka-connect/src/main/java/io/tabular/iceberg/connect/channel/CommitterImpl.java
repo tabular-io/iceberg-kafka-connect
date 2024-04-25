@@ -57,6 +57,7 @@ public class CommitterImpl extends Channel implements Committer, AutoCloseable {
   private final SinkTaskContext context;
   private final IcebergSinkConfig config;
   private final Optional<CoordinatorThread> maybeCoordinatorThread;
+  private final ConsumerGroupMetadata consumerGroupMetadata;
 
   public CommitterImpl(SinkTaskContext context, IcebergSinkConfig config, Catalog catalog) {
     this(context, config, catalog, new KafkaClientFactory(config.kafkaProps()));
@@ -92,9 +93,16 @@ public class CommitterImpl extends Channel implements Committer, AutoCloseable {
 
     this.maybeCoordinatorThread = coordinatorThreadFactory.create(context, config);
 
-    // The source-of-truth for source-topic offsets is the control-group-id
-    Map<TopicPartition, Long> stableConsumerOffsets =
-        fetchStableConsumerOffsets(config.controlGroupId());
+    ConsumerGroupMetadata groupMetadata;
+    try {
+      groupMetadata = KafkaUtils.consumerGroupMetadata(context);
+    } catch (IllegalArgumentException e) {
+      LOG.warn("Could not extract ConsumerGroupMetadata from consumer inside Kafka Connect, falling back to simple ConsumerGroupMetadata which can result in duplicates from zombie tasks");
+      groupMetadata = new ConsumerGroupMetadata(config.connectGroupId());
+    }
+    this.consumerGroupMetadata = groupMetadata;
+
+    Map<TopicPartition, Long> stableConsumerOffsets = fetchStableConsumerOffsets(consumerGroupMetadata.groupId());
     // Rewind kafka connect consumer to avoid duplicates
     context.offset(stableConsumerOffsets);
 
@@ -183,8 +191,7 @@ public class CommitterImpl extends Channel implements Committer, AutoCloseable {
     events.add(commitReady);
 
     Map<TopicPartition, Offset> offsets = committable.offsetsByTopicPartition();
-    send(events, offsets, new ConsumerGroupMetadata(config.controlGroupId()));
-    send(ImmutableList.of(), offsets, new ConsumerGroupMetadata(config.connectGroupId()));
+    send(events, offsets, consumerGroupMetadata);
   }
 
   @Override
