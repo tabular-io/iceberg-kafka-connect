@@ -20,23 +20,6 @@ The zip archive will be found under `./kafka-connect-runtime/build/distributions
 
 # Configuration
 
-iceberg.deadletter.enabled 
-
-// this is now on the transform somewhere
-// and MUST be supplied
-// and is validated that FailedRecordFactory.schema provides it. 
-iceberg.deadletter.table_route_field // sure 
-// but also needs to be on the connector I think... I don't think the connector sees the transform settings <- LOOK INTO THIS 
-
-
-// iceberg.deadletter.table 
-
-// iceberg.table.\<table name\>.partition-by <- we can add a partitioning scheme to it 
-//   probably topic 
-
-// connector that is handling 10 topics for customer A going to Catalog A 
-
-
 | Property                                   | Description                                                                                                      |
 |--------------------------------------------|------------------------------------------------------------------------------------------------------------------|
 | iceberg.tables                             | Comma-separated list of destination tables                                                                       |
