@@ -24,52 +24,42 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.IcebergWriter;
 import io.tabular.iceberg.connect.data.IcebergWriterFactory;
 import io.tabular.iceberg.connect.data.WriterResult;
-import io.tabular.iceberg.connect.events.CommitReadyPayload;
-import io.tabular.iceberg.connect.events.CommitRequestPayload;
-import io.tabular.iceberg.connect.events.CommitResponsePayload;
-import io.tabular.iceberg.connect.events.Event;
 import io.tabular.iceberg.connect.events.EventTestUtil;
-import io.tabular.iceberg.connect.events.EventType;
 import java.util.Map;
-import java.util.UUID;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
-import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
 import org.apache.iceberg.types.Types.StructType;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.junit.jupiter.api.Test;
 
-public class WorkerTest extends ChannelTestBase {
-
+public class WorkerTest {
+  private static final String SRC_TOPIC_NAME = "src-topic";
   private static final String TABLE_NAME = "db.tbl";
   private static final String FIELD_NAME = "fld";
 
   @Test
   public void testStaticRoute() {
+    IcebergSinkConfig config = mock(IcebergSinkConfig.class);
     when(config.tables()).thenReturn(ImmutableList.of(TABLE_NAME));
     Map<String, Object> value = ImmutableMap.of(FIELD_NAME, "val");
-    workerTest(value);
+    workerTest(config, value);
   }
 
   @Test
   public void testDynamicRoute() {
+    IcebergSinkConfig config = mock(IcebergSinkConfig.class);
     when(config.dynamicTablesEnabled()).thenReturn(true);
     when(config.tablesRouteField()).thenReturn(FIELD_NAME);
     Map<String, Object> value = ImmutableMap.of(FIELD_NAME, TABLE_NAME);
-    workerTest(value);
+    workerTest(config, value);
   }
 
-  private void workerTest(Map<String, Object> value) {
-    SinkTaskContext context = mock(SinkTaskContext.class);
-    when(context.assignment()).thenReturn(ImmutableSet.of(new TopicPartition(SRC_TOPIC_NAME, 0)));
-
+  private void workerTest(IcebergSinkConfig config, Map<String, Object> value) {
     WriterResult writeResult =
         new WriterResult(
             TableIdentifier.parse(TABLE_NAME),
@@ -82,38 +72,21 @@ public class WorkerTest extends ChannelTestBase {
     IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
     when(writerFactory.createWriter(any(), any(), anyBoolean())).thenReturn(writer);
 
-    Worker worker = new Worker(config, clientFactory, writerFactory, context);
-    worker.start();
-
-    // init consumer after subscribe()
-    initConsumer();
+    Writer worker = new Worker(config, writerFactory);
 
     // save a record
     SinkRecord rec = new SinkRecord(SRC_TOPIC_NAME, 0, null, "key", null, value, 0L);
-    worker.save(ImmutableList.of(rec));
+    worker.write(ImmutableList.of(rec));
 
-    UUID commitId = UUID.randomUUID();
-    Event commitRequest =
-        new Event(
-            config.controlGroupId(), EventType.COMMIT_REQUEST, new CommitRequestPayload(commitId));
-    byte[] bytes = Event.encode(commitRequest);
-    consumer.addRecord(new ConsumerRecord<>(CTL_TOPIC_NAME, 0, 1, "key", bytes));
+    Committable committable = worker.committable();
 
-    worker.process();
-
-    assertThat(producer.history()).hasSize(2);
-
-    Event event = Event.decode(producer.history().get(0).value());
-    assertThat(event.type()).isEqualTo(EventType.COMMIT_RESPONSE);
-    CommitResponsePayload responsePayload = (CommitResponsePayload) event.payload();
-    assertThat(responsePayload.commitId()).isEqualTo(commitId);
-
-    event = Event.decode(producer.history().get(1).value());
-    assertThat(event.type()).isEqualTo(EventType.COMMIT_READY);
-    CommitReadyPayload readyPayload = (CommitReadyPayload) event.payload();
-    assertThat(readyPayload.commitId()).isEqualTo(commitId);
-    assertThat(readyPayload.assignments()).hasSize(1);
+    assertThat(committable.offsetsByTopicPartition()).hasSize(1);
     // offset should be one more than the record offset
-    assertThat(readyPayload.assignments().get(0).offset()).isEqualTo(1L);
+    assertThat(
+            committable
+                .offsetsByTopicPartition()
+                .get(committable.offsetsByTopicPartition().keySet().iterator().next())
+                .offset())
+        .isEqualTo(1L);
   }
 }
