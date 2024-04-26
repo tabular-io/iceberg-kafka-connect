@@ -59,13 +59,15 @@ public class IcebergWriter implements RecordWriter {
   public void write(SinkRecord record) {
     try {
       // TODO: config to handle tombstones instead of always ignoring?
-      Record row = convertToRow(record);
-      String cdcField = config.tablesCdcField();
-      if (cdcField == null) {
-        writer.write(row);
-      } else {
-        Operation op = extractCdcOperation(record.value(), cdcField);
-        writer.write(new RecordWrapper(row, op));
+      if (record.value() != null) {
+        Record row = convertToRow(record);
+        String cdcField = config.tablesCdcField();
+        if (cdcField == null) {
+          writer.write(row);
+        } else {
+          Operation op = extractCdcOperation(record.value(), cdcField);
+          writer.write(new RecordWrapper(row, op));
+        }
       }
     } catch (Exception e) {
       throw new DataException(
