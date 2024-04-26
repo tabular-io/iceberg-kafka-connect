@@ -83,7 +83,13 @@ public class IcebergSinkConfig extends AbstractConfig {
       "iceberg.tables.schema-force-optional";
   private static final String TABLES_SCHEMA_CASE_INSENSITIVE_PROP =
       "iceberg.tables.schema-case-insensitive";
-  private static final String DEAD_LETTER_TABLE_PROP = "iceberg.tables.deadletter";
+  private static final String WRITE_EXCEPTION_HANDLER_PROP = "iceberg.tables.deadletter.handler";
+  private static final String FAILED_RECORD_FACTORY_PROP =
+      "iceberg.tables.deadletter.record_factory";
+  private static final String FAILED_RECORD_FACTORY_PREFIX =
+      "iceberg.tables.deadletter.record_factory";
+  private static final String FAILED_RECORD_FACTORY_DEFAULT =
+      "io.tabular.iceberg.connect.deadletter.DefaultFailedRecordFactory";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
   private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group-id";
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.control.commit.interval-ms";
@@ -93,14 +99,11 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String COMMIT_THREADS_PROP = "iceberg.control.commit.threads";
   private static final String CONNECT_GROUP_ID_PROP = "iceberg.connect.group-id";
   private static final String HADDOP_CONF_DIR_PROP = "iceberg.hadoop-conf-dir";
-
   private static final String NAME_PROP = "name";
   private static final String BOOTSTRAP_SERVERS_PROP = "bootstrap.servers";
-
   private static final String DEFAULT_CATALOG_NAME = "iceberg";
   private static final String DEFAULT_CONTROL_TOPIC = "control-iceberg";
   public static final String DEFAULT_CONTROL_GROUP_PREFIX = "cg-control-";
-
   public static final int SCHEMA_UPDATE_RETRIES = 2; // 3 total attempts
   public static final int CREATE_TABLE_RETRIES = 2; // 3 total attempts
 
@@ -239,11 +242,17 @@ public class IcebergSinkConfig extends AbstractConfig {
         Importance.MEDIUM,
         "Coordinator threads to use for table commits, default is (cores * 2)");
     configDef.define(
-        DEAD_LETTER_TABLE_PROP,
+        WRITE_EXCEPTION_HANDLER_PROP,
         Type.STRING,
         null,
         Importance.MEDIUM,
-        "If using ErrorTransform for Dead Letter Table, the db.name to write");
+        "If writing to Dead Letter Table, write exception handler class to use");
+    configDef.define(
+        FAILED_RECORD_FACTORY_PROP,
+        Type.STRING,
+        FAILED_RECORD_FACTORY_DEFAULT,
+        Importance.MEDIUM,
+        "If writing to Dead Letter Table, failed record factory class to use");
     return configDef;
   }
 
@@ -341,12 +350,15 @@ public class IcebergSinkConfig extends AbstractConfig {
   }
 
   public boolean deadLetterTableEnabled() {
-    String table = getString(DEAD_LETTER_TABLE_PROP);
-    return table != null;
+    return getWriteExceptionHandler() != null;
   }
 
-  public String deadLetterTableName() {
-    return getString(DEAD_LETTER_TABLE_PROP);
+  public String getWriteExceptionHandler() {
+    return getString(WRITE_EXCEPTION_HANDLER_PROP);
+  }
+
+  public String getFailedRecordHandler() {
+    return getString(FAILED_RECORD_FACTORY_PROP);
   }
 
   public String tablesRouteField() {
@@ -363,6 +375,10 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public String tablesDefaultPartitionBy() {
     return getString(TABLES_DEFAULT_PARTITION_BY);
+  }
+
+  public Map<String, String> failedRecordHandlerProperties() {
+    return PropertyUtil.propertiesWithPrefix(originalProps, FAILED_RECORD_FACTORY_PREFIX + ".");
   }
 
   public TableSinkConfig tableConfig(String tableName) {

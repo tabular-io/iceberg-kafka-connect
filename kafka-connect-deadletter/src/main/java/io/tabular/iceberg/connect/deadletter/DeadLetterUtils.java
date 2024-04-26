@@ -21,7 +21,6 @@ package io.tabular.iceberg.connect.deadletter;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.List;
-import java.util.Map;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -54,38 +53,19 @@ public class DeadLetterUtils {
     throw new IllegalStateException("Should not be initialialized");
   }
 
-  public static final String TYPE = "dlt";
-  public static final String KEY_BYTES = "key";
-  public static final String VALUE_BYTES = "value";
-  public static final String PAYLOAD_KEY = "transformed";
-  public static final String ORIGINAL_BYTES_KEY = "original";
-  private static final String HEADERS = "headers";
+  public static final String KEY_HEADER = "t_original_key";
+  public static final String VALUE_HEADER = "t_original_value";
+
+  public static final String HEADERS_HEADER = "t_original_headers";
   public static final Schema HEADER_ELEMENT_SCHEMA =
       SchemaBuilder.struct()
           .field("key", Schema.STRING_SCHEMA)
           .field("value", Schema.OPTIONAL_BYTES_SCHEMA)
           .optional()
           .build();
+
   public static final Schema HEADER_SCHEMA =
       SchemaBuilder.array(HEADER_ELEMENT_SCHEMA).optional().build();
-  public static final Schema FAILED_SCHEMA =
-      SchemaBuilder.struct()
-          .name("failed_message")
-          .parameter("isFailed", "true")
-          .field("identifier", Schema.OPTIONAL_STRING_SCHEMA)
-          .field("topic", Schema.STRING_SCHEMA)
-          .field("partition", Schema.INT32_SCHEMA)
-          .field("offset", Schema.INT64_SCHEMA)
-          .field("location", Schema.STRING_SCHEMA)
-          .field("timestamp", Schema.OPTIONAL_INT64_SCHEMA)
-          .field("exception", Schema.OPTIONAL_STRING_SCHEMA)
-          .field("stack_trace", Schema.OPTIONAL_STRING_SCHEMA)
-          .field("key_bytes", Schema.OPTIONAL_BYTES_SCHEMA)
-          .field("value_bytes", Schema.OPTIONAL_BYTES_SCHEMA)
-          .field(HEADERS, HEADER_SCHEMA)
-          .field("target_table", Schema.OPTIONAL_STRING_SCHEMA)
-          .field("type", Schema.STRING_SCHEMA)
-          .schema();
 
   public static String stackTrace(Throwable error) {
     StringWriter sw = new StringWriter();
@@ -94,88 +74,32 @@ public class DeadLetterUtils {
     return sw.toString();
   }
 
-  public static class Values {
-    // expect byte[]
-    private final Object keyBytes;
-    // expect byte[]
-    private final Object valueBytes;
-    // expect List<Struct>
-    private final Object headers;
-
-    public Values(Object keyBytes, Object valueBytes, Object headers) {
-      this.keyBytes = keyBytes;
-      this.valueBytes = valueBytes;
-      this.headers = headers;
-    }
-
-    public Object getKeyBytes() {
-      return keyBytes;
-    }
-
-    public Object getValueBytes() {
-      return valueBytes;
-    }
-
-    public Object getHeaders() {
-      return headers;
-    }
-  }
-
-  public static SinkRecord failedRecord(
-      SinkRecord original, Throwable error, String location, String identifier) {
-    List<Struct> headers = null;
-    if (!original.headers().isEmpty()) {
-      headers = DeadLetterUtils.serializedHeaders(original);
-    }
-    Values values = new Values(original.key(), original.value(), headers);
-    return failedRecord(original, values, error, location, null, identifier);
-  }
-
-  private static SinkRecord failedRecord(
-      SinkRecord original,
-      Values values,
-      Throwable error,
-      String location,
-      String targetTable,
-      String identifier) {
-
-    Struct struct = new Struct(FAILED_SCHEMA);
-    if (identifier != null) {
-      struct.put("identifier", identifier);
-    }
-    struct.put("topic", original.topic());
-    struct.put("partition", original.kafkaPartition());
-    struct.put("offset", original.kafkaOffset());
-    struct.put("timestamp", original.timestamp());
-    struct.put("location", location);
-    struct.put("exception", error.toString());
-    String stack = stackTrace(error);
-    if (!stack.isEmpty()) {
-      struct.put("stack_trace", stackTrace(error));
-    }
-    if (values.getKeyBytes() != null) {
-      struct.put("key_bytes", values.getKeyBytes());
-    }
-    if (values.getValueBytes() != null) {
-      struct.put("value_bytes", values.getValueBytes());
-    }
-    if (values.getHeaders() != null) {
-      struct.put(HEADERS, values.getHeaders());
-    }
-    if (targetTable != null) {
-      struct.put("target_table", targetTable);
-    }
-
-    struct.put("type", TYPE);
-    return original.newRecord(
-        original.topic(),
-        original.kafkaPartition(),
-        null,
-        null,
-        FAILED_SCHEMA,
-        struct,
-        original.timestamp());
-  }
+  //  public static class Values {
+  //    // expect byte[]
+  //    private final Object keyBytes;
+  //    // expect byte[]
+  //    private final Object valueBytes;
+  //    // expect List<Struct>
+  //    private final Object headers;
+  //
+  //    public Values(Object keyBytes, Object valueBytes, Object headers) {
+  //      this.keyBytes = keyBytes;
+  //      this.valueBytes = valueBytes;
+  //      this.headers = headers;
+  //    }
+  //
+  //    public Object getKeyBytes() {
+  //      return keyBytes;
+  //    }
+  //
+  //    public Object getValueBytes() {
+  //      return valueBytes;
+  //    }
+  //
+  //    public Object getHeaders() {
+  //      return headers;
+  //    }
+  //  }
 
   /**
    * No way to get back the original Kafka header bytes. We instead have an array with elements of
@@ -197,15 +121,30 @@ public class DeadLetterUtils {
     return headers;
   }
 
-  @SuppressWarnings("unchecked")
-  public static SinkRecord mapToFailedRecord(
-      String targetTable, SinkRecord record, String location, Throwable error, String identifier) {
-    Map<String, Object> payload = (Map<String, Object>) record.value();
-    Map<String, Object> bytes = (Map<String, Object>) payload.get(ORIGINAL_BYTES_KEY);
-    Object keyBytes = bytes.get(KEY_BYTES);
-    Object valueBytes = bytes.get(VALUE_BYTES);
-    Object headers = bytes.get(HEADERS);
-    Values values = new Values(keyBytes, valueBytes, headers);
-    return failedRecord(record, values, error, location, targetTable, identifier);
+  //  @SuppressWarnings("unchecked")
+  //  public static SinkRecord mapToFailedRecord(
+  //      String targetTable, SinkRecord record, String location, Throwable error, String
+  // identifier) {
+  //    Map<String, Object> payload = (Map<String, Object>) record.value();
+  //    Map<String, Object> bytes = (Map<String, Object>) payload.get(ORIGINAL_BYTES_KEY);
+  //    Object keyBytes = bytes.get(KEY_BYTES);
+  //    Object valueBytes = bytes.get(VALUE_BYTES);
+  //    Object headers = bytes.get(HEADERS);
+  //    Values values = new Values(keyBytes, valueBytes, headers);
+  //    return failedRecord(record, values, error, location, targetTable, identifier);
+  //  }
+
+  public static Object loadClass(String name, ClassLoader loader) {
+    if (name == null || name.isEmpty()) {
+      throw new IllegalArgumentException("cannot initialize empty class");
+    }
+    Object obj;
+    try {
+      Class<?> clazz = Class.forName(name, true, loader);
+      obj = clazz.getDeclaredConstructor().newInstance();
+    } catch (Exception e) {
+      throw new RuntimeException(String.format("could not initialize class %s", name), e);
+    }
+    return obj;
   }
 }

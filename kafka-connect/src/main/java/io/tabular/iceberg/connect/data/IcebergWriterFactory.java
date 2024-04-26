@@ -20,7 +20,6 @@ package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Predicate;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
@@ -35,8 +34,6 @@ public class IcebergWriterFactory {
 
   private final IcebergSinkConfig config;
 
-  private final Predicate<String> shouldAutoCreate;
-
   private final CatalogApi catalogApi;
 
   public IcebergWriterFactory(Catalog catalog, IcebergSinkConfig config) {
@@ -46,31 +43,21 @@ public class IcebergWriterFactory {
   public IcebergWriterFactory(IcebergSinkConfig config, CatalogApi api) {
     this.config = config;
     this.catalogApi = api;
-
-    if (config.autoCreateEnabled()) {
-      shouldAutoCreate = (unused) -> true;
-    } else if (config.deadLetterTableEnabled()) {
-      String deadLetterTableName = config.deadLetterTableName().toLowerCase();
-      shouldAutoCreate = (tableName) -> tableName.equals(deadLetterTableName);
-    } else {
-      shouldAutoCreate = (unused) -> false;
-    }
   }
 
   public RecordWriter createWriter(
       String tableName, SinkRecord sample, boolean ignoreMissingTable) {
-
-    TableIdentifier identifier = catalogApi.tableId(tableName);
+    TableIdentifier identifier = TableIdentifier.parse(tableName);
     Table table;
     try {
       table = catalogApi.loadTable(identifier);
     } catch (NoSuchTableException nst) {
-      if (shouldAutoCreate.test(tableName)) {
+      if (config.autoCreateEnabled()) {
         table = autoCreateTable(tableName, sample);
       } else if (ignoreMissingTable) {
         return new RecordWriter() {};
       } else {
-        throw nst;
+        throw new WriteException.LoadTableException(identifier, nst);
       }
     }
 
@@ -79,7 +66,6 @@ public class IcebergWriterFactory {
 
   @VisibleForTesting
   Table autoCreateTable(String tableName, SinkRecord sample) {
-
     TableIdentifier identifier = catalogApi.tableId(tableName);
 
     Schema schema = catalogApi.schema(identifier, sample);
@@ -103,10 +89,6 @@ public class IcebergWriterFactory {
   }
 
   private static CatalogApi getCatalogApi(Catalog catalog, IcebergSinkConfig config) {
-    if (config.deadLetterTableEnabled()) {
-      return new CatalogApi.ErrorHandlingCatalogApi(catalog, config);
-    } else {
-      return new CatalogApi(catalog, config) {};
-    }
+    return new BaseCatalogApi(catalog, config) {};
   }
 }

@@ -19,9 +19,6 @@
 package io.tabular.iceberg.connect.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -29,15 +26,12 @@ import io.tabular.iceberg.connect.data.IcebergWriter;
 import io.tabular.iceberg.connect.data.IcebergWriterFactory;
 import io.tabular.iceberg.connect.data.RecordWriter;
 import io.tabular.iceberg.connect.data.WriterResult;
-import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
 import io.tabular.iceberg.connect.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.events.CommitRequestPayload;
 import io.tabular.iceberg.connect.events.CommitResponsePayload;
 import io.tabular.iceberg.connect.events.Event;
 import io.tabular.iceberg.connect.events.EventTestUtil;
 import io.tabular.iceberg.connect.events.EventType;
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -47,18 +41,11 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
-import org.apache.iceberg.relocated.com.google.common.collect.Maps;
-import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.SchemaBuilder;
-import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 
@@ -91,33 +78,6 @@ public class WorkerTest extends ChannelTestBase {
 
   private static final byte[] ORIGINAL_BYTES =
       "{\"field\":\"success\"}".getBytes(StandardCharsets.UTF_8);
-
-  private SinkRecord errorTransformSuccessRecord() {
-    Schema schema =
-        SchemaBuilder.struct()
-            .field("field", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
-            .build();
-    Struct struct = new Struct(schema);
-    struct.put("field", "success");
-    Map<String, Object> map = Maps.newHashMap();
-    SinkRecord success =
-        new SinkRecord(
-            "topic", 0, null, null, schema, struct, 100L, 1000L, TimestampType.CREATE_TIME);
-    map.put(DeadLetterUtils.PAYLOAD_KEY, success);
-    Map<String, Object> failed = Maps.newHashMap();
-    failed.put(DeadLetterUtils.VALUE_BYTES, ORIGINAL_BYTES);
-    map.put(DeadLetterUtils.ORIGINAL_BYTES_KEY, failed);
-    return new SinkRecord(
-        "topic", 0, null, null, null, map, 100L, 1000L, TimestampType.CREATE_TIME);
-  }
-
-  private SinkRecord errorTransformFailedRecord() {
-    SinkRecord originalRecord =
-        new SinkRecord(
-            "topic", 0, null, null, null, ORIGINAL_BYTES, 100L, 1000L, TimestampType.CREATE_TIME);
-    return DeadLetterUtils.failedRecord(
-        originalRecord, new IllegalArgumentException("test"), "location", "test_identifier");
-  }
 
   @Test
   public void testStaticRoute() {
@@ -185,249 +145,5 @@ public class WorkerTest extends ChannelTestBase {
     assertThat(readyPayload.assignments()).hasSize(1);
     // offset should be one more than the record offset
     assertThat(readyPayload.assignments().get(0).offset()).isEqualTo(1L);
-  }
-
-  @Test
-  @DisplayName("BaseWriterForTable should create writers and pass records to them")
-  public void baseWriterForTable() {
-    when(config.deadLetterTableEnabled()).thenReturn(false);
-
-    RecordingRecordWriter writer = new RecordingRecordWriter(false);
-
-    IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
-    when(writerFactory.createWriter(
-            ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anyBoolean()))
-        .thenReturn(writer);
-
-    Map<String, RecordWriter> writerMap = Maps.newHashMap();
-
-    Worker.BaseWriterForTable writerForTable =
-        new Worker.BaseWriterForTable(writerFactory, writerMap);
-
-    SinkRecord nullRecord = new SinkRecord(SRC_TOPIC_NAME, 0, null, null, null, "test", 0);
-    writerForTable.write(TABLE_NAME, nullRecord, true);
-
-    assertThat(writer.written.size()).isEqualTo(1);
-    assertThat(writer.written.get(0).value()).isEqualTo("test");
-    assertThat(writerMap.keySet()).isEqualTo(Sets.newHashSet(TABLE_NAME));
-  }
-
-  @Test
-  @DisplayName("DeadLetterWriterForTable should ignore null records")
-  public void deadLetterWriterForTableNullRecords() {
-    when(config.deadLetterTableEnabled()).thenReturn(true);
-    when(config.deadLetterTableName()).thenReturn(DEAD_LETTER_TABLE_NAME);
-    when(config.connectorName()).thenReturn("connector-name");
-
-    RecordingRecordWriter writer = new RecordingRecordWriter(false);
-
-    IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
-    when(writerFactory.createWriter(
-            ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anyBoolean()))
-        .thenReturn(writer);
-
-    Map<String, RecordWriter> writerMap = Maps.newHashMap();
-
-    Worker.DeadLetterWriterForTable writerForTable =
-        new Worker.DeadLetterWriterForTable(writerFactory, writerMap, config);
-
-    SinkRecord nullRecord = new SinkRecord(SRC_TOPIC_NAME, 0, null, null, null, null, 0);
-    writerForTable.write(TABLE_NAME, nullRecord, true);
-
-    assertThat(writer.written).isEmpty();
-  }
-
-  @Test
-  @DisplayName("DeadLetterWriterForTable should write successful ErrorTransformed records")
-  public void deadLetterWriterForTableSuccessErrorTransform() {
-    when(config.deadLetterTableEnabled()).thenReturn(true);
-    when(config.deadLetterTableName()).thenReturn(DEAD_LETTER_TABLE_NAME);
-    when(config.connectorName()).thenReturn("connector-name");
-
-    RecordingRecordWriter writer = new RecordingRecordWriter(false);
-
-    IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
-    when(writerFactory.createWriter(
-            ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anyBoolean()))
-        .thenReturn(writer);
-
-    Map<String, RecordWriter> writerMap = Maps.newHashMap();
-
-    Worker.DeadLetterWriterForTable writerForTable =
-        new Worker.DeadLetterWriterForTable(writerFactory, writerMap, config);
-
-    writerForTable.write(TABLE_NAME, errorTransformSuccessRecord(), true);
-    Schema expectedSchema =
-        SchemaBuilder.struct()
-            .field("field", org.apache.kafka.connect.data.Schema.STRING_SCHEMA)
-            .build();
-    assertThat(writer.written.size()).isEqualTo(1);
-    SinkRecord result = writer.written.get(0);
-    assertThat(result.valueSchema()).isEqualTo(expectedSchema);
-    assertThat(result.value()).isInstanceOf(Struct.class);
-    Struct resultStruct = (Struct) result.value();
-    assertThat(resultStruct.get("field")).isEqualTo("success");
-  }
-
-  @Test
-  @DisplayName("DeadLetterWriterForTable should write failed ErrorTransformed records")
-  public void deadLetterWriterForTableFailureErrorTransform() {
-    when(config.deadLetterTableEnabled()).thenReturn(true);
-    when(config.deadLetterTableName()).thenReturn(DEAD_LETTER_TABLE_NAME);
-    when(config.connectorName()).thenReturn("connector-name");
-
-    RecordingRecordWriter writer = new RecordingRecordWriter(false);
-
-    IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
-    when(writerFactory.createWriter(
-            ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anyBoolean()))
-        .thenReturn(writer);
-
-    Map<String, RecordWriter> writerMap = Maps.newHashMap();
-
-    Worker.DeadLetterWriterForTable writerForTable =
-        new Worker.DeadLetterWriterForTable(writerFactory, writerMap, config);
-
-    writerForTable.write(TABLE_NAME, errorTransformFailedRecord(), true);
-    assertThat(writer.written.size()).isEqualTo(1);
-    SinkRecord result = writer.written.get(0);
-    assertThat(result.valueSchema()).isEqualTo(DeadLetterUtils.FAILED_SCHEMA);
-    assertThat(result.value()).isInstanceOf(Struct.class);
-    Struct resultValue = (Struct) result.value();
-    assertThat(resultValue.get("exception").toString().contains("test")).isTrue();
-    String resultBytesAsString =
-        new String((byte[]) resultValue.get("value_bytes"), StandardCharsets.UTF_8);
-    assertThat(resultBytesAsString).isEqualTo(new String(ORIGINAL_BYTES, StandardCharsets.UTF_8));
-    assertThat(resultValue.get("target_table")).isEqualTo(TABLE_NAME);
-    assertThat(resultValue.get("identifier")).isEqualTo("connector_name");
-  }
-
-  @Test
-  @DisplayName(
-      "DeadLetterWriterForTable should convert Iceberg Writer failures to failed SinkRecord")
-  public void deadLetterWriterForTableConvertWriterFailures() {
-    when(config.deadLetterTableEnabled()).thenReturn(true);
-    when(config.deadLetterTableName()).thenReturn(DEAD_LETTER_TABLE_NAME);
-    when(config.connectorName()).thenReturn("connector-name");
-
-    RecordingRecordWriter writer = new RecordingRecordWriter(true);
-
-    IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
-    when(writerFactory.createWriter(
-            ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anyBoolean()))
-        .thenReturn(writer);
-
-    Map<String, RecordWriter> writerMap = Maps.newHashMap();
-
-    Worker.DeadLetterWriterForTable writerForTable =
-        new Worker.DeadLetterWriterForTable(writerFactory, writerMap, config);
-
-    writerForTable.write(TABLE_NAME, errorTransformSuccessRecord(), true);
-    assertThat(writer.written.size()).isEqualTo(1);
-    SinkRecord result = writer.written.get(0);
-    assertThat(result.valueSchema()).isEqualTo(DeadLetterUtils.FAILED_SCHEMA);
-    assertThat(result.value()).isInstanceOf(Struct.class);
-    Struct resultValue = (Struct) result.value();
-    assertThat(resultValue.get("exception").toString().contains("test throw")).isTrue();
-    String resultBytesAsString =
-        new String((byte[]) resultValue.get("value_bytes"), StandardCharsets.UTF_8);
-    assertThat(resultBytesAsString).isEqualTo(new String(ORIGINAL_BYTES, StandardCharsets.UTF_8));
-    assertThat(resultValue.get("target_table")).isEqualTo(TABLE_NAME);
-    assertThat(resultValue.get("identifier")).isEqualTo("connector_name");
-    // we successfully create the regular writer, but fail to write it, seeing both writers in the
-    // Map
-    assertThat(writerMap.keySet()).isEqualTo(Sets.newHashSet(TABLE_NAME, DEAD_LETTER_TABLE_NAME));
-  }
-
-  @Test
-  @DisplayName(
-      "DeadLetterWriterForTable should fail when non-DeadLetterExceptions are thrown during writer creation")
-  public void deadLetterWriterThrowWriterCreation() {
-    when(config.deadLetterTableEnabled()).thenReturn(true);
-    when(config.deadLetterTableName()).thenReturn(DEAD_LETTER_TABLE_NAME);
-    when(config.connectorName()).thenReturn("connector-name");
-
-    IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
-    when(writerFactory.createWriter(
-            eq(TABLE_NAME), ArgumentMatchers.any(), ArgumentMatchers.anyBoolean()))
-        .thenThrow(new IllegalArgumentException("writer factory throws"));
-
-    Map<String, RecordWriter> writerMap = Maps.newHashMap();
-
-    Worker.DeadLetterWriterForTable writerForTable =
-        new Worker.DeadLetterWriterForTable(writerFactory, writerMap, config);
-
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> writerForTable.write(TABLE_NAME, errorTransformSuccessRecord(), true));
-  }
-
-  @Test
-  @DisplayName(
-      "DeadLetterWriterForTable should write failed SinkRecords when DeadLetterWriter exceptions are thrown during writer creation")
-  public void deadLetterWriterDeadLetterExceptionsAtCreation() {
-    when(config.deadLetterTableEnabled()).thenReturn(true);
-    when(config.deadLetterTableName()).thenReturn(DEAD_LETTER_TABLE_NAME);
-    when(config.connectorName()).thenReturn("connector-name");
-
-    RecordingRecordWriter writer = new RecordingRecordWriter(false);
-
-    IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
-    when(writerFactory.createWriter(
-            eq(TABLE_NAME), ArgumentMatchers.any(), ArgumentMatchers.anyBoolean()))
-        .thenThrow(
-            new DeadLetterUtils.DeadLetterException(
-                "test", new IllegalArgumentException("creation throw")));
-    when(writerFactory.createWriter(
-            eq(DEAD_LETTER_TABLE_NAME), ArgumentMatchers.any(), ArgumentMatchers.anyBoolean()))
-        .thenReturn(writer);
-    Map<String, RecordWriter> writerMap = Maps.newHashMap();
-
-    Worker.DeadLetterWriterForTable writerForTable =
-        new Worker.DeadLetterWriterForTable(writerFactory, writerMap, config);
-
-    writerForTable.write(TABLE_NAME, errorTransformSuccessRecord(), true);
-
-    assertThat(writer.written.size()).isEqualTo(1);
-    SinkRecord result = writer.written.get(0);
-    assertThat(result.valueSchema()).isEqualTo(DeadLetterUtils.FAILED_SCHEMA);
-    assertThat(result.value()).isInstanceOf(Struct.class);
-    Struct resultValue = (Struct) result.value();
-    assertThat(resultValue.get("stack_trace").toString().contains("creation throw")).isTrue();
-    String resultBytesAsString =
-        new String((byte[]) resultValue.get("value_bytes"), StandardCharsets.UTF_8);
-    assertThat(resultBytesAsString).isEqualTo(new String(ORIGINAL_BYTES, StandardCharsets.UTF_8));
-    // fail to create the original message, but do successfully create the dead letter table
-    assertThat(writerMap.keySet()).isEqualTo(Sets.newHashSet(DEAD_LETTER_TABLE_NAME));
-  }
-
-  @Test
-  @DisplayName(
-      "DeadLetterWriterForTable should fail when UncheckedIOException is thrown on writing a record")
-  public void deadLetterWriterThrowWriterWriteUncheckedIO() {
-    // the writer may close/flush during writing due to schema changes being applied to the table
-    // which introduces the possibility of IOExceptions
-    when(config.deadLetterTableEnabled()).thenReturn(true);
-    when(config.deadLetterTableName()).thenReturn(DEAD_LETTER_TABLE_NAME);
-    when(config.connectorName()).thenReturn("connector-name");
-    RecordWriter writer = mock(IcebergWriter.class);
-
-    doThrow(new UncheckedIOException(new IOException("test")))
-        .when(writer)
-        .write(ArgumentMatchers.any());
-
-    IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
-    when(writerFactory.createWriter(
-            ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anyBoolean()))
-        .thenReturn(writer);
-
-    Map<String, RecordWriter> writerMap = Maps.newHashMap();
-
-    Worker.DeadLetterWriterForTable writerForTable =
-        new Worker.DeadLetterWriterForTable(writerFactory, writerMap, config);
-
-    assertThrows(
-        UncheckedIOException.class,
-        () -> writerForTable.write(TABLE_NAME, errorTransformSuccessRecord(), true));
   }
 }

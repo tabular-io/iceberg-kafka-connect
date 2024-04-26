@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
+import io.tabular.iceberg.connect.deadletter.FailedRecordFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,8 +31,10 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.DisplayName;
@@ -52,10 +55,14 @@ public class ErrorTransformTest {
   private static final String JSON_CONVERTER = "org.apache.kafka.connect.json.JsonConverter";
   private static final String STRING_CONVERTER = "org.apache.kafka.connect.storage.StringConverter";
 
+  private static final String DEAD_LETTER_TABLE_NAME = "dead_letter.table";
+
+  private final FailedRecordFactory failedRecordFactory = getFailedRecordFactory();
+
   private Headers stringAsByteHeaders() {
     Headers headers = new ConnectHeaders();
     headers.add(
-        "h1", new SchemaAndValue(Schema.BYTES_SCHEMA, "h1".getBytes(StandardCharsets.UTF_8)));
+        "h1k", new SchemaAndValue(Schema.BYTES_SCHEMA, "h1v".getBytes(StandardCharsets.UTF_8)));
     return headers;
   }
 
@@ -76,9 +83,24 @@ public class ErrorTransformTest {
         headers);
   }
 
+  private FailedRecordFactory getFailedRecordFactory() {
+    FailedRecordFactory factory =
+        (FailedRecordFactory)
+            DeadLetterUtils.loadClass(
+                "io.tabular.iceberg.connect.deadletter.DefaultFailedRecordFactory",
+                this.getClass().getClassLoader());
+    factory.configure(ImmutableMap.of("table_name", DEAD_LETTER_TABLE_NAME));
+    return factory;
+  }
+
+  //  private assertHeaders(Headers headers, String valueBytes, String keyBytes, List<Struct>
+  // originalHeaders) {
+  //    headers.lastWithName("t_")
+  //  }
+
   @Test
   @DisplayName(
-      "It should deserialize using the supplied converters into the custom SinkRecord shape with original/transformed result")
+      "It should deserialize using the supplied converters into the custom SinkRecord shape with additional headers")
   public void deserialize() {
     try (ErrorTransform smt = new ErrorTransform()) {
       smt.configure(
@@ -90,60 +112,30 @@ public class ErrorTransformTest {
               "header.converter",
               STRING_CONVERTER,
               "header.converter.converter.type",
-              "header"));
+              "header",
+              "table_name",
+              DEAD_LETTER_TABLE_NAME));
+
       SinkRecord result = smt.apply(createRecord(KEY_STRING, VALUE_STRING, stringAsByteHeaders()));
 
-      assertThat(result.keySchema()).isNull();
-      assertThat(result.value()).isInstanceOf(Map.class);
-      Map<?, ?> value = (Map<?, ?>) result.value();
+      assertThat(result.keySchema()).isEqualTo(SchemaBuilder.OPTIONAL_STRING_SCHEMA);
+      assertThat(result.valueSchema()).isEqualTo(SchemaBuilder.OPTIONAL_STRING_SCHEMA);
+      assertThat(result.key()).isEqualTo(KEY_STRING);
+      assertThat(result.value()).isEqualTo(VALUE_STRING);
 
-      // can't assert on map due to byte array equality
-      Map<?, ?> original = (Map<?, ?>) value.get("original");
-      byte[] valueBytes = (byte[]) original.get("value");
-      byte[] keyBytes = (byte[]) original.get("key");
-      assertThat(valueBytes).isEqualTo(VALUE_STRING.getBytes(StandardCharsets.UTF_8));
-      assertThat(keyBytes).isEqualTo(KEY_STRING.getBytes(StandardCharsets.UTF_8));
+      Headers headers = result.headers();
+      Header keyHeader = headers.lastWithName(DeadLetterUtils.KEY_HEADER);
+      Header valueHeader = headers.lastWithName(DeadLetterUtils.VALUE_HEADER);
+      Header serializedHeader = headers.lastWithName(DeadLetterUtils.HEADERS_HEADER);
 
-      assertThat(original.get("headers")).isInstanceOf(ArrayList.class);
-      List<?> resultHeaders = (List<?>) (original.get("headers"));
-      assertThat(resultHeaders).isNotEmpty();
-
-      Struct headerElement = (Struct) resultHeaders.get(0);
-      assertThat(headerElement.get("key")).isEqualTo("h1");
-      assertThat((byte[]) headerElement.get("value"))
-          .isEqualTo("h1".getBytes(StandardCharsets.UTF_8));
-
-      assertThat(value.get("transformed")).isInstanceOf(SinkRecord.class);
-      SinkRecord transformed = (SinkRecord) value.get("transformed");
-      assertThat(transformed.value()).isEqualTo(VALUE_STRING);
-      assertThat(transformed.valueSchema()).isEqualTo(Schema.OPTIONAL_STRING_SCHEMA);
-      assertThat(transformed.key()).isEqualTo(KEY_STRING);
-      assertThat(transformed.keySchema()).isEqualTo(Schema.OPTIONAL_STRING_SCHEMA);
-      assertThat(transformed.topic()).isEqualTo(TOPIC);
-      assertThat(transformed.kafkaPartition()).isEqualTo(PARTITION);
-      assertThat(transformed.kafkaOffset()).isEqualTo(OFFSET);
-
-      ConnectHeaders expectedHeaders = new ConnectHeaders();
-      expectedHeaders.add("h1", new SchemaAndValue(Schema.OPTIONAL_STRING_SCHEMA, "h1"));
-      assertThat(transformed.headers()).isEqualTo(expectedHeaders);
-    }
-  }
-
-  @Test
-  @DisplayName("It should not have a key entry for original bytes if the key was null")
-  public void nullKey() {
-    try (ErrorTransform smt = new ErrorTransform()) {
-      smt.configure(
-          ImmutableMap.of("value.converter", STRING_CONVERTER, "key.converter", STRING_CONVERTER));
-      SinkRecord result = smt.apply(createRecord(null, VALUE_STRING, null));
-
-      assertThat(result.keySchema()).isNull();
-      assertThat(result.value()).isInstanceOf(Map.class);
-      Map<?, ?> value = (Map<?, ?>) result.value();
-      Map<?, ?> original = (Map<?, ?>) value.get("original");
-
-      assertThat(original.containsKey("value")).isTrue();
-      assertThat(original.containsKey("key")).isFalse();
+      assertThat(keyHeader.value()).isEqualTo(KEY_STRING.getBytes(StandardCharsets.UTF_8));
+      assertThat(valueHeader.value()).isEqualTo(VALUE_STRING.getBytes(StandardCharsets.UTF_8));
+      assertThat(serializedHeader.value()).isInstanceOf(List.class);
+      List<Struct> resultHeaders = (List<Struct>) serializedHeader.value();
+      assertThat(resultHeaders.size()).isEqualTo(1);
+      assertThat(resultHeaders.get(0).get("key")).isEqualTo("h1k");
+      assertThat(resultHeaders.get(0).get("value"))
+          .isEqualTo("h1v".getBytes(StandardCharsets.UTF_8));
     }
   }
 
@@ -163,23 +155,31 @@ public class ErrorTransformTest {
               "smts",
               "io.tabular.iceberg.connect.transforms.TestStringTransform,io.tabular.iceberg.connect.transforms.TestStringTransform",
               "smts.transform_text",
-              transformString));
+              transformString,
+              "table_name",
+              DEAD_LETTER_TABLE_NAME));
+
       SinkRecord result = smt.apply(createRecord(KEY_STRING, VALUE_STRING, null));
 
-      assertThat(result.value()).isInstanceOf(Map.class);
-      Map<?, ?> value = (Map<?, ?>) result.value();
-
-      assertThat(value.get("transformed")).isInstanceOf(SinkRecord.class);
-      SinkRecord transformed = (SinkRecord) value.get("transformed");
+      assertThat(result.value()).isInstanceOf(String.class);
       // each transformer appends _transformed to the original value
       // we are configured with two transform appenders
-      assertThat(transformed.value()).isEqualTo(VALUE_STRING + "_transformed_transformed");
-      assertThat(transformed.key()).isEqualTo(KEY_STRING);
-      assertThat(transformed.keySchema()).isEqualTo(Schema.OPTIONAL_STRING_SCHEMA);
-      assertThat(transformed.topic()).isEqualTo(TOPIC);
-      assertThat(transformed.kafkaPartition()).isEqualTo(PARTITION);
-      assertThat(transformed.kafkaOffset()).isEqualTo(OFFSET);
-      assertThat(transformed.headers()).isEqualTo(new ConnectHeaders());
+      assertThat(result.value()).isEqualTo(VALUE_STRING + "_transformed_transformed");
+
+      assertThat(result.key()).isEqualTo(KEY_STRING);
+      assertThat(result.keySchema()).isEqualTo(Schema.OPTIONAL_STRING_SCHEMA);
+      assertThat(result.topic()).isEqualTo(TOPIC);
+      assertThat(result.kafkaPartition()).isEqualTo(PARTITION);
+
+      assertThat(result.kafkaOffset()).isEqualTo(OFFSET);
+      Headers headers = result.headers();
+      Header keyHeader = headers.lastWithName(DeadLetterUtils.KEY_HEADER);
+      Header valueHeader = headers.lastWithName(DeadLetterUtils.VALUE_HEADER);
+      Header serializedHeader = headers.lastWithName(DeadLetterUtils.HEADERS_HEADER);
+
+      assertThat(keyHeader.value()).isEqualTo(KEY_STRING.getBytes(StandardCharsets.UTF_8));
+      assertThat(valueHeader.value()).isEqualTo(VALUE_STRING.getBytes(StandardCharsets.UTF_8));
+      assertThat(serializedHeader).isNull();
     }
   }
 
@@ -188,7 +188,13 @@ public class ErrorTransformTest {
   public void tombstone() {
     try (ErrorTransform smt = new ErrorTransform()) {
       smt.configure(
-          ImmutableMap.of("value.converter", STRING_CONVERTER, "key.converter", STRING_CONVERTER));
+          ImmutableMap.of(
+              "value.converter",
+              STRING_CONVERTER,
+              "key.converter",
+              STRING_CONVERTER,
+              "table_name",
+              DEAD_LETTER_TABLE_NAME));
       SinkRecord record = createRecord(null, null, null);
       assertThat(smt.apply(record)).isSameAs(record);
     }
@@ -212,7 +218,10 @@ public class ErrorTransformTest {
               "smts.transform_text",
               transformString,
               "smts.null",
-              "true"));
+              "true",
+              "table_name",
+              DEAD_LETTER_TABLE_NAME));
+
       SinkRecord result = smt.apply(createRecord(KEY_STRING, VALUE_STRING, null));
 
       assertThat(result).isNull();
@@ -232,20 +241,21 @@ public class ErrorTransformTest {
               "header.converter",
               STRING_CONVERTER,
               "header.converter.converter.type",
-              "header"));
+              "header",
+              "table_name",
+              DEAD_LETTER_TABLE_NAME));
 
       String malformedKey = "{\"malformed_json\"\"\"{}{}{}{}**";
       SinkRecord result =
           smt.apply(createRecord(malformedKey, VALUE_STRING, stringAsByteHeaders()));
       assertThat(result.keySchema()).isNull();
-      assertThat(result.valueSchema()).isEqualTo(DeadLetterUtils.FAILED_SCHEMA);
+      assertThat(result.valueSchema()).isEqualTo(failedRecordFactory.schema(null));
       assertThat(result.valueSchema().name()).isEqualTo("failed_message");
       assertThat(result.value()).isInstanceOf(Struct.class);
       Struct value = (Struct) result.value();
       assertThat(value.get("topic")).isEqualTo(TOPIC);
       assertThat(value.get("partition")).isEqualTo(PARTITION);
       assertThat(value.get("offset")).isEqualTo(OFFSET);
-      assertThat(value.get("location")).isEqualTo("KEY_CONVERTER");
       assertThat(((String) value.get("stack_trace")).contains("JsonConverter")).isTrue();
       assertThat(((String) value.get("exception")).contains("DataException")).isTrue();
       assertThat((byte[]) value.get("key_bytes"))
@@ -257,9 +267,9 @@ public class ErrorTransformTest {
       List<?> resultHeaders = (List<?>) (value.get("headers"));
       assertThat(resultHeaders).isNotEmpty();
       Struct headerElement = (Struct) resultHeaders.get(0);
-      assertThat(headerElement.get("key")).isEqualTo("h1");
+      assertThat(headerElement.get("key")).isEqualTo("h1k");
       assertThat((byte[]) headerElement.get("value"))
-          .isEqualTo("h1".getBytes(StandardCharsets.UTF_8));
+          .isEqualTo("h1v".getBytes(StandardCharsets.UTF_8));
     }
   }
 
@@ -276,20 +286,21 @@ public class ErrorTransformTest {
               "header.converter",
               STRING_CONVERTER,
               "header.converter.converter.type",
-              "header"));
+              "header",
+              "table_name",
+              DEAD_LETTER_TABLE_NAME));
 
       String malformedValue = "{\"malformed_json\"\"\"{}{}{}{}**";
       SinkRecord result =
           smt.apply(createRecord(KEY_STRING, malformedValue, stringAsByteHeaders()));
       assertThat(result.keySchema()).isNull();
-      assertThat(result.valueSchema()).isEqualTo(DeadLetterUtils.FAILED_SCHEMA);
+      assertThat(result.valueSchema()).isEqualTo(failedRecordFactory.schema(null));
       assertThat(result.valueSchema().name()).isEqualTo("failed_message");
       assertThat(result.value()).isInstanceOf(Struct.class);
       Struct value = (Struct) result.value();
       assertThat(value.get("topic")).isEqualTo(TOPIC);
       assertThat(value.get("partition")).isEqualTo(PARTITION);
       assertThat(value.get("offset")).isEqualTo(OFFSET);
-      assertThat(value.get("location")).isEqualTo("VALUE_CONVERTER");
       assertThat(((String) value.get("stack_trace")).contains("JsonConverter")).isTrue();
       assertThat(((String) value.get("exception")).contains("DataException")).isTrue();
       assertThat((byte[]) value.get("key_bytes"))
@@ -301,9 +312,9 @@ public class ErrorTransformTest {
       List<?> resultHeaders = (ArrayList<?>) (value.get("headers"));
       assertThat(resultHeaders).isNotEmpty();
       Struct headerElement = (Struct) resultHeaders.get(0);
-      assertThat(headerElement.get("key")).isEqualTo("h1");
+      assertThat(headerElement.get("key")).isEqualTo("h1k");
       assertThat((byte[]) headerElement.get("value"))
-          .isEqualTo("h1".getBytes(StandardCharsets.UTF_8));
+          .isEqualTo("h1v".getBytes(StandardCharsets.UTF_8));
     }
   }
 
@@ -328,19 +339,20 @@ public class ErrorTransformTest {
               "header.converter.schemas.enable",
               "false",
               "header.converter.converter.type",
-              "header"));
+              "header",
+              "table_name",
+              DEAD_LETTER_TABLE_NAME));
 
       SinkRecord record = createRecord(KEY_STRING, VALUE_STRING, headers);
       SinkRecord result = smt.apply(record);
       assertThat(result.keySchema()).isNull();
-      assertThat(result.valueSchema()).isEqualTo(DeadLetterUtils.FAILED_SCHEMA);
+      assertThat(result.valueSchema()).isEqualTo(failedRecordFactory.schema(null));
       assertThat(result.valueSchema().name()).isEqualTo("failed_message");
       assertThat(result.value()).isInstanceOf(Struct.class);
       Struct value = (Struct) result.value();
       assertThat(value.get("topic")).isEqualTo(TOPIC);
       assertThat(value.get("partition")).isEqualTo(PARTITION);
       assertThat(value.get("offset")).isEqualTo(OFFSET);
-      assertThat(value.get("location")).isEqualTo("HEADER_CONVERTER");
       assertThat(((String) value.get("stack_trace")).contains("JsonConverter")).isTrue();
       assertThat(((String) value.get("exception")).contains("DataException")).isTrue();
       assertThat((byte[]) value.get("key_bytes"))
@@ -375,19 +387,20 @@ public class ErrorTransformTest {
               "smts",
               "io.tabular.iceberg.connect.transforms.TestStringTransform,io.tabular.iceberg.connect.transforms.TestStringTransform",
               "smts.throw",
-              "true"));
+              "true",
+              "table_name",
+              DEAD_LETTER_TABLE_NAME));
 
       SinkRecord record = createRecord(KEY_STRING, VALUE_STRING, stringAsByteHeaders());
       SinkRecord result = smt.apply(record);
       assertThat(result.keySchema()).isNull();
-      assertThat(result.valueSchema()).isEqualTo(DeadLetterUtils.FAILED_SCHEMA);
+      assertThat(result.valueSchema()).isEqualTo(failedRecordFactory.schema(null));
       assertThat(result.valueSchema().name()).isEqualTo("failed_message");
       assertThat(result.value()).isInstanceOf(Struct.class);
       Struct value = (Struct) result.value();
       assertThat(value.get("topic")).isEqualTo(TOPIC);
       assertThat(value.get("partition")).isEqualTo(PARTITION);
       assertThat(value.get("offset")).isEqualTo(OFFSET);
-      assertThat(value.get("location")).isEqualTo("SMT_FAILURE");
       assertThat(((String) value.get("stack_trace")).contains("smt failure")).isTrue();
       assertThat(((String) value.get("exception")).contains("smt failure")).isTrue();
       assertThat((byte[]) value.get("key_bytes"))
@@ -399,9 +412,9 @@ public class ErrorTransformTest {
       List<?> resultHeaders = (ArrayList<?>) (value.get("headers"));
       assertThat(resultHeaders).isNotEmpty();
       Struct headerElement = (Struct) resultHeaders.get(0);
-      assertThat(headerElement.get("key")).isEqualTo("h1");
+      assertThat(headerElement.get("key")).isEqualTo("h1k");
       assertThat((byte[]) headerElement.get("value"))
-          .isEqualTo("h1".getBytes(StandardCharsets.UTF_8));
+          .isEqualTo("h1v".getBytes(StandardCharsets.UTF_8));
     }
   }
 

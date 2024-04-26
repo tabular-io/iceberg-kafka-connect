@@ -43,8 +43,6 @@ import org.mockito.ArgumentCaptor;
 
 public class IcebergWriterFactoryTest {
 
-  private static final String DEAD_LETTER_TABLE = "dlt.name";
-
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   @SuppressWarnings("unchecked")

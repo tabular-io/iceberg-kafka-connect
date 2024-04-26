@@ -26,10 +26,12 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
-import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
@@ -115,7 +117,6 @@ public class ErrorTransform implements Transformation<SinkRecord> {
     }
   }
 
-  private static final String HEADERS = "headers";
   private static final String KEY_CONVERTER = "key.converter";
   private static final String VALUE_CONVERTER = "value.converter";
   private static final String HEADER_CONVERTER = "header.converter";
@@ -126,6 +127,7 @@ public class ErrorTransform implements Transformation<SinkRecord> {
   private static final String VALUE_FAILURE = "VALUE_CONVERTER";
   private static final String HEADER_FAILURE = "HEADER_CONVERTER";
   private static final String SMT_FAILURE = "SMT_FAILURE";
+  private static final Schema OPTIONAL_BYTES_SCHEMA = SchemaBuilder.OPTIONAL_BYTES_SCHEMA;
 
   private TransformExceptionHandler converterErrorHandler;
   private TransformExceptionHandler smtErrorHandler;
@@ -296,8 +298,10 @@ public class ErrorTransform implements Transformation<SinkRecord> {
 
     converterErrorHandler =
         (TransformExceptionHandler) loadClass(config.getString(CONVERTER_ERROR_HANDLER), loader);
+    converterErrorHandler.configure(props);
     smtErrorHandler =
         (TransformExceptionHandler) loadClass(config.getString(SMT_ERROR_HANDLER), loader);
+    smtErrorHandler.configure(props);
   }
 
   private Object loadClass(String name, ClassLoader loader) {
@@ -351,33 +355,29 @@ public class ErrorTransform implements Transformation<SinkRecord> {
   }
 
   private SinkRecord newRecord(SinkRecord original, SinkRecord transformed) {
-    Map<String, Object> bytes = Maps.newHashMap();
-
-    if (original.key() != null) {
-      bytes.put(DeadLetterUtils.KEY_BYTES, original.key());
-    }
-    if (original.value() == null) {
-      throw new IllegalStateException("newRecord called with null value for record.value");
-    }
-
     if (!original.headers().isEmpty()) {
-      bytes.put(HEADERS, DeadLetterUtils.serializedHeaders(original));
+      List<Struct> serializedHeaders = DeadLetterUtils.serializedHeaders(original);
+      transformed
+          .headers()
+          .add(
+              DeadLetterUtils.HEADERS_HEADER,
+              new SchemaAndValue(DeadLetterUtils.HEADER_SCHEMA, serializedHeaders));
+    }
+    if (original.key() != null) {
+      transformed
+          .headers()
+          .add(
+              DeadLetterUtils.KEY_HEADER,
+              new SchemaAndValue(OPTIONAL_BYTES_SCHEMA, original.key()));
+    }
+    if (original.value() != null) {
+      transformed
+          .headers()
+          .add(
+              DeadLetterUtils.VALUE_HEADER,
+              new SchemaAndValue(OPTIONAL_BYTES_SCHEMA, original.value()));
     }
 
-    bytes.put(DeadLetterUtils.VALUE_BYTES, original.value());
-
-    Map<String, Object> result = Maps.newHashMap();
-    result.put(DeadLetterUtils.PAYLOAD_KEY, transformed);
-    result.put(DeadLetterUtils.ORIGINAL_BYTES_KEY, bytes);
-
-    return transformed.newRecord(
-        transformed.topic(),
-        transformed.kafkaPartition(),
-        null,
-        null,
-        null,
-        result,
-        transformed.timestamp(),
-        transformed.headers());
+    return transformed;
   }
 }

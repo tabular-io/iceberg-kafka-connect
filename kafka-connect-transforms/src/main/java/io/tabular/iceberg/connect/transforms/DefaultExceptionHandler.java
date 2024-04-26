@@ -19,11 +19,43 @@
 package io.tabular.iceberg.connect.transforms;
 
 import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
+import io.tabular.iceberg.connect.deadletter.FailedRecordFactory;
+import java.util.Map;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 public class DefaultExceptionHandler implements TransformExceptionHandler {
+
+  private static final String FAILED_RECORD_FACTORY_PROP = "failed_record_factory";
+  private static final ConfigDef CONFIG_DEF =
+      new ConfigDef()
+          .define(
+              FAILED_RECORD_FACTORY_PROP,
+              ConfigDef.Type.STRING,
+              "io.tabular.iceberg.connect.deadletter.DefaultFailedRecordFactory",
+              ConfigDef.Importance.MEDIUM,
+              "class name for failed record conversion");
+
+  private FailedRecordFactory recordFactory;
+
   @Override
   public SinkRecord handle(SinkRecord original, Throwable error, String location) {
-    return DeadLetterUtils.failedRecord(original, error, location, null);
+    return recordFactory.recordFromSmt(original, error, location);
+  }
+
+  @Override
+  public void configure(Map<String, ?> props) {
+    SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
+    ClassLoader loader = this.getClass().getClassLoader();
+    this.recordFactory =
+        (FailedRecordFactory)
+            DeadLetterUtils.loadClass(config.getString(FAILED_RECORD_FACTORY_PROP), loader);
+    recordFactory.configure(props);
+  }
+
+  @Override
+  public ConfigDef config() {
+    return CONFIG_DEF;
   }
 }

@@ -18,8 +18,14 @@
  */
 package io.tabular.iceberg.connect.transforms;
 
+import java.util.Map;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 public interface TransformExceptionHandler {
   SinkRecord handle(SinkRecord original, Throwable error, String location);
+
+  void configure(Map<String, ?> props);
+
+  ConfigDef config();
 }

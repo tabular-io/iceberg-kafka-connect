@@ -92,6 +92,7 @@ public class IcebergWriter implements RecordWriter {
       // initialize a new writer with the new schema
       initNewWriter();
       // convert the row again, this time using the new table schema
+      // fail here again
       row = recordConverter.convert(record.value(), null);
     }
 
@@ -99,8 +100,12 @@ public class IcebergWriter implements RecordWriter {
   }
 
   private Operation extractCdcOperation(Object recordValue, String cdcField) {
-    Object opValue = Utilities.extractFromRecordValue(recordValue, cdcField);
-
+    Object opValue;
+    try {
+      opValue = Utilities.extractFromRecordValue(recordValue, cdcField);
+    } catch (Exception e) {
+      throw new WriteException.CdcException(e);
+    }
     if (opValue == null) {
       return Operation.INSERT;
     }

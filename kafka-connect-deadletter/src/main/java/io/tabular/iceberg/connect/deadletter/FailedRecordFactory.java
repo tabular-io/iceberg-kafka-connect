@@ -16,28 +16,25 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.data;
+package io.tabular.iceberg.connect.deadletter;
 
 import java.util.Map;
-import org.apache.iceberg.PartitionSpec;
-import org.apache.iceberg.Schema;
-import org.apache.iceberg.Table;
-import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.sink.SinkRecord;
 
-public interface CatalogApi {
+public interface FailedRecordFactory {
+  Schema schema(String context);
 
-  TableIdentifier tableId(String name);
+  // how to take SMT record (which FYI is all ByteArrays) and turn it into some form of FailedRecord
+  SinkRecord recordFromSmt(SinkRecord original, Throwable error, String context);
 
-  Table loadTable(TableIdentifier identifier);
+  // here is where it starts getting awkward
+  // where in the original are the byte arrays.
+  SinkRecord recordFromConnector(SinkRecord record, Throwable error, String context);
 
-  PartitionSpec partitionSpec(String tableName, Schema schema);
+  boolean isFailedTransformRecord(SinkRecord record);
 
-  Table createTable(
-      TableIdentifier identifier,
-      Schema schema,
-      PartitionSpec spec,
-      Map<String, String> properties);
+  String tableName(SinkRecord record);
 
-  Schema schema(TableIdentifier identifier, SinkRecord sample);
+  void configure(Map<String, ?> props);
 }

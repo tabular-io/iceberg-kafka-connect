@@ -88,9 +88,13 @@ public class SchemaUtils {
       return;
     }
 
-    Tasks.range(1)
-        .retry(IcebergSinkConfig.SCHEMA_UPDATE_RETRIES)
-        .run(notUsed -> commitSchemaUpdates(table, updates));
+    try {
+      Tasks.range(1)
+          .retry(IcebergSinkConfig.SCHEMA_UPDATE_RETRIES)
+          .run(notUsed -> commitSchemaUpdates(table, updates));
+    } catch (Exception error) {
+      throw new WriteException.SchemaEvolutionException(table.name(), error);
+    }
   }
 
   private static void commitSchemaUpdates(Table table, SchemaUpdate.Consumer updates) {
