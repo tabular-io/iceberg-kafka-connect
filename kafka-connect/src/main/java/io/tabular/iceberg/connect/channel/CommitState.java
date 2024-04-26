@@ -48,7 +48,7 @@ public class CommitState {
   public void addResponse(Envelope envelope) {
     commitBuffer.add(envelope);
     if (!isCommitInProgress()) {
-      LOG.warn(
+      LOG.debug(
           "Received commit response with commit-id={} when no commit in progress, this can happen during recovery",
           ((CommitResponsePayload) envelope.event().payload()).commitId());
     }
@@ -57,7 +57,7 @@ public class CommitState {
   public void addReady(Envelope envelope) {
     readyBuffer.add((CommitReadyPayload) envelope.event().payload());
     if (!isCommitInProgress()) {
-      LOG.warn(
+      LOG.debug(
           "Received commit ready for commit-id={} when no commit in progress, this can happen during recovery",
           ((CommitReadyPayload) envelope.event().payload()).commitId());
     }
@@ -118,14 +118,14 @@ public class CommitState {
             .sum();
 
     if (receivedPartitionCount >= expectedPartitionCount) {
-      LOG.info(
+      LOG.debug(
           "Commit {} ready, received responses for all {} partitions",
           currentCommitId,
           receivedPartitionCount);
       return true;
     }
 
-    LOG.info(
+    LOG.debug(
         "Commit {} not ready, received responses for {} of {} partitions, waiting for more",
         currentCommitId,
         receivedPartitionCount,

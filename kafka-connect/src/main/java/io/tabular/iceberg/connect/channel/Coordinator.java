@@ -103,7 +103,7 @@ public class Coordinator extends Channel implements AutoCloseable {
               EventType.COMMIT_REQUEST,
               new CommitRequestPayload(commitState.currentCommitId()));
       send(event);
-      LOG.info("Started new commit with commit-id={}", commitState.currentCommitId().toString());
+      LOG.debug("Started new commit with commit-id={}", commitState.currentCommitId().toString());
     }
 
     consumeAvailable(POLL_DURATION, this::receive);
