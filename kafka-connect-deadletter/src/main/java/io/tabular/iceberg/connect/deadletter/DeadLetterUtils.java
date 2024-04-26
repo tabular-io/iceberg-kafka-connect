@@ -49,9 +49,7 @@ public class DeadLetterUtils {
     }
   }
 
-  private DeadLetterUtils() {
-    throw new IllegalStateException("Should not be initialialized");
-  }
+  private DeadLetterUtils() {}
 
   public static final String KEY_HEADER = "t_original_key";
   public static final String VALUE_HEADER = "t_original_value";
