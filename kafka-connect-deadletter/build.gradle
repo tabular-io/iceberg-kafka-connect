@@ -6,19 +6,7 @@ dependencies {
   implementation libs.iceberg.core
   implementation libs.iceberg.common
   implementation libs.iceberg.guava
-  implementation libs.avro
   compileOnly libs.bundles.kafka.connect
-
-
-  testImplementation libs.junit.api
-  testRuntimeOnly libs.junit.engine
-
-  testImplementation libs.mockito
-  testImplementation libs.assertj
-
-  testFixturesImplementation libs.iceberg.common
-  testFixturesImplementation libs.iceberg.core
-  testFixturesImplementation libs.avro
 }
 
 publishing {

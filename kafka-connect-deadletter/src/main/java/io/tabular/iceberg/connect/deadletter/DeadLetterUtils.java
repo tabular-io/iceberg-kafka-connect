@@ -72,33 +72,6 @@ public class DeadLetterUtils {
     return sw.toString();
   }
 
-  //  public static class Values {
-  //    // expect byte[]
-  //    private final Object keyBytes;
-  //    // expect byte[]
-  //    private final Object valueBytes;
-  //    // expect List<Struct>
-  //    private final Object headers;
-  //
-  //    public Values(Object keyBytes, Object valueBytes, Object headers) {
-  //      this.keyBytes = keyBytes;
-  //      this.valueBytes = valueBytes;
-  //      this.headers = headers;
-  //    }
-  //
-  //    public Object getKeyBytes() {
-  //      return keyBytes;
-  //    }
-  //
-  //    public Object getValueBytes() {
-  //      return valueBytes;
-  //    }
-  //
-  //    public Object getHeaders() {
-  //      return headers;
-  //    }
-  //  }
-
   /**
    * No way to get back the original Kafka header bytes. We instead have an array with elements of
    * {"key": String, "value": bytes} for each header. This can be converted back into a Kafka
@@ -118,19 +91,6 @@ public class DeadLetterUtils {
     }
     return headers;
   }
-
-  //  @SuppressWarnings("unchecked")
-  //  public static SinkRecord mapToFailedRecord(
-  //      String targetTable, SinkRecord record, String location, Throwable error, String
-  // identifier) {
-  //    Map<String, Object> payload = (Map<String, Object>) record.value();
-  //    Map<String, Object> bytes = (Map<String, Object>) payload.get(ORIGINAL_BYTES_KEY);
-  //    Object keyBytes = bytes.get(KEY_BYTES);
-  //    Object valueBytes = bytes.get(VALUE_BYTES);
-  //    Object headers = bytes.get(HEADERS);
-  //    Values values = new Values(keyBytes, valueBytes, headers);
-  //    return failedRecord(record, values, error, location, targetTable, identifier);
-  //  }
 
   public static Object loadClass(String name, ClassLoader loader) {
     if (name == null || name.isEmpty()) {
