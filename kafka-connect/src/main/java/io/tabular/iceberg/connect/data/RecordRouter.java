@@ -62,7 +62,7 @@ public abstract class RecordRouter {
         config.tables().forEach(TableIdentifier::of);
         baseRecordRouter = new ConfigRecordRouter(writers, config.tables());
       } else {
-        baseRecordRouter = new StaticRecordRouter(writers, config);
+        baseRecordRouter = new RegexRecordRouter(writers, config);
       }
     }
 
@@ -101,12 +101,12 @@ public abstract class RecordRouter {
     }
   }
 
-  private static class StaticRecordRouter extends RecordRouter {
+  private static class RegexRecordRouter extends RecordRouter {
     private final String routeField;
     private final WriterManager writers;
     private final IcebergSinkConfig config;
 
-    StaticRecordRouter(WriterManager writers, IcebergSinkConfig config) {
+    RegexRecordRouter(WriterManager writers, IcebergSinkConfig config) {
       this.routeField = config.tablesRouteField();
       this.writers = writers;
       this.config = config;
