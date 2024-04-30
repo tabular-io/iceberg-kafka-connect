@@ -123,7 +123,7 @@ public abstract class Channel {
             // so increment the record offset by one
             controlTopicOffsets.put(record.partition(), record.offset() + 1);
 
-            Event event = AvroUtil.decode(record.value());
+            Event event = EventDecoder.decode(record.value());
 
             if (event.groupId().equals(groupId)) {
               LOG.debug("Received event of type: {}", event.type().name());
