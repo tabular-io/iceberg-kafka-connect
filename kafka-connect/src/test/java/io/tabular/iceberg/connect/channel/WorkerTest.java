@@ -35,6 +35,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Types.StructType;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.junit.jupiter.api.Test;
 
 public class WorkerTest {
@@ -60,6 +61,9 @@ public class WorkerTest {
   }
 
   private void workerTest(IcebergSinkConfig config, Map<String, Object> value) {
+    SinkTaskContext context = mock(SinkTaskContext.class);
+
+
     WriterResult writeResult =
         new WriterResult(
             TableIdentifier.parse(TABLE_NAME),
@@ -72,7 +76,7 @@ public class WorkerTest {
     IcebergWriterFactory writerFactory = mock(IcebergWriterFactory.class);
     when(writerFactory.createWriter(any(), any(), anyBoolean())).thenReturn(writer);
 
-    Writer worker = new Worker(config, writerFactory);
+    Writer worker = new Worker(context, config, writerFactory);
 
     // save a record
     SinkRecord rec = new SinkRecord(SRC_TOPIC_NAME, 0, null, "key", null, value, 0L);

@@ -54,13 +54,14 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
  * passed and namespaced
  *
  * <p>"transforms": "tab", "transforms.tab.type":
- * "io.tabular.iceberg.connect.transform.managed.ManagedTransform",
- * "transforms.tab.value.converter": "org.apache.kafka.connect.storage.StringConverter",
- * "transforms.tab.value.converter.some_property: "...", "transforms.tab.key.converter":
- * "org.apache.kafka.connect.storage.StringConverter", "transforms.tab.key.converter.some_property":
- * "...", "transforms.tab.smts" : "some.java.class,some.other.java.class",
- * "transforms.tab.smts.prop1" : "some_property_for_the_smts"
- *
+ * <ul>
+ *  <li>"io.tabular.iceberg.connect.transform.managed.ManagedTransform" </li>
+ *  <li>"transforms.tab.value.converter": "org.apache.kafka.connect.storage.StringConverter"</li>
+ *  <li>"transforms.tab.value.converter.some_property: "...", "transforms.tab.key.converter":</li>
+ *  <li>"org.apache.kafka.connect.storage.StringConverter", "transforms.tab.key.converter.some_property": "..."</li>
+ *  <li>"transforms.tab.smts" : "some.java.class,some.other.java.class"</li>
+ *  <li>"transforms.tab.smts.prop1" : "some_property_for_the_smts"</li>
+ * </ul>
  * <p>This should not be used with any other SMT. All SMTs should be added to "transforms.tab.smts".
  *
  * <p>It returns a special Map of String -> Object "original" : Map of String -> Object containing

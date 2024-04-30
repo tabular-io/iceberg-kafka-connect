@@ -33,7 +33,7 @@ public class TaskImpl implements Task, AutoCloseable {
 
   public TaskImpl(SinkTaskContext context, IcebergSinkConfig config) {
     this.catalog = Utilities.loadCatalog(config);
-    this.writer = new Worker(config, catalog);
+    this.writer = new Worker(context, config, catalog);
     this.committer = new CommitterImpl(context, config, catalog);
   }
 
