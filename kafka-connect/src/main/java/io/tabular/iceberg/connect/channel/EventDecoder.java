@@ -18,13 +18,13 @@
  */
 package io.tabular.iceberg.connect.channel;
 
-import io.tabular.iceberg.connect.events.deprecated.CommitRequestPayload;
+import io.tabular.iceberg.connect.events.CommitRequestPayload;
 import java.util.UUID;
+
+import io.tabular.iceberg.connect.events.CommitResponsePayload;
+import org.apache.avro.Schema;
 import org.apache.avro.SchemaParseException;
-import org.apache.iceberg.connect.events.AvroUtil;
-import org.apache.iceberg.connect.events.Event;
-import org.apache.iceberg.connect.events.Payload;
-import org.apache.iceberg.connect.events.StartCommit;
+import org.apache.iceberg.connect.events.*;
 
 public class EventDecoder {
 
@@ -34,23 +34,30 @@ public class EventDecoder {
     try {
       return AvroUtil.decode(value);
     } catch (SchemaParseException exception) {
-      io.tabular.iceberg.connect.events.deprecated.Event event =
-          io.tabular.iceberg.connect.events.deprecated.Event.decode(value);
+      io.tabular.iceberg.connect.events.Event event =
+          io.tabular.iceberg.connect.events.Event.decode(value);
       return convertLegacy(event);
     }
   }
 
-  private static Event convertLegacy(io.tabular.iceberg.connect.events.deprecated.Event event) {
+  private static Event convertLegacy(io.tabular.iceberg.connect.events.Event event) {
     Payload payload = convertPayload(event.payload());
     return new Event(event.groupId(), payload);
   }
 
   private static Payload convertPayload(
-      io.tabular.iceberg.connect.events.deprecated.Payload payload) {
-    if (payload instanceof io.tabular.iceberg.connect.events.deprecated.CommitRequestPayload) {
+      io.tabular.iceberg.connect.events.Payload payload) {
+    if (payload instanceof CommitRequestPayload) {
       CommitRequestPayload pay = (CommitRequestPayload) payload;
       return new StartCommit((UUID) pay.get(0));
-    } else {
+    }  else if (payload instanceof CommitResponsePayload) {
+      CommitResponsePayload pay = (CommitResponsePayload) payload;
+      Schema schema = pay.getSchema();
+      // need to get a PartitionType somehow .
+      throw new RuntimeException("stuck here");
+    }
+
+    else {
       throw new RuntimeException("borp");
     }
   }

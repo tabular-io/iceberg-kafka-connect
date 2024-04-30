@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.events.deprecated;
+package io.tabular.iceberg.connect.events;
 
 import java.util.List;
 import java.util.Map;

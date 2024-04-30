@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.events.deprecated;
+package io.tabular.iceberg.connect.events;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
