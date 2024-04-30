@@ -19,15 +19,16 @@
 package io.tabular.iceberg.connect.data;
 
 import java.util.Objects;
+import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 
-public class Offset implements Comparable<Offset> {
-
-  public static final Offset NULL_OFFSET = new Offset(null, null);
+public class Offset {
 
   private final Long offset;
   private final Long timestamp;
 
   public Offset(Long offset, Long timestamp) {
+    Preconditions.checkNotNull(offset, "offset cannot be null");
+
     this.offset = offset;
     this.timestamp = timestamp;
   }
@@ -41,13 +42,24 @@ public class Offset implements Comparable<Offset> {
   }
 
   @Override
-  public int compareTo(Offset other) {
-    if (Objects.equals(this.offset, other.offset)) {
-      return 0;
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
     }
-    if (this.offset == null || (other.offset != null && other.offset > this.offset)) {
-      return -1;
+    if (o == null || getClass() != o.getClass()) {
+      return false;
     }
-    return 1;
+    Offset offset1 = (Offset) o;
+    return Objects.equals(offset, offset1.offset) && Objects.equals(timestamp, offset1.timestamp);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(offset, timestamp);
+  }
+
+  @Override
+  public String toString() {
+    return "Offset{" + "offset=" + offset + ", timestamp=" + timestamp + '}';
   }
 }

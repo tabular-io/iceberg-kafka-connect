@@ -56,7 +56,7 @@ import org.apache.kafka.clients.admin.MemberDescription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Coordinator extends Channel {
+public class Coordinator extends Channel implements AutoCloseable {
 
   private static final Logger LOG = LoggerFactory.getLogger(Coordinator.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -88,6 +88,9 @@ public class Coordinator extends Channel {
         String.format(OFFSETS_SNAPSHOT_PROP_FMT, config.controlTopic(), config.controlGroupId());
     this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.commitThreads());
     this.commitState = new CommitState(config);
+
+    // initial poll with longer duration so the consumer will initialize...
+    consumeAvailable(Duration.ofMillis(1000), this::receive);
   }
 
   public void process() {
@@ -100,18 +103,17 @@ public class Coordinator extends Channel {
               EventType.COMMIT_REQUEST,
               new CommitRequestPayload(commitState.currentCommitId()));
       send(event);
-      LOG.info("Started new commit with commit-id={}", commitState.currentCommitId().toString());
+      LOG.debug("Started new commit with commit-id={}", commitState.currentCommitId().toString());
     }
 
-    consumeAvailable(POLL_DURATION);
+    consumeAvailable(POLL_DURATION, this::receive);
 
     if (commitState.isCommitTimedOut()) {
       commit(true);
     }
   }
 
-  @Override
-  protected boolean receive(Envelope envelope) {
+  private boolean receive(Envelope envelope) {
     switch (envelope.event().type()) {
       case COMMIT_RESPONSE:
         commitState.addResponse(envelope);
@@ -296,5 +298,11 @@ public class Coordinator extends Channel {
       snapshot = parentSnapshotId != null ? table.snapshot(parentSnapshotId) : null;
     }
     return ImmutableMap.of();
+  }
+
+  @Override
+  public void close() throws IOException {
+    exec.shutdownNow();
+    stop();
   }
 }
