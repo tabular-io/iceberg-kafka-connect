@@ -21,6 +21,7 @@ package io.tabular.iceberg.connect.data;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
 import io.tabular.iceberg.connect.deadletter.FailedRecordFactory;
+
 import java.util.List;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
@@ -60,8 +61,15 @@ public abstract class RecordRouter {
         // validate all table identifiers are valid, otherwise exception is thrown
         // as this is an invalid config setting, not an error during processing
         config.tables().forEach(TableIdentifier::of);
-        baseRecordRouter = new ConfigRecordRouter(writers, config.tables());
+        if (config.deadLetterTableEnabled()) {
+
+          // need a config option to find this one 
+          baseRecordRouter = new FallbackRecordRouter(new DynamicRecordRouter(writers, config.tablesRouteField()), new ConfigRecordRouter(writers, config.tables()));
+        } else{
+          baseRecordRouter = new ConfigRecordRouter(writers, config.tables());
+        }
       } else {
+        // does this need a fallback or can it even have a fallback :thinking-face:
         baseRecordRouter = new RegexRecordRouter(writers, config);
       }
     }
@@ -154,6 +162,24 @@ public abstract class RecordRouter {
       if (routeValue != null) {
         String tableName = routeValue.toLowerCase();
         writers.write(tableName, record, true);
+      }
+    }
+  }
+
+  private static class FallbackRecordRouter extends RecordRouter {
+    private final RecordRouter primary;
+    private final RecordRouter fallback;
+
+    FallbackRecordRouter(RecordRouter primary, RecordRouter fallback) {
+      this.primary = primary;
+      this.fallback = fallback;
+    }
+
+    public void write(SinkRecord record) {
+      try {
+        primary.write(record); // this doesn't work because of the null. or rather test this out.
+      } catch (Exception error) {
+        fallback.write(record);
       }
     }
   }
