@@ -55,6 +55,8 @@ public abstract class Channel {
   private final Map<Integer, Long> controlTopicOffsets = Maps.newHashMap();
   private final String producerId;
 
+  private final EventDecoder eventDecoder;
+
   public Channel(
       String name,
       String consumerGroupId,
@@ -70,6 +72,7 @@ public abstract class Channel {
     this.admin = clientFactory.createAdmin();
 
     this.producerId = UUID.randomUUID().toString();
+    this.eventDecoder = new EventDecoder(config.catalogName());
   }
 
   protected void send(Event event) {
@@ -123,12 +126,13 @@ public abstract class Channel {
             // so increment the record offset by one
             controlTopicOffsets.put(record.partition(), record.offset() + 1);
 
-            Event event = EventDecoder.decode(record.value());
-
-            if (event.groupId().equals(groupId)) {
-              LOG.debug("Received event of type: {}", event.type().name());
-              if (receive(new Envelope(event, record.partition(), record.offset()))) {
-                LOG.info("Handled event of type: {}", event.type().name());
+            Event event = eventDecoder.decode(record.value());
+            if (event != null) {
+              if (event.groupId().equals(groupId)) {
+                LOG.debug("Received event of type: {}", event.type().name());
+                if (receive(new Envelope(event, record.partition(), record.offset()))) {
+                  LOG.info("Handled event of type: {}", event.type().name());
+                }
               }
             }
           });

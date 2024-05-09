@@ -28,10 +28,10 @@ import org.apache.iceberg.types.Types.StructType;
 import org.junit.jupiter.api.Test;
 
 public class EventSerializationTest {
+  private final UUID commitId = UUID.randomUUID();
 
   @Test
   public void testCommitRequestSerialization() {
-    UUID commitId = UUID.randomUUID();
     Event event =
         new Event("cg-connector", EventType.COMMIT_REQUEST, new CommitRequestPayload(commitId));
 
@@ -45,7 +45,6 @@ public class EventSerializationTest {
 
   @Test
   public void testCommitResponseSerialization() {
-    UUID commitId = UUID.randomUUID();
     Event event =
         new Event(
             "cg-connector",
@@ -72,7 +71,6 @@ public class EventSerializationTest {
 
   @Test
   public void testCommitReadySerialization() {
-    UUID commitId = UUID.randomUUID();
     Event event =
         new Event(
             "cg-connector",
@@ -95,7 +93,6 @@ public class EventSerializationTest {
 
   @Test
   public void testCommitTableSerialization() {
-    UUID commitId = UUID.randomUUID();
     Event event =
         new Event(
             "cg-connector",
@@ -116,7 +113,6 @@ public class EventSerializationTest {
 
   @Test
   public void testCommitCompleteSerialization() {
-    UUID commitId = UUID.randomUUID();
     Event event =
         new Event(
             "cg-connector", EventType.COMMIT_COMPLETE, new CommitCompletePayload(commitId, 2L));

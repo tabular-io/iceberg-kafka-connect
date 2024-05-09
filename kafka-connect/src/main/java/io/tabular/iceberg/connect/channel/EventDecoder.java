@@ -18,19 +18,44 @@
  */
 package io.tabular.iceberg.connect.channel;
 
+import io.tabular.iceberg.connect.events.CommitCompletePayload;
+import io.tabular.iceberg.connect.events.CommitReadyPayload;
 import io.tabular.iceberg.connect.events.CommitRequestPayload;
-import java.util.UUID;
-
 import io.tabular.iceberg.connect.events.CommitResponsePayload;
+import io.tabular.iceberg.connect.events.CommitTablePayload;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaParseException;
-import org.apache.iceberg.connect.events.*;
+import org.apache.iceberg.DataFile;
+import org.apache.iceberg.DeleteFile;
+import org.apache.iceberg.avro.AvroSchemaUtil;
+import org.apache.iceberg.connect.events.AvroUtil;
+import org.apache.iceberg.connect.events.CommitComplete;
+import org.apache.iceberg.connect.events.CommitToTable;
+import org.apache.iceberg.connect.events.DataComplete;
+import org.apache.iceberg.connect.events.DataWritten;
+import org.apache.iceberg.connect.events.Event;
+import org.apache.iceberg.connect.events.Payload;
+import org.apache.iceberg.connect.events.StartCommit;
+import org.apache.iceberg.connect.events.TableReference;
+import org.apache.iceberg.connect.events.TopicPartitionOffset;
+import org.apache.iceberg.relocated.com.google.common.collect.Lists;
+import org.apache.iceberg.types.Type;
+import org.apache.iceberg.types.Types;
 
 public class EventDecoder {
 
-  private EventDecoder() {}
+  private final String catalogName;
 
-  public static Event decode(byte[] value) {
+  public EventDecoder(String catalogName) {
+    this.catalogName = catalogName;
+  }
+
+  public Event decode(byte[] value) {
     try {
       return AvroUtil.decode(value);
     } catch (SchemaParseException exception) {
@@ -40,25 +65,93 @@ public class EventDecoder {
     }
   }
 
-  private static Event convertLegacy(io.tabular.iceberg.connect.events.Event event) {
+  private Event convertLegacy(io.tabular.iceberg.connect.events.Event event) {
     Payload payload = convertPayload(event.payload());
+    if (payload == null) {
+      return null;
+    }
     return new Event(event.groupId(), payload);
   }
 
-  private static Payload convertPayload(
-      io.tabular.iceberg.connect.events.Payload payload) {
+  private Payload convertPayload(io.tabular.iceberg.connect.events.Payload payload) {
     if (payload instanceof CommitRequestPayload) {
       CommitRequestPayload pay = (CommitRequestPayload) payload;
-      return new StartCommit((UUID) pay.get(0));
-    }  else if (payload instanceof CommitResponsePayload) {
+      return new StartCommit(pay.commitId());
+    } else if (payload instanceof CommitResponsePayload) {
       CommitResponsePayload pay = (CommitResponsePayload) payload;
-      Schema schema = pay.getSchema();
-      // need to get a PartitionType somehow .
-      throw new RuntimeException("stuck here");
+      return convertCommitResponse(pay);
+    } else if (payload instanceof CommitReadyPayload) {
+      CommitReadyPayload pay = (CommitReadyPayload) payload;
+      List<io.tabular.iceberg.connect.events.TopicPartitionOffset> legacyTPO = pay.assignments();
+      List<TopicPartitionOffset> converted =
+          legacyTPO.stream()
+              .map(
+                  t ->
+                      new TopicPartitionOffset(
+                          t.topic(),
+                          t.partition(),
+                          t.offset() == null ? null : t.offset(),
+                          t.timestamp() == null
+                              ? null
+                              : OffsetDateTime.ofInstant(
+                                  Instant.ofEpochMilli(t.timestamp()), ZoneOffset.UTC)))
+              .collect(Collectors.toList());
+      return new DataComplete(pay.commitId(), converted);
+    } else if (payload instanceof CommitTablePayload) {
+      CommitTablePayload pay = (CommitTablePayload) payload;
+      return new CommitToTable(
+          pay.commitId(),
+          TableReference.of(catalogName, pay.tableName().toIdentifier()),
+          pay.snapshotId(),
+          OffsetDateTime.ofInstant(Instant.ofEpochMilli(pay.vtts()), ZoneOffset.UTC));
+    } else if (payload instanceof CommitCompletePayload) {
+      CommitCompletePayload pay = (CommitCompletePayload) payload;
+      return new CommitComplete(
+          pay.commitId(),
+          OffsetDateTime.ofInstant(Instant.ofEpochMilli(pay.vtts()), ZoneOffset.UTC));
+    } else {
+      throw new IllegalStateException(
+          String.format("Unknown event payload: %s", payload.getSchema()));
+    }
+  }
+
+  private Payload convertCommitResponse(CommitResponsePayload payload) {
+    List<DataFile> dataFiles = payload.dataFiles();
+    List<DeleteFile> deleteFiles = payload.deleteFiles();
+    if (dataFiles.isEmpty() && deleteFiles.isEmpty()) {
+      return null;
     }
 
-    else {
-      throw new RuntimeException("borp");
+    String target = (dataFiles.isEmpty()) ? "deleteFiles" : "dataFiles";
+    List<Schema.Field> fields =
+        payload.getSchema().getField(target).schema().getTypes().stream()
+            .filter(s -> s.getType() != Schema.Type.NULL)
+            .findFirst()
+            .get()
+            .getElementType()
+            .getField("partition")
+            .schema()
+            .getFields();
+
+    List<Types.NestedField> convertedFields = Lists.newArrayListWithExpectedSize(fields.size());
+
+    for (Schema.Field f : fields) {
+      Schema fieldSchema =
+          f.schema().getTypes().stream()
+              .filter(s -> s.getType() != Schema.Type.NULL)
+              .findFirst()
+              .get();
+      Type fieldType = AvroSchemaUtil.convert(fieldSchema);
+      int fieldId = (int) f.getObjectProp("field-id");
+      convertedFields.add(Types.NestedField.optional(fieldId, f.name(), fieldType));
     }
+
+    Types.StructType convertedStructType = Types.StructType.of(convertedFields);
+    return new DataWritten(
+        convertedStructType,
+        payload.commitId(),
+        TableReference.of(catalogName, payload.tableName().toIdentifier()),
+        payload.dataFiles(),
+        payload.deleteFiles());
   }
 }
