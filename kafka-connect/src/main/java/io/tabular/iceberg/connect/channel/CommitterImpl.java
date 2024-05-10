@@ -23,13 +23,6 @@ import static java.util.stream.Collectors.toMap;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.Offset;
-import io.tabular.iceberg.connect.events.CommitReadyPayload;
-import io.tabular.iceberg.connect.events.CommitRequestPayload;
-import io.tabular.iceberg.connect.events.CommitResponsePayload;
-import io.tabular.iceberg.connect.events.Event;
-import io.tabular.iceberg.connect.events.EventType;
-import io.tabular.iceberg.connect.events.TableName;
-import io.tabular.iceberg.connect.events.TopicPartitionOffset;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
@@ -38,6 +31,13 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import org.apache.iceberg.catalog.Catalog;
+import org.apache.iceberg.connect.events.DataComplete;
+import org.apache.iceberg.connect.events.DataWritten;
+import org.apache.iceberg.connect.events.Event;
+import org.apache.iceberg.connect.events.PayloadType;
+import org.apache.iceberg.connect.events.StartCommit;
+import org.apache.iceberg.connect.events.TableReference;
+import org.apache.iceberg.connect.events.TopicPartitionOffset;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
@@ -129,8 +129,8 @@ public class CommitterImpl extends Channel implements Committer, AutoCloseable {
   }
 
   private boolean receive(Envelope envelope, CommittableSupplier committableSupplier) {
-    if (envelope.event().type() == EventType.COMMIT_REQUEST) {
-      UUID commitId = ((CommitRequestPayload) envelope.event().payload()).commitId();
+    if (envelope.event().type() == PayloadType.START_COMMIT) {
+      UUID commitId = ((StartCommit) envelope.event().payload()).commitId();
       sendCommitResponse(commitId, committableSupplier);
       return true;
     }
@@ -149,11 +149,10 @@ public class CommitterImpl extends Channel implements Committer, AutoCloseable {
               Event commitResponse =
                   new Event(
                       config.controlGroupId(),
-                      EventType.COMMIT_RESPONSE,
-                      new CommitResponsePayload(
+                      new DataWritten(
                           writerResult.partitionStruct(),
                           commitId,
-                          TableName.of(writerResult.tableIdentifier()),
+                          TableReference.of(config.catalogName(), writerResult.tableIdentifier()),
                           writerResult.dataFiles(),
                           writerResult.deleteFiles()));
 
@@ -180,8 +179,7 @@ public class CommitterImpl extends Channel implements Committer, AutoCloseable {
     Event commitReady =
         new Event(
             config.controlGroupId(),
-            EventType.COMMIT_READY,
-            new CommitReadyPayload(commitId, assignments));
+            new DataComplete(commitId, assignments));
     events.add(commitReady);
 
     Map<TopicPartition, Offset> offsets = committable.offsetsByTopicPartition();

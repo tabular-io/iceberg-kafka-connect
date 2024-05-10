@@ -63,6 +63,13 @@ public class Event implements Element {
     this.avroSchema = avroSchema;
   }
 
+  /**
+   * @deprecated
+   * <p>This class is required for a fallback decoder that can decode the legacy iceberg 1.4.x avro schemas in the case where
+   *   the coordinator topic was not fully drained during the upgrade to 1.5.2.  This entire module should be removed
+   *   in later releases.</p>
+   */
+  @Deprecated
   public Event(String groupId, EventType type, Payload payload) {
     this.id = UUID.randomUUID();
     this.type = type;

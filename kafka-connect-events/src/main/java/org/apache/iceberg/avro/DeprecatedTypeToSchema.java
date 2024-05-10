@@ -30,6 +30,13 @@ import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.TypeUtil;
 import org.apache.iceberg.types.Types;
 
+/**
+ * Iceberg 1.5.0 introduced a breaking change to Avro serialization that the connector uses when encoding
+ * messages for the control topic, requiring a way to fall back to decoding 1.4.x series messages that may
+ * be left behind on a control topic when upgrading.
+ *
+ * This class should be removed in later releases.
+ */
 class DeprecatedTypeToSchema extends TypeUtil.SchemaVisitor<Schema> {
   private static final Schema BOOLEAN_SCHEMA = Schema.create(Schema.Type.BOOLEAN);
   private static final Schema INTEGER_SCHEMA = Schema.create(Schema.Type.INT);

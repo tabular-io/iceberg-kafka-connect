@@ -47,6 +47,13 @@ import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 
+/**
+ * Iceberg 1.5.0 introduced a breaking change to Avro serialization that the connector uses when encoding
+ * messages for the control topic, requiring a way to fall back to decoding 1.4.x series messages that may
+ * be left behind on a control topic when upgrading.
+ *
+ * This class should be removed in later revisions.
+ */
 public class EventDecoder {
 
   private final String catalogName;
@@ -55,6 +62,12 @@ public class EventDecoder {
     this.catalogName = catalogName;
   }
 
+  /**
+   * @deprecated
+   * <p>This provides a fallback decoder that can decode the legacy iceberg 1.4.x avro schemas in the case where
+   *   the coordinator topic was not fully drained during the upgrade to 1.5.2</p>
+   */
+  @Deprecated
   public Event decode(byte[] value) {
     try {
       return AvroUtil.decode(value);

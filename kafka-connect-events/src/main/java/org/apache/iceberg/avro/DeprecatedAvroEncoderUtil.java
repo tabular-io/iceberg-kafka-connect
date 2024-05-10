@@ -33,6 +33,13 @@ import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 
+/**
+ * Iceberg 1.5.0 introduced a breaking change to Avro serialization that the connector uses when encoding
+ * messages for the control topic, requiring a way to fall back to decoding 1.4.x series messages that may
+ * be left behind on a control topic when upgrading.
+ *
+ * This class should be removed in later releases.
+ */
 public class DeprecatedAvroEncoderUtil {
 
   private DeprecatedAvroEncoderUtil() {}
