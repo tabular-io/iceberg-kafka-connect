@@ -58,6 +58,7 @@ import org.apache.iceberg.types.Types.StructType;
 import org.apache.kafka.clients.admin.MemberAssignment;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -74,6 +75,8 @@ public class CoordinatorTest extends ChannelTestBase {
     table.refresh();
 
     assertThat(producer.history()).hasSize(3);
+    assertThat(consumer.committed(ImmutableSet.of(CTL_TOPIC_PARTITION)))
+        .isEqualTo(ImmutableMap.of(CTL_TOPIC_PARTITION, new OffsetAndMetadata(3L)));
     assertCommitTable(1, commitId, ts);
     assertCommitComplete(2, commitId, ts);
 
@@ -102,6 +105,8 @@ public class CoordinatorTest extends ChannelTestBase {
             ts);
 
     assertThat(producer.history()).hasSize(3);
+    assertThat(consumer.committed(ImmutableSet.of(CTL_TOPIC_PARTITION)))
+        .isEqualTo(ImmutableMap.of(CTL_TOPIC_PARTITION, new OffsetAndMetadata(3L)));
     assertCommitTable(1, commitId, ts);
     assertCommitComplete(2, commitId, ts);
 
@@ -126,6 +131,8 @@ public class CoordinatorTest extends ChannelTestBase {
     UUID commitId = coordinatorTest(ImmutableList.of(), ImmutableList.of(), ts);
 
     assertThat(producer.history()).hasSize(2);
+    assertThat(consumer.committed(ImmutableSet.of(CTL_TOPIC_PARTITION)))
+        .isEqualTo(ImmutableMap.of(CTL_TOPIC_PARTITION, new OffsetAndMetadata(3L)));
     assertCommitComplete(1, commitId, ts);
 
     List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
@@ -152,6 +159,8 @@ public class CoordinatorTest extends ChannelTestBase {
 
     // no commit messages sent
     assertThat(producer.history()).hasSize(1);
+    assertThat(consumer.committed(ImmutableSet.of(CTL_TOPIC_PARTITION)))
+        .isEqualTo(ImmutableMap.of());
 
     List<Snapshot> snapshots = ImmutableList.copyOf(table.snapshots());
     Assertions.assertEquals(0, snapshots.size());
@@ -289,7 +298,6 @@ public class CoordinatorTest extends ChannelTestBase {
     }
 
     final Coordinator coordinator = new Coordinator(catalog, config, members, clientFactory);
-    coordinator.start();
     initConsumer();
 
     // start a new commit immediately and wait for all workers to respond infinitely
@@ -449,7 +457,6 @@ public class CoordinatorTest extends ChannelTestBase {
     when(config.commitTimeoutMs()).thenReturn(Integer.MAX_VALUE);
 
     Coordinator coordinator = new Coordinator(catalog, config, ImmutableList.of(), clientFactory);
-    coordinator.start();
 
     // init consumer after subscribe()
     initConsumer();

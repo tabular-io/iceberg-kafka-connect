@@ -120,7 +120,7 @@ public class IntegrationCdcTest extends IntegrationTestBase {
             .config("value.converter.schemas.enable", useSchema)
             .config("iceberg.tables", String.format("%s.%s", TEST_DB, TEST_TABLE))
             .config("iceberg.tables.cdc-field", "op")
-            .config("iceberg.control.commit.interval-ms", 1000)
+            .config("iceberg.control.commit.interval-ms", 5000)
             .config("iceberg.control.commit.timeout-ms", Integer.MAX_VALUE)
             .config("iceberg.kafka.auto.offset.reset", "earliest");
 

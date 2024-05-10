@@ -264,5 +264,20 @@ public class Utilities {
     return configClass;
   }
 
+  public static <C> void close(C closeable) {
+    if (closeable != null) {
+      if (closeable instanceof AutoCloseable) {
+        try {
+          ((AutoCloseable) closeable).close();
+        } catch (Exception e) {
+          LOG.warn(
+              "An error occurred while trying to close {} instance, ignoring...",
+              closeable.getClass().getSimpleName(),
+              e);
+        }
+      }
+    }
+  }
+
   private Utilities() {}
 }

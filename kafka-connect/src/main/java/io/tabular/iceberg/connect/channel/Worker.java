@@ -19,7 +19,6 @@
 package io.tabular.iceberg.connect.channel;
 
 import static java.util.stream.Collectors.toList;
-import static java.util.stream.Collectors.toMap;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.IcebergWriterFactory;
@@ -27,87 +26,42 @@ import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.data.RecordWriter;
 import io.tabular.iceberg.connect.data.Utilities;
 import io.tabular.iceberg.connect.data.WriterResult;
-import java.time.Duration;
+import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.UUID;
-import java.util.concurrent.ExecutionException;
-import org.apache.iceberg.connect.events.DataComplete;
-import org.apache.iceberg.connect.events.DataWritten;
-import org.apache.iceberg.connect.events.Event;
-import org.apache.iceberg.connect.events.PayloadType;
-import org.apache.iceberg.connect.events.StartCommit;
-import org.apache.iceberg.connect.events.TableReference;
-import org.apache.iceberg.connect.events.TopicPartitionOffset;
+import org.apache.iceberg.catalog.Catalog;
+import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
-import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.apache.kafka.connect.sink.SinkTaskContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class Worker extends Channel {
+// TODO: rename to WriterImpl later, minimize changes for clearer commit history for now
+class Worker implements Writer, AutoCloseable {
 
+  private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
   private final IcebergSinkConfig config;
   private final IcebergWriterFactory writerFactory;
-  private final SinkTaskContext context;
-  private final String controlGroupId;
   private final Map<String, RecordWriter> writers;
   private final Map<TopicPartition, Offset> sourceOffsets;
 
-  public Worker(
-      IcebergSinkConfig config,
-      KafkaClientFactory clientFactory,
-      IcebergWriterFactory writerFactory,
-      SinkTaskContext context) {
-    // pass transient consumer group ID to which we never commit offsets
-    super(
-        "worker",
-        IcebergSinkConfig.DEFAULT_CONTROL_GROUP_PREFIX + UUID.randomUUID(),
-        config,
-        clientFactory);
+  Worker(IcebergSinkConfig config, Catalog catalog) {
+    this(config, new IcebergWriterFactory(catalog, config));
+  }
 
+  @VisibleForTesting
+  Worker(IcebergSinkConfig config, IcebergWriterFactory writerFactory) {
     this.config = config;
     this.writerFactory = writerFactory;
-    this.context = context;
-    this.controlGroupId = config.controlGroupId();
     this.writers = Maps.newHashMap();
     this.sourceOffsets = Maps.newHashMap();
   }
 
-  public void syncCommitOffsets() {
-    Map<TopicPartition, Long> offsets =
-        commitOffsets().entrySet().stream()
-            .collect(toMap(Entry::getKey, entry -> entry.getValue().offset()));
-    context.offset(offsets);
-  }
-
-  public Map<TopicPartition, OffsetAndMetadata> commitOffsets() {
-    try {
-      ListConsumerGroupOffsetsResult response = admin().listConsumerGroupOffsets(controlGroupId);
-      return response.partitionsToOffsetAndMetadata().get().entrySet().stream()
-          .filter(entry -> context.assignment().contains(entry.getKey()))
-          .collect(toMap(Entry::getKey, Entry::getValue));
-    } catch (InterruptedException | ExecutionException e) {
-      throw new ConnectException(e);
-    }
-  }
-
-  public void process() {
-    consumeAvailable(Duration.ZERO);
-  }
-
   @Override
-  protected boolean receive(Envelope envelope) {
-    Event event = envelope.event();
-    if (event.type() != PayloadType.START_COMMIT) {
-      return false;
-    }
-
+  public Committable committable() {
     List<WriterResult> writeResults =
         writers.values().stream().flatMap(writer -> writer.complete().stream()).collect(toList());
     Map<TopicPartition, Offset> offsets = Maps.newHashMap(sourceOffsets);
@@ -115,55 +69,21 @@ public class Worker extends Channel {
     writers.clear();
     sourceOffsets.clear();
 
-    // include all assigned topic partitions even if no messages were read
-    // from a partition, as the coordinator will use that to determine
-    // when all data for a commit has been received
-    List<TopicPartitionOffset> assignments =
-        context.assignment().stream()
-            .map(
-                tp -> {
-                  Offset offset = offsets.get(tp);
-                  if (offset == null) {
-                    offset = Offset.NULL_OFFSET;
-                  }
-                  return new TopicPartitionOffset(
-                      tp.topic(), tp.partition(), offset.offset(), offset.timestamp());
-                })
-            .collect(toList());
-
-    UUID commitId = ((StartCommit) event.payload()).commitId();
-
-    List<Event> events =
-        writeResults.stream()
-            .map(
-                writeResult ->
-                    new Event(
-                        config.controlGroupId(),
-                        new DataWritten(
-                            writeResult.partitionStruct(),
-                            commitId,
-                            TableReference.of(config.catalogName(), writeResult.tableIdentifier()),
-                            writeResult.dataFiles(),
-                            writeResult.deleteFiles())))
-            .collect(toList());
-
-    Event readyEvent = new Event(config.controlGroupId(), new DataComplete(commitId, assignments));
-    events.add(readyEvent);
-
-    send(events, offsets);
-    context.requestCommit();
-
-    return true;
+    return new Committable(offsets, writeResults);
   }
 
   @Override
-  public void stop() {
-    super.stop();
+  public void close() throws IOException {
     writers.values().forEach(RecordWriter::close);
+    writers.clear();
+    sourceOffsets.clear();
   }
 
-  public void save(Collection<SinkRecord> sinkRecords) {
-    sinkRecords.forEach(this::save);
+  @Override
+  public void write(Collection<SinkRecord> sinkRecords) {
+    if (sinkRecords != null && !sinkRecords.isEmpty()) {
+      sinkRecords.forEach(this::save);
+    }
   }
 
   private void save(SinkRecord record) {

@@ -52,7 +52,7 @@ public class CommitState {
   public void addResponse(Envelope envelope) {
     commitBuffer.add(envelope);
     if (!isCommitInProgress()) {
-      LOG.warn(
+      LOG.debug(
           "Received data written with commit-id={} when no commit in progress, this can happen during recovery",
           ((DataWritten) envelope.event().payload()).commitId());
     }
@@ -61,7 +61,7 @@ public class CommitState {
   public void addReady(Envelope envelope) {
     readyBuffer.add((DataComplete) envelope.event().payload());
     if (!isCommitInProgress()) {
-      LOG.warn(
+      LOG.debug(
           "Received data complete for commit-id={} when no commit in progress, this can happen during recovery",
           ((DataComplete) envelope.event().payload()).commitId());
     }
@@ -122,14 +122,14 @@ public class CommitState {
             .sum();
 
     if (receivedPartitionCount >= expectedPartitionCount) {
-      LOG.info(
+      LOG.debug(
           "Commit {} ready, received responses for all {} partitions",
           currentCommitId,
           receivedPartitionCount);
       return true;
     }
 
-    LOG.info(
+    LOG.debug(
         "Commit {} not ready, received responses for {} of {} partitions, waiting for more",
         currentCommitId,
         receivedPartitionCount,
@@ -143,19 +143,23 @@ public class CommitState {
         .collect(
             groupingBy(
                 envelope ->
-                    ((DataWritten) envelope.event().payload()).tableReference().identifier()));
+                    ((DataWritten) envelope.event().payload())
+                        .tableReference()
+                        .identifier()));
   }
 
   public OffsetDateTime vtts(boolean partialCommit) {
 
-    Comparator<OffsetDateTime> comparator =
-        new Comparator<OffsetDateTime>() {
+      // move to static on the class
+      Comparator<OffsetDateTime> comparator =
+              new Comparator<OffsetDateTime>() {
 
-          @Override
-          public int compare(OffsetDateTime o1, OffsetDateTime o2) {
-            return o1.compareTo(o2);
-          }
-        };
+                  @Override
+                  public int compare(OffsetDateTime o1, OffsetDateTime o2) {
+                      return o1.compareTo(o2);
+                  }
+              };
+
 
     boolean validVtts =
         !partialCommit
@@ -163,18 +167,18 @@ public class CommitState {
                 .flatMap(event -> event.assignments().stream())
                 .allMatch(offset -> offset.timestamp() != null);
 
-    OffsetDateTime result;
-    if (validVtts) {
-      Optional<OffsetDateTime> maybeResult =
-          readyBuffer.stream()
-              .flatMap(event -> event.assignments().stream())
-              .map(TopicPartitionOffset::timestamp)
-              .min(comparator);
-      if (maybeResult.isPresent()) {
-        result = maybeResult.get();
-      } else {
-        throw new NoSuchElementException("no vtts found");
-      }
+      OffsetDateTime result;
+      if (validVtts) {
+          Optional<OffsetDateTime> maybeResult =
+                  readyBuffer.stream()
+                          .flatMap(event -> event.assignments().stream())
+                          .map(TopicPartitionOffset::timestamp)
+                          .min(comparator);
+          if (maybeResult.isPresent()) {
+              result = maybeResult.get();
+          } else {
+              throw new NoSuchElementException("no vtts found");
+          }
     } else {
       result = null;
     }

@@ -73,13 +73,17 @@ public abstract class Channel {
 
     this.producerId = UUID.randomUUID().toString();
     this.eventDecoder = new EventDecoder(config.catalogName());
+    this.producerId = pair.first().toString();
   }
 
   protected void send(Event event) {
-    send(ImmutableList.of(event), ImmutableMap.of());
+    send(ImmutableList.of(event), ImmutableMap.of(), null);
   }
 
-  protected void send(List<Event> events, Map<TopicPartition, Offset> sourceOffsets) {
+  protected void send(
+      List<Event> events,
+      Map<TopicPartition, Offset> sourceOffsets,
+      ConsumerGroupMetadata consumerGroupMetadata) {
     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = Maps.newHashMap();
     sourceOffsets.forEach((k, v) -> offsetsToCommit.put(k, new OffsetAndMetadata(v.offset())));
 
@@ -87,7 +91,7 @@ public abstract class Channel {
         events.stream()
             .map(
                 event -> {
-                  LOG.info("Sending event of type: {}", event.type().name());
+                  LOG.debug("Sending event of type: {}", event.type().name());
                   byte[] data = AvroUtil.encode(event);
                   // key by producer ID to keep event order
                   return new ProducerRecord<>(controlTopic, producerId, data);
@@ -98,10 +102,9 @@ public abstract class Channel {
       producer.beginTransaction();
       try {
         recordList.forEach(producer::send);
+        producer.flush();
         if (!sourceOffsets.isEmpty()) {
-          // TODO: this doesn't fence zombies
-          producer.sendOffsetsToTransaction(
-              offsetsToCommit, new ConsumerGroupMetadata(controlGroupId));
+          producer.sendOffsetsToTransaction(offsetsToCommit, consumerGroupMetadata);
         }
         producer.commitTransaction();
       } catch (Exception e) {
@@ -115,9 +118,7 @@ public abstract class Channel {
     }
   }
 
-  protected abstract boolean receive(Envelope envelope);
-
-  protected void consumeAvailable(Duration pollDuration) {
+  protected void consumeAvailable(Duration pollDuration, Function<Envelope, Boolean> receiveFn) {
     ConsumerRecords<String, byte[]> records = consumer.poll(pollDuration);
     while (!records.isEmpty()) {
       records.forEach(
@@ -128,12 +129,12 @@ public abstract class Channel {
 
             Event event = eventDecoder.decode(record.value());
             if (event != null) {
-              if (event.groupId().equals(groupId)) {
-                LOG.debug("Received event of type: {}", event.type().name());
-                if (receive(new Envelope(event, record.partition(), record.offset()))) {
-                  LOG.info("Handled event of type: {}", event.type().name());
-                }
+            if (event.groupId().equals(groupId)) {
+              LOG.debug("Received event of type: {}", event.type().name());
+              if (receiveFn.apply(new Envelope(event, record.partition(), record.offset()))) {
+                LOG.debug("Handled event of type: {}", event.type().name());
               }
+            }
             }
           });
       records = consumer.poll(pollDuration);
@@ -155,13 +156,6 @@ public abstract class Channel {
 
   protected Admin admin() {
     return admin;
-  }
-
-  public void start() {
-    consumer.subscribe(ImmutableList.of(controlTopic));
-
-    // initial poll with longer duration so the consumer will initialize...
-    consumeAvailable(Duration.ofMillis(1000));
   }
 
   public void stop() {

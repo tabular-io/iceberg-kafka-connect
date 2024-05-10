@@ -21,6 +21,7 @@ package io.tabular.iceberg.connect.channel;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
+import org.apache.iceberg.util.Pair;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -40,14 +41,17 @@ public class KafkaClientFactory {
     this.kafkaProps = kafkaProps;
   }
 
-  public Producer<String, byte[]> createProducer(String transactionalId) {
+  public Pair<UUID, Producer<String, byte[]>> createProducer(String transactionalId) {
+    UUID producerId = UUID.randomUUID();
+
     Map<String, Object> producerProps = Maps.newHashMap(kafkaProps);
     producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
     producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, UUID.randomUUID().toString());
     KafkaProducer<String, byte[]> result =
         new KafkaProducer<>(producerProps, new StringSerializer(), new ByteArraySerializer());
     result.initTransactions();
-    return result;
+
+    return Pair.of(producerId, result);
   }
 
   public Consumer<String, byte[]> createConsumer(String consumerGroupId) {
