@@ -34,7 +34,7 @@ public class DefaultWriteExceptionHandler implements WriteExceptionHandler {
   }
 
   @Override
-  public Result handle(SinkRecord record, Exception exception) {
+  public SinkRecord handle(SinkRecord record, Exception exception) {
     if (exception instanceof WriteException) {
       return handleWriteException(record, (WriteException) exception);
     }
@@ -46,7 +46,7 @@ public class DefaultWriteExceptionHandler implements WriteExceptionHandler {
   }
 
   @SuppressWarnings("checkstyle:CyclomaticComplexity")
-  private Result handleWriteException(SinkRecord record, WriteException exception) {
+  private SinkRecord handleWriteException(SinkRecord record, WriteException exception) {
     if (exception instanceof WriteException.CreateTableException) {
       Throwable cause = exception.getCause();
       if (cause instanceof IllegalArgumentException || cause instanceof ValidationException) {
@@ -81,14 +81,7 @@ public class DefaultWriteExceptionHandler implements WriteExceptionHandler {
     throw exception;
   }
 
-  private Result failedRecord(SinkRecord record, WriteException exception) {
-    String targetTableId = exception.tableId();
-    if (targetTableId != null && targetTableId.equals(factory.tableName(record))) {
-      throw new IllegalArgumentException(
-          String.format(
-              "Must throw for exceptions involving target Dead Letter Table: %s", targetTableId),
-          exception);
-    }
-    return new Result(factory.recordFromConnector(record, exception, null), targetTableId);
+  private SinkRecord failedRecord(SinkRecord record, WriteException exception) {
+    return factory.recordFromConnector(record, exception, null);
   }
 }

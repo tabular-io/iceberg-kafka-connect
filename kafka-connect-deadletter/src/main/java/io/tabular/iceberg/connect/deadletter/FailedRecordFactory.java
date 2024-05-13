@@ -32,9 +32,5 @@ public interface FailedRecordFactory {
   // where in the original are the byte arrays.
   SinkRecord recordFromConnector(SinkRecord record, Throwable error, String context);
 
-  boolean isFailedTransformRecord(SinkRecord record);
-
-  String tableName(SinkRecord record);
-
   void configure(Map<String, ?> props);
 }

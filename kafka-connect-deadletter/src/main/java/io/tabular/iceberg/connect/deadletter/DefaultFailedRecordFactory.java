@@ -29,8 +29,9 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 public class DefaultFailedRecordFactory implements FailedRecordFactory {
-
   private static final String DEAD_LETTER_TABLE_NAME_PROP = "table_name";
+
+  private static final String DEAD_LETTER_ROUTE_FIELD_PROP = "route_field";
   private static final ConfigDef CONFIG_DEF =
       new ConfigDef()
           .define(
@@ -38,12 +39,18 @@ public class DefaultFailedRecordFactory implements FailedRecordFactory {
               ConfigDef.Type.STRING,
               null,
               ConfigDef.Importance.MEDIUM,
-              "dead letter table name namespace.table");
+              "dead letter table name namespace.table")
+              .define(DEAD_LETTER_ROUTE_FIELD_PROP,
+                      ConfigDef.Type.STRING,
+                      null,
+                      ConfigDef.Importance.MEDIUM,
+                      "route field to inject table name on");
 
   private static final String HEADERS = "headers";
   private Schema schema;
 
   private String deadLetterTableName;
+  private String deadLetterRouteField;
 
   @Override
   public Schema schema(String context) {
@@ -101,28 +108,10 @@ public class DefaultFailedRecordFactory implements FailedRecordFactory {
   }
 
   @Override
-  public boolean isFailedTransformRecord(SinkRecord record) {
-    if (record != null && record.valueSchema() != null) {
-      Map<String, String> parameters = record.valueSchema().parameters();
-      if (parameters != null) {
-        String isFailed = parameters.get("transform_failed");
-        if (isFailed != null) {
-          return isFailed.equals("true");
-        }
-      }
-    }
-    return false;
-  }
-
-  @Override
-  public String tableName(SinkRecord record) {
-    return deadLetterTableName;
-  }
-
-  @Override
   public void configure(Map<String, ?> props) {
     SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
     deadLetterTableName = config.getString(DEAD_LETTER_TABLE_NAME_PROP);
+    deadLetterRouteField = config.getString(DEAD_LETTER_ROUTE_FIELD_PROP);
     if (deadLetterTableName == null) {
       throw new IllegalArgumentException("Dead letter table name cannot be null");
     }
@@ -141,7 +130,8 @@ public class DefaultFailedRecordFactory implements FailedRecordFactory {
             .field(HEADERS, DeadLetterUtils.HEADER_SCHEMA)
             .field("context", Schema.OPTIONAL_STRING_SCHEMA)
             .field("target_table", Schema.OPTIONAL_STRING_SCHEMA)
-            .schema();
+            .field(deadLetterRouteField, Schema.STRING_SCHEMA)
+            .build();
   }
 
   private void addCommon(Struct struct, SinkRecord record, Throwable error, String context) {
@@ -157,5 +147,6 @@ public class DefaultFailedRecordFactory implements FailedRecordFactory {
     if (context != null) {
       struct.put("context", context);
     }
+    struct.put(deadLetterRouteField, deadLetterTableName);
   }
 }

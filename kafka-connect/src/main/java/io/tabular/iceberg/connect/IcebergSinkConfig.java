@@ -88,8 +88,6 @@ public class IcebergSinkConfig extends AbstractConfig {
       "iceberg.tables.deadletter.record_factory";
   private static final String FAILED_RECORD_FACTORY_PREFIX =
       "iceberg.tables.deadletter.record_factory";
-  private static final String FAILED_RECORD_FACTORY_DEFAULT =
-      "io.tabular.iceberg.connect.deadletter.DefaultFailedRecordFactory";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
   private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group-id";
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.control.commit.interval-ms";
@@ -250,7 +248,7 @@ public class IcebergSinkConfig extends AbstractConfig {
     configDef.define(
         FAILED_RECORD_FACTORY_PROP,
         Type.STRING,
-        FAILED_RECORD_FACTORY_DEFAULT,
+        null,
         Importance.MEDIUM,
         "If writing to Dead Letter Table, failed record factory class to use");
     return configDef;

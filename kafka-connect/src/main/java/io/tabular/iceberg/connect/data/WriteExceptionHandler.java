@@ -26,35 +26,16 @@ import org.apache.kafka.connect.sink.SinkTaskContext;
 public interface WriteExceptionHandler {
   void initialize(SinkTaskContext context, IcebergSinkConfig config, FailedRecordFactory factory);
 
-  class Result {
-    private final SinkRecord sinkRecord;
-    private final String tableName;
-
-    public Result(SinkRecord sinkRecord, String tableName) {
-      this.sinkRecord = sinkRecord;
-      this.tableName = tableName;
-    }
-
-    public SinkRecord sinkRecord() {
-      return sinkRecord;
-    }
-
-    public String tableName() {
-      return tableName;
-    }
-  }
-
   /**
    * This method will be invoked whenever the connector runs into an exception while trying to write
    * SinkRecords to a table. Implementations of this method have 3 general options:
    *
    * <ol>
-   *   <li>Return a SinkRecord and the name of the table to write to (wrapped inside a {@link
-   *       Result})
+   *   <li>Return a SinkRecord
    *   <li>Return null to drop the SinkRecord
    * </ol>
    *
    * @param record The SinkRecord that couldn't be written
    */
-  Result handle(SinkRecord record, Exception exception);
+  SinkRecord handle(SinkRecord record, Exception exception);
 }

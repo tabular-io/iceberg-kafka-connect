@@ -42,34 +42,55 @@ public abstract class RecordRouter {
     } catch (Exception error) {
       throw new WriteException.RouteException(error);
     }
+
+    // confirm if this can even happen
     return routeValue == null ? null : routeValue.toString();
   }
 
+
+  /*
+   |iceberg.tables|dynamic-enables|route-field| routing behavior |
+   |--------------|---------------|----------------|-------------|
+   | empty        |  true         |  populated     |    DynamicRecordRouter |
+   | empty        |  false        |  populated     |    RegexRouter |
+   | populated    |  false        |  null          |    ConfigRouter |
+   | populated    |  false        |  populated     |    DynamicRecordRouter then ConfigRouter |
+
+ what does iceberg.tables.default-commit-branch do ?
+
+   Record routing is complex due to maintaining non-breaking config changes
+   <ul>
+     <li> if iceberg.tables.dynamic-enabled is true then we route based on iceberg.tables.route-field, regardless of other fields
+     <li> if iceberg.tables.dynamic-enabled is false and iceberg.tables is empty, we use routeRegex
+     <li> if iceberg.tables.dynamic-enabled is false and iceberg.tables is populated and route-field is empty, we route to all listed tables
+     <li> as above, but if route-field is set we attempt to route dynamically and if that field does not exist we do the behavior above.
+   </ul>
+     <p>
+     The last option is required for Dead Letter Table handling while routing to iceberg.tables, as the dead letter table routing
+     is similar to dynamic routing: based on a field and under the control of the user. </p>
+
+    How to avoid the infinite loop problem?
+   */
   public static RecordRouter from(
-      WriterManager writers,
-      IcebergSinkConfig config,
-      ClassLoader loader,
-      SinkTaskContext context) {
+          WriterManager writers,
+          IcebergSinkConfig config,
+          ClassLoader loader,
+          SinkTaskContext context) {
     RecordRouter baseRecordRouter;
 
     if (config.dynamicTablesEnabled()) {
       Preconditions.checkNotNull(
-          config.tablesRouteField(), "Route field cannot be null with dynamic routing");
+              config.tablesRouteField(), "Route field cannot be null with dynamic routing");
       baseRecordRouter = new DynamicRecordRouter(writers, config.tablesRouteField());
     } else {
-      if (config.tablesRouteField() == null) {
-        // validate all table identifiers are valid, otherwise exception is thrown
-        // as this is an invalid config setting, not an error during processing
+      if (config.tables() != null && !config.tables().isEmpty()) {
         config.tables().forEach(TableIdentifier::of);
-        if (config.deadLetterTableEnabled()) {
-
-          // need a config option to find this one 
+        if (config.tablesRouteField() != null) {
           baseRecordRouter = new FallbackRecordRouter(new DynamicRecordRouter(writers, config.tablesRouteField()), new ConfigRecordRouter(writers, config.tables()));
-        } else{
+        } else {
           baseRecordRouter = new ConfigRecordRouter(writers, config.tables());
         }
       } else {
-        // does this need a fallback or can it even have a fallback :thinking-face:
         baseRecordRouter = new RegexRecordRouter(writers, config);
       }
     }
@@ -78,19 +99,19 @@ public abstract class RecordRouter {
       String failedRecordFactoryClass = config.getFailedRecordHandler();
       String handlerClass = config.getWriteExceptionHandler();
       FailedRecordFactory factory =
-          (FailedRecordFactory) DeadLetterUtils.loadClass(failedRecordFactoryClass, loader);
+              (FailedRecordFactory) DeadLetterUtils.loadClass(failedRecordFactoryClass, loader);
       factory.configure(config.failedRecordHandlerProperties());
       WriteExceptionHandler handler =
-          (WriteExceptionHandler) DeadLetterUtils.loadClass(handlerClass, loader);
+              (WriteExceptionHandler) DeadLetterUtils.loadClass(handlerClass, loader);
       handler.initialize(context, config, factory);
       baseRecordRouter =
-          new RecordRouter.ErrorHandlingRecordRouter(baseRecordRouter, handler, writers, factory);
+              new RecordRouter.ErrorHandlingRecordRouter(baseRecordRouter, handler);
     }
 
     return baseRecordRouter;
   }
 
-  private static class ConfigRecordRouter extends RecordRouter {
+  public static class ConfigRecordRouter extends RecordRouter {
     private final List<String> tables;
     private final WriterManager writers;
 
@@ -103,13 +124,13 @@ public abstract class RecordRouter {
     public void write(SinkRecord record) {
       // route to all tables
       tables.forEach(
-          tableName -> {
-            writers.write(tableName, record, false);
-          });
+              tableName -> {
+                writers.write(tableName, record, false);
+              });
     }
   }
 
-  private static class RegexRecordRouter extends RecordRouter {
+  public static class RegexRecordRouter extends RecordRouter {
     private final String routeField;
     private final WriterManager writers;
     private final IcebergSinkConfig config;
@@ -125,29 +146,29 @@ public abstract class RecordRouter {
       String routeValue = extractRouteValue(record.value(), routeField);
       if (routeValue != null) {
         config
-            .tables()
-            .forEach(
-                tableName ->
-                    config
-                        .tableConfig(tableName)
-                        .routeRegex()
-                        .ifPresent(
-                            regex -> {
-                              boolean matches;
-                              try {
-                                matches = regex.matcher(routeValue).matches();
-                              } catch (Exception error) {
-                                throw new WriteException.RouteRegexException(error);
-                              }
-                              if (matches) {
-                                writers.write(tableName, record, false);
-                              }
-                            }));
+                .tables()
+                .forEach(
+                        tableName ->
+                                config
+                                        .tableConfig(tableName)
+                                        .routeRegex()
+                                        .ifPresent(
+                                                regex -> {
+                                                  boolean matches;
+                                                  try {
+                                                    matches = regex.matcher(routeValue).matches();
+                                                  } catch (Exception error) {
+                                                    throw new WriteException.RouteRegexException(error);
+                                                  }
+                                                  if (matches) {
+                                                    writers.write(tableName, record, false);
+                                                  }
+                                                }));
       }
     }
   }
 
-  private static class DynamicRecordRouter extends RecordRouter {
+  public static class DynamicRecordRouter extends RecordRouter {
     private final String routeField;
     private final WriterManager writers;
 
@@ -166,7 +187,7 @@ public abstract class RecordRouter {
     }
   }
 
-  private static class FallbackRecordRouter extends RecordRouter {
+  public static class FallbackRecordRouter extends RecordRouter {
     private final RecordRouter primary;
     private final RecordRouter fallback;
 
@@ -177,43 +198,31 @@ public abstract class RecordRouter {
 
     public void write(SinkRecord record) {
       try {
-        primary.write(record); // this doesn't work because of the null. or rather test this out.
+        primary.write(record);
       } catch (Exception error) {
         fallback.write(record);
       }
     }
   }
 
-  private static class ErrorHandlingRecordRouter extends RecordRouter {
+  public static class ErrorHandlingRecordRouter extends RecordRouter {
     private final WriteExceptionHandler handler;
-    private final WriterManager writers;
     private final RecordRouter router;
-    private final FailedRecordFactory failedRecordFactory;
 
     ErrorHandlingRecordRouter(
-        RecordRouter baseRouter,
-        WriteExceptionHandler handler,
-        WriterManager writers,
-        FailedRecordFactory factory) {
+            RecordRouter baseRouter,
+            WriteExceptionHandler handler) {
       this.router = baseRouter;
       this.handler = handler;
-      this.writers = writers;
-      this.failedRecordFactory = factory;
     }
 
     @Override
     public void write(SinkRecord record) {
-      if (failedRecordFactory.isFailedTransformRecord(record)) {
-        writers.write(failedRecordFactory.tableName(record), record, false);
-      } else {
-        try {
-          router.write(record);
-        } catch (Exception error) {
-          WriteExceptionHandler.Result result = handler.handle(record, error);
-          if (result != null) {
-            writers.write(result.tableName(), result.sinkRecord(), false);
-          }
-        }
+      try {
+        router.write(record);
+      } catch (Exception error) {
+        SinkRecord result = handler.handle(record, error);
+        router.write(result);
       }
     }
   }

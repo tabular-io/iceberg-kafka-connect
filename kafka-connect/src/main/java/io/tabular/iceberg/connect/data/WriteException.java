@@ -29,6 +29,11 @@ public class WriteException extends RuntimeException {
     tableIdentifier = null;
   }
 
+  WriteException(String msg) {
+    super(msg);
+    tableIdentifier = null;
+  }
+
   WriteException(TableIdentifier tableId, Throwable cause) {
     super(cause);
     this.tableIdentifier = tableId.toString();
@@ -79,6 +84,10 @@ public class WriteException extends RuntimeException {
   public static class RouteException extends WriteException {
     RouteException(Throwable cause) {
       super(cause);
+    }
+
+    RouteException(String msg) {
+      super(msg);
     }
   }
 
