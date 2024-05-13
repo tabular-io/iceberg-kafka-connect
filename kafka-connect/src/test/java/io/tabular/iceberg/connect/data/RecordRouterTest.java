@@ -110,6 +110,7 @@ public class RecordRouterTest {
         assertThat(result).isEqualTo(Lists.newArrayList(Pair.of("route_field_table", recordWithRoute), Pair.of("tbl1", recordWithoutRoute), Pair.of("tbl2", recordWithoutRoute)));
     }
 
+
     @Test
     @DisplayName("DynamicRecordRouter should dispatch based on the record field")
     public void dynamicRecordRouterTest() {

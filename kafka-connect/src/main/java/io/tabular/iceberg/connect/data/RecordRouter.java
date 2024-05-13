@@ -23,6 +23,7 @@ import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
 import io.tabular.iceberg.connect.deadletter.FailedRecordFactory;
 
 import java.util.List;
+
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -86,7 +87,11 @@ public abstract class RecordRouter {
       if (config.tables() != null && !config.tables().isEmpty()) {
         config.tables().forEach(TableIdentifier::of);
         if (config.tablesRouteField() != null) {
-          baseRecordRouter = new FallbackRecordRouter(new DynamicRecordRouter(writers, config.tablesRouteField()), new ConfigRecordRouter(writers, config.tables()));
+          if (hasRegexMode(config)) {
+            baseRecordRouter = new RegexRecordRouter(writers, config);
+          } else {
+            baseRecordRouter = new FallbackRecordRouter(new DynamicRecordRouter(writers, config.tablesRouteField()), new ConfigRecordRouter(writers, config.tables()));
+          }
         } else {
           baseRecordRouter = new ConfigRecordRouter(writers, config.tables());
         }
@@ -109,6 +114,23 @@ public abstract class RecordRouter {
     }
 
     return baseRecordRouter;
+  }
+
+  private static boolean hasRegexMode(IcebergSinkConfig config) {
+    long definedRegexes = config
+            .tables()
+            .stream()
+            .map(
+                    tableName -> {
+                      try {
+return                         config
+                                .tableConfig(tableName)
+                                .routeRegex().isPresent();
+                      } catch (Exception unused) {
+                        return false;
+                      }
+                    }).filter(present -> present).count();
+    return definedRegexes > 0;
   }
 
   public static class ConfigRecordRouter extends RecordRouter {
