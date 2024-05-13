@@ -103,9 +103,7 @@ public class RecordRouterTest {
         when(config.dynamicTablesEnabled()).thenReturn(false);
 
         RecordRouter router = RecordRouter.from(manager, config, this.getClass().getClassLoader(), context);
-        // do some assertions here.
         assertThat(router).isInstanceOf(RecordRouter.FallbackRecordRouter.class);
-        // test some dispatching here.
         router.write(recordWithRoute);
         router.write(recordWithoutRoute);
         List<Pair<String, SinkRecord>> result = manager.log;
@@ -201,7 +199,39 @@ public class RecordRouterTest {
 
         List<Pair<String, SinkRecord>> result = manager.log;
         assertThat(result.stream().map(Pair::first).collect(Collectors.toList())).isEqualTo(Lists.newArrayList("route_field_table", "dlt.table"));
-
     }
 
+    @Test
+    @DisplayName("ErrorHandlingRouter should throw if there is an issue with the failed record conversion")
+    public void errorHandlingRouterDoesNotInfiniteLoop() {
+        RecordingWriterManager manager = new RecordingWriterManager(factory);
+
+        Schema schemaWithoutRoute = SchemaBuilder.struct().field("a", Schema.STRING_SCHEMA);
+
+        Struct structWithoutRoute = new Struct(schemaWithoutRoute).put("a", "bad_record_fail");
+
+        SinkRecord recordWithoutRoute = new SinkRecord("topic", 1, null, null, schemaWithoutRoute, structWithoutRoute, 101L);
+
+        // defaultRecordFactory assumes ErrorTransform has been used to put original bytes on the records in the headers
+        // since this record will fail, it will go through the configured DefaultFailedRecordFactory and expects these values to be present
+        recordWithoutRoute.headers().add(DeadLetterUtils.VALUE_HEADER, new SchemaAndValue(SchemaBuilder.OPTIONAL_BYTES_SCHEMA, "test".getBytes(StandardCharsets.UTF_8)));
+
+        IcebergSinkConfig config = mock(IcebergSinkConfig.class);
+        when(config.tables()).thenReturn(Lists.newArrayList("tbl1", "tbl2"));
+        when(config.deadLetterTableEnabled()).thenReturn(true);
+        when(config.tablesRouteField()).thenReturn("route_field");
+        when(config.dynamicTablesEnabled()).thenReturn(true);
+        when(config.getFailedRecordHandler()).thenReturn("io.tabular.iceberg.connect.deadletter.DefaultFailedRecordFactory");
+        when(config.getWriteExceptionHandler()).thenReturn("io.tabular.iceberg.connect.data.DefaultWriteExceptionHandler");
+        // the underlying router is looking for `route_field` but the failed record handler is configured to have
+        // the route field on `route_field_bad`
+        // this should cause the ErrorHandler to throw an exception
+        // since this is a configuration issue, it should kill the connector w/ unhandled exception
+        when(config.failedRecordHandlerProperties()).thenReturn(ImmutableMap.of("table_name", "dlt.table", "route_field", "route_field_bad"));
+
+        RecordRouter router = RecordRouter.from(manager, config, this.getClass().getClassLoader(), context);
+        assertThat(router).isInstanceOf(RecordRouter.ErrorHandlingRecordRouter.class);
+
+        assertThrows(WriteException.RouteException.class, () -> router.write(recordWithoutRoute));
+    }
 }
