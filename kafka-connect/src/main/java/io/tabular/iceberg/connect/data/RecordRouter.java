@@ -44,34 +44,9 @@ public abstract class RecordRouter {
       throw new WriteException.RouteException(error);
     }
 
-    // confirm if this can even happen
     return routeValue == null ? null : routeValue.toString();
   }
 
-
-  /*
-   |iceberg.tables|dynamic-enables|route-field| routing behavior |
-   |--------------|---------------|----------------|-------------|
-   | empty        |  true         |  populated     |    DynamicRecordRouter |
-   | empty        |  false        |  populated     |    RegexRouter |
-   | populated    |  false        |  null          |    ConfigRouter |
-   | populated    |  false        |  populated     |    DynamicRecordRouter then ConfigRouter |
-
- what does iceberg.tables.default-commit-branch do ?
-
-   Record routing is complex due to maintaining non-breaking config changes
-   <ul>
-     <li> if iceberg.tables.dynamic-enabled is true then we route based on iceberg.tables.route-field, regardless of other fields
-     <li> if iceberg.tables.dynamic-enabled is false and iceberg.tables is empty, we use routeRegex
-     <li> if iceberg.tables.dynamic-enabled is false and iceberg.tables is populated and route-field is empty, we route to all listed tables
-     <li> as above, but if route-field is set we attempt to route dynamically and if that field does not exist we do the behavior above.
-   </ul>
-     <p>
-     The last option is required for Dead Letter Table handling while routing to iceberg.tables, as the dead letter table routing
-     is similar to dynamic routing: based on a field and under the control of the user. </p>
-
-    How to avoid the infinite loop problem?
-   */
   public static RecordRouter from(
           WriterManager writers,
           IcebergSinkConfig config,
