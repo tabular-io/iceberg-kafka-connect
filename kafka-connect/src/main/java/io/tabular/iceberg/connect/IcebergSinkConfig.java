@@ -83,11 +83,11 @@ public class IcebergSinkConfig extends AbstractConfig {
       "iceberg.tables.schema-force-optional";
   private static final String TABLES_SCHEMA_CASE_INSENSITIVE_PROP =
       "iceberg.tables.schema-case-insensitive";
-  private static final String WRITE_EXCEPTION_HANDLER_PROP = "iceberg.tables.deadletter.handler";
+  private static final String WRITE_EXCEPTION_HANDLER_PROP = "iceberg.deadletter.handler";
   private static final String FAILED_RECORD_FACTORY_PROP =
-      "iceberg.tables.deadletter.record_factory";
+      "iceberg.deadletter.failed_record_factory";
   private static final String FAILED_RECORD_FACTORY_PREFIX =
-      "iceberg.tables.deadletter.record_factory";
+      "iceberg.deadletter.failed_record_factory";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
   private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group-id";
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.control.commit.interval-ms";

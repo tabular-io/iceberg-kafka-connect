@@ -20,7 +20,12 @@ package io.tabular.iceberg.connect.transforms;
 
 import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
 import io.tabular.iceberg.connect.deadletter.FailedRecordFactory;
+
+import java.util.Collections;
 import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
@@ -28,6 +33,7 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 public class DefaultExceptionHandler implements TransformExceptionHandler {
 
   private static final String FAILED_RECORD_FACTORY_PROP = "failed_record_factory";
+
   private static final ConfigDef CONFIG_DEF =
       new ConfigDef()
           .define(
@@ -45,7 +51,7 @@ public class DefaultExceptionHandler implements TransformExceptionHandler {
   }
 
   @Override
-  public void configure(Map<String, ?> props) {
+  public void configure(Map<String, String> props) {
     SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
     ClassLoader loader = this.getClass().getClassLoader();
     this.recordFactory =
@@ -57,5 +63,22 @@ public class DefaultExceptionHandler implements TransformExceptionHandler {
   @Override
   public ConfigDef config() {
     return CONFIG_DEF;
+  }
+
+  private Map<String, String> failedRecordProperties(Map<String, String> originalProps) {
+    return propertiesWithPrefix(originalProps, FAILED_RECORD_FACTORY_PROP + ".");
+  }
+
+  private static Map<String, String> propertiesWithPrefix(
+          Map<String, String> properties, String prefix) {
+    if (properties == null || properties.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    Preconditions.checkArgument(prefix != null, "Invalid prefix: null");
+
+    return properties.entrySet().stream()
+            .filter(e -> e.getKey().startsWith(prefix))
+            .collect(Collectors.toMap(e -> e.getKey().replaceFirst(prefix, ""), Map.Entry::getValue));
   }
 }

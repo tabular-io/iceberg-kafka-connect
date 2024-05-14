@@ -26,6 +26,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
@@ -55,7 +56,7 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
  *
  * <p>"transforms": "tab", "transforms.tab.type":
  * <ul>
- *  <li>"io.tabular.iceberg.connect.transform.managed.ManagedTransform" </li>
+ *  <li>"io.tabular.iceberg.connect.transforms.ErrorTransform" </li>
  *  <li>"transforms.tab.value.converter": "org.apache.kafka.connect.storage.StringConverter"</li>
  *  <li>"transforms.tab.value.converter.some_property: "...", "transforms.tab.key.converter":</li>
  *  <li>"org.apache.kafka.connect.storage.StringConverter", "transforms.tab.key.converter.some_property": "..."</li>
@@ -64,12 +65,13 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
  * </ul>
  * <p>This should not be used with any other SMT. All SMTs should be added to "transforms.tab.smts".
  *
- * <p>It returns a special Map of String -> Object "original" : Map of String -> Object containing
- * the key,value, and header bytes of the original message "transformed" : [null, Struct, Map, etc.]
- * of whatever the deserialized record is (after transformation if SMTs are configured)
+ * <p> In the success path, the original key/value/header bytes are put on the headers of the transformed record.
+ * Note that the original Kafka headers are lost due to Kafka Connect; however, the Kafka Connect headers are
+ * translated and can be used to recover the original Kafka values in order to construct a new Producer Record if required
+ * (user responsibility).
  *
  * <p>The original payload can be used in the Iceberg Connector if the record cannot be transformed
- * to an Iceberg record so that the original kafka message can be stored in Iceberg at that point.
+ * to an Iceberg record, or some other issue arises, so that the original kafka message can be stored in Iceberg at that point.
  *
  * <p>If any of the key, value, header deserializers or SMTs throw an exception a failed record is
  * constructed that contains kafka metadata, exception/location information, and the original
@@ -297,12 +299,15 @@ public class ErrorTransform implements Transformation<SinkRecord> {
               .collect(Collectors.toList());
     }
 
+
+    Map<String, String> stringProps = propsAsStrings(props);
+
     converterErrorHandler =
         (TransformExceptionHandler) loadClass(config.getString(CONVERTER_ERROR_HANDLER), loader);
-    converterErrorHandler.configure(props);
+    converterErrorHandler.configure(stringProps);
     smtErrorHandler =
         (TransformExceptionHandler) loadClass(config.getString(SMT_ERROR_HANDLER), loader);
-    smtErrorHandler.configure(props);
+    smtErrorHandler.configure(stringProps);
   }
 
   private Object loadClass(String name, ClassLoader loader) {
@@ -380,5 +385,15 @@ public class ErrorTransform implements Transformation<SinkRecord> {
     }
 
     return transformed;
+  }
+
+  private Map<String, String> propsAsStrings(Map<String, ?> props) {
+    Map<String, String> newProps = Maps.newHashMap();
+    props.forEach((key, value) -> {
+      if (value instanceof String) {
+        newProps.put(key, (String) value);
+      }
+    });
+    return newProps;
   }
 }

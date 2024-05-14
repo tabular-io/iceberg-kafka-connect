@@ -25,7 +25,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 public interface TransformExceptionHandler {
   SinkRecord handle(SinkRecord original, Throwable error, String location);
 
-  void configure(Map<String, ?> props);
+  void configure(Map<String, String> props);
 
   ConfigDef config();
 }
