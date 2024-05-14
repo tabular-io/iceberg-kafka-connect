@@ -57,6 +57,10 @@ public class ErrorTransformTest {
 
   private static final String DEAD_LETTER_TABLE_NAME = "dead_letter.table";
 
+  private static final String DEAD_LETTER_ROUTE_FIELD_PROP = "route_field";
+
+  private static final String DEAD_LETTER_ROUTE_FIELD = "some_field";
+
   private final FailedRecordFactory failedRecordFactory = getFailedRecordFactory();
 
   private Headers stringAsByteHeaders() {
@@ -89,14 +93,9 @@ public class ErrorTransformTest {
             DeadLetterUtils.loadClass(
                 "io.tabular.iceberg.connect.deadletter.DefaultFailedRecordFactory",
                 this.getClass().getClassLoader());
-    factory.configure(ImmutableMap.of("table_name", DEAD_LETTER_TABLE_NAME));
+    factory.configure(ImmutableMap.of("table_name", DEAD_LETTER_TABLE_NAME, DEAD_LETTER_ROUTE_FIELD_PROP, DEAD_LETTER_ROUTE_FIELD));
     return factory;
   }
-
-  //  private assertHeaders(Headers headers, String valueBytes, String keyBytes, List<Struct>
-  // originalHeaders) {
-  //    headers.lastWithName("t_")
-  //  }
 
   @Test
   @DisplayName(
@@ -114,7 +113,7 @@ public class ErrorTransformTest {
               "header.converter.converter.type",
               "header",
               "table_name",
-              DEAD_LETTER_TABLE_NAME));
+              DEAD_LETTER_TABLE_NAME, DEAD_LETTER_ROUTE_FIELD_PROP, DEAD_LETTER_ROUTE_FIELD));
 
       SinkRecord result = smt.apply(createRecord(KEY_STRING, VALUE_STRING, stringAsByteHeaders()));
 
@@ -157,7 +156,7 @@ public class ErrorTransformTest {
               "smts.transform_text",
               transformString,
               "table_name",
-              DEAD_LETTER_TABLE_NAME));
+              DEAD_LETTER_TABLE_NAME, DEAD_LETTER_ROUTE_FIELD_PROP, DEAD_LETTER_ROUTE_FIELD));
 
       SinkRecord result = smt.apply(createRecord(KEY_STRING, VALUE_STRING, null));
 
@@ -194,7 +193,7 @@ public class ErrorTransformTest {
               "key.converter",
               STRING_CONVERTER,
               "table_name",
-              DEAD_LETTER_TABLE_NAME));
+              DEAD_LETTER_TABLE_NAME, DEAD_LETTER_ROUTE_FIELD_PROP, DEAD_LETTER_ROUTE_FIELD));
       SinkRecord record = createRecord(null, null, null);
       assertThat(smt.apply(record)).isSameAs(record);
     }
@@ -220,7 +219,7 @@ public class ErrorTransformTest {
               "smts.null",
               "true",
               "table_name",
-              DEAD_LETTER_TABLE_NAME));
+              DEAD_LETTER_TABLE_NAME, DEAD_LETTER_ROUTE_FIELD_PROP, DEAD_LETTER_ROUTE_FIELD));
 
       SinkRecord result = smt.apply(createRecord(KEY_STRING, VALUE_STRING, null));
 
@@ -243,7 +242,7 @@ public class ErrorTransformTest {
               "header.converter.converter.type",
               "header",
               "table_name",
-              DEAD_LETTER_TABLE_NAME));
+              DEAD_LETTER_TABLE_NAME, DEAD_LETTER_ROUTE_FIELD_PROP, DEAD_LETTER_ROUTE_FIELD));
 
       String malformedKey = "{\"malformed_json\"\"\"{}{}{}{}**";
       SinkRecord result =
@@ -288,7 +287,7 @@ public class ErrorTransformTest {
               "header.converter.converter.type",
               "header",
               "table_name",
-              DEAD_LETTER_TABLE_NAME));
+              DEAD_LETTER_TABLE_NAME, DEAD_LETTER_ROUTE_FIELD_PROP, DEAD_LETTER_ROUTE_FIELD));
 
       String malformedValue = "{\"malformed_json\"\"\"{}{}{}{}**";
       SinkRecord result =
@@ -341,7 +340,7 @@ public class ErrorTransformTest {
               "header.converter.converter.type",
               "header",
               "table_name",
-              DEAD_LETTER_TABLE_NAME));
+              DEAD_LETTER_TABLE_NAME, DEAD_LETTER_ROUTE_FIELD_PROP, DEAD_LETTER_ROUTE_FIELD));
 
       SinkRecord record = createRecord(KEY_STRING, VALUE_STRING, headers);
       SinkRecord result = smt.apply(record);
@@ -389,7 +388,7 @@ public class ErrorTransformTest {
               "smts.throw",
               "true",
               "table_name",
-              DEAD_LETTER_TABLE_NAME));
+              DEAD_LETTER_TABLE_NAME, DEAD_LETTER_ROUTE_FIELD_PROP, DEAD_LETTER_ROUTE_FIELD));
 
       SinkRecord record = createRecord(KEY_STRING, VALUE_STRING, stringAsByteHeaders());
       SinkRecord result = smt.apply(record);
