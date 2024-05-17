@@ -103,7 +103,7 @@ public class EventDecoder {
                       new TopicPartitionOffset(
                           t.topic(),
                           t.partition(),
-                          t.offset() == null ? null : t.offset(),
+                          t.offset(),
                           t.timestamp() == null
                               ? null
                               : OffsetDateTime.ofInstant(
@@ -156,7 +156,7 @@ public class EventDecoder {
               .get();
       Type fieldType = AvroSchemaUtil.convert(fieldSchema);
       int fieldId = (int) f.getObjectProp("field-id");
-      convertedFields.add(Types.NestedField.optional(fieldId, f.name(), fieldType));
+      convertedFields.add(Types.NestedField.of(fieldId, false, f.name(), fieldType));
     }
 
     Types.StructType convertedStructType = Types.StructType.of(convertedFields);

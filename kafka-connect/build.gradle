@@ -15,7 +15,6 @@ dependencies {
 
   testImplementation libs.mockito
   testImplementation libs.assertj
-  testImplementation libs.iceberg.kafka.connect.events
 
   testImplementation 'ch.qos.logback:logback-classic:1.5.3'
 }

@@ -50,7 +50,6 @@ import org.apache.iceberg.connect.events.Event;
 import org.apache.iceberg.connect.events.PayloadType;
 import org.apache.iceberg.connect.events.StartCommit;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
-import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 import org.junit.jupiter.api.Test;
@@ -184,17 +183,7 @@ public class EventDecoderTest {
                 })
             .collect(Collectors.toList());
 
-    List<Types.NestedField> expectedPartitionInfo =
-        Lists.newArrayList(
-            Types.NestedField.optional(1000, "ts1_year", Types.IntegerType.get()),
-            Types.NestedField.optional(1001, "ts2_month", Types.IntegerType.get()),
-            Types.NestedField.optional(1002, "ts3_day", Types.DateType.get()),
-            Types.NestedField.optional(1003, "ts4_hour", Types.IntegerType.get()),
-            Types.NestedField.optional(1004, "i_bucket", Types.IntegerType.get()),
-            Types.NestedField.optional(1005, "s_trunc", Types.StringType.get()),
-            Types.NestedField.optional(1006, "s", Types.StringType.get()));
-
-    assertThat(resultPartitionInfo).isEqualTo(expectedPartitionInfo);
+    assertThat(resultPartitionInfo).isEqualTo(spec.partitionType().fields());
   }
 
   @Test

@@ -45,6 +45,9 @@ public class CommitState {
   private UUID currentCommitId;
   private final IcebergSinkConfig config;
 
+  private final Comparator<OffsetDateTime> dateTimeComparator =
+          OffsetDateTime::compareTo;
+
   public CommitState(IcebergSinkConfig config) {
     this.config = config;
   }
@@ -149,18 +152,6 @@ public class CommitState {
   }
 
   public OffsetDateTime vtts(boolean partialCommit) {
-
-      // move to static on the class
-      Comparator<OffsetDateTime> comparator =
-              new Comparator<OffsetDateTime>() {
-
-                  @Override
-                  public int compare(OffsetDateTime o1, OffsetDateTime o2) {
-                      return o1.compareTo(o2);
-                  }
-              };
-
-
     boolean validVtts =
         !partialCommit
             && readyBuffer.stream()
@@ -173,7 +164,7 @@ public class CommitState {
                   readyBuffer.stream()
                           .flatMap(event -> event.assignments().stream())
                           .map(TopicPartitionOffset::timestamp)
-                          .min(comparator);
+                          .min(dateTimeComparator);
           if (maybeResult.isPresent()) {
               result = maybeResult.get();
           } else {

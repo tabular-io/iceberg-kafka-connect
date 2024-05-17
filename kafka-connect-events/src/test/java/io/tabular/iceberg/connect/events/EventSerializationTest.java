@@ -28,12 +28,12 @@ import org.apache.iceberg.types.Types.StructType;
 import org.junit.jupiter.api.Test;
 
 public class EventSerializationTest {
-  private final UUID commitId = UUID.randomUUID();
 
   @Test
   public void testCommitRequestSerialization() {
+    UUID commitId = UUID.randomUUID();
     Event event =
-        new Event("cg-connector", EventType.COMMIT_REQUEST, new CommitRequestPayload(commitId));
+            new Event("cg-connector", EventType.COMMIT_REQUEST, new CommitRequestPayload(commitId));
 
     byte[] data = Event.encode(event);
     Event result = Event.decode(data);
@@ -45,16 +45,17 @@ public class EventSerializationTest {
 
   @Test
   public void testCommitResponseSerialization() {
+    UUID commitId = UUID.randomUUID();
     Event event =
-        new Event(
-            "cg-connector",
-            EventType.COMMIT_RESPONSE,
-            new CommitResponsePayload(
-                StructType.of(),
-                commitId,
-                new TableName(Collections.singletonList("db"), "tbl"),
-                Arrays.asList(EventTestUtil.createDataFile(), EventTestUtil.createDataFile()),
-                Arrays.asList(EventTestUtil.createDeleteFile(), EventTestUtil.createDeleteFile())));
+            new Event(
+                    "cg-connector",
+                    EventType.COMMIT_RESPONSE,
+                    new CommitResponsePayload(
+                            StructType.of(),
+                            commitId,
+                            new TableName(Collections.singletonList("db"), "tbl"),
+                            Arrays.asList(EventTestUtil.createDataFile(), EventTestUtil.createDataFile()),
+                            Arrays.asList(EventTestUtil.createDeleteFile(), EventTestUtil.createDeleteFile())));
 
     byte[] data = Event.encode(event);
     Event result = Event.decode(data);
@@ -71,15 +72,16 @@ public class EventSerializationTest {
 
   @Test
   public void testCommitReadySerialization() {
+    UUID commitId = UUID.randomUUID();
     Event event =
-        new Event(
-            "cg-connector",
-            EventType.COMMIT_READY,
-            new CommitReadyPayload(
-                commitId,
-                Arrays.asList(
-                    new TopicPartitionOffset("topic", 1, 1L, 1L),
-                    new TopicPartitionOffset("topic", 2, null, null))));
+            new Event(
+                    "cg-connector",
+                    EventType.COMMIT_READY,
+                    new CommitReadyPayload(
+                            commitId,
+                            Arrays.asList(
+                                    new TopicPartitionOffset("topic", 1, 1L, 1L),
+                                    new TopicPartitionOffset("topic", 2, null, null))));
 
     byte[] data = Event.encode(event);
     Event result = Event.decode(data);
@@ -93,12 +95,13 @@ public class EventSerializationTest {
 
   @Test
   public void testCommitTableSerialization() {
+    UUID commitId = UUID.randomUUID();
     Event event =
-        new Event(
-            "cg-connector",
-            EventType.COMMIT_TABLE,
-            new CommitTablePayload(
-                commitId, new TableName(Collections.singletonList("db"), "tbl"), 1L, 2L));
+            new Event(
+                    "cg-connector",
+                    EventType.COMMIT_TABLE,
+                    new CommitTablePayload(
+                            commitId, new TableName(Collections.singletonList("db"), "tbl"), 1L, 2L));
 
     byte[] data = Event.encode(event);
     Event result = Event.decode(data);
@@ -113,9 +116,10 @@ public class EventSerializationTest {
 
   @Test
   public void testCommitCompleteSerialization() {
+    UUID commitId = UUID.randomUUID();
     Event event =
-        new Event(
-            "cg-connector", EventType.COMMIT_COMPLETE, new CommitCompletePayload(commitId, 2L));
+            new Event(
+                    "cg-connector", EventType.COMMIT_COMPLETE, new CommitCompletePayload(commitId, 2L));
 
     byte[] data = Event.encode(event);
     Event result = Event.decode(data);

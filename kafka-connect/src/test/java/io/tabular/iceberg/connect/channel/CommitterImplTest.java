@@ -18,6 +18,7 @@
  */
 package io.tabular.iceberg.connect.channel;
 
+import static io.tabular.iceberg.connect.fixtures.EventTestUtil.createDataFile;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -43,11 +44,7 @@ import java.util.stream.Collectors;
 import org.apache.commons.lang3.NotImplementedException;
 import org.apache.iceberg.ContentFile;
 import org.apache.iceberg.DataFile;
-import org.apache.iceberg.DataFiles;
 import org.apache.iceberg.DeleteFile;
-import org.apache.iceberg.FileFormat;
-import org.apache.iceberg.FileMetadata;
-import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.common.DynConstructors;
 import org.apache.iceberg.connect.events.AvroUtil;
@@ -286,24 +283,6 @@ class CommitterImplTest {
 
   private OffsetDateTime offsetDateTime(Long ms) {
    return OffsetDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneOffset.UTC);
-  }
-
-  public static DataFile createDataFile() {
-    return DataFiles.builder(PartitionSpec.unpartitioned())
-            .withPath(UUID.randomUUID() + ".parquet")
-            .withFormat(FileFormat.PARQUET)
-            .withFileSizeInBytes(100L)
-            .withRecordCount(5)
-            .build();
-  }
-
-  public static DeleteFile createDeleteFile() {
-    return FileMetadata.deleteFileBuilder(PartitionSpec.unpartitioned())
-            .ofEqualityDeletes(1)
-            .withPath(UUID.randomUUID() + ".parquet")
-            .withFileSizeInBytes(10)
-            .withRecordCount(1)
-            .build();
   }
 
   @Test
