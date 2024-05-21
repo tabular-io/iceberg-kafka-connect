@@ -23,15 +23,10 @@ import static java.util.stream.Collectors.toList;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.events.CommitCompletePayload;
-import io.tabular.iceberg.connect.events.CommitRequestPayload;
-import io.tabular.iceberg.connect.events.CommitTablePayload;
-import io.tabular.iceberg.connect.events.Event;
-import io.tabular.iceberg.connect.events.EventType;
-import io.tabular.iceberg.connect.events.TableName;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +42,11 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.Transaction;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.connect.events.CommitComplete;
+import org.apache.iceberg.connect.events.CommitToTable;
+import org.apache.iceberg.connect.events.Event;
+import org.apache.iceberg.connect.events.StartCommit;
+import org.apache.iceberg.connect.events.TableReference;
 import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
@@ -98,10 +98,7 @@ public class Coordinator extends Channel implements AutoCloseable {
       // send out begin commit
       commitState.startNewCommit();
       Event event =
-          new Event(
-              config.controlGroupId(),
-              EventType.COMMIT_REQUEST,
-              new CommitRequestPayload(commitState.currentCommitId()));
+          new Event(config.controlGroupId(), new StartCommit(commitState.currentCommitId()));
       send(event);
       LOG.debug("Started new commit with commit-id={}", commitState.currentCommitId().toString());
     }
@@ -115,10 +112,10 @@ public class Coordinator extends Channel implements AutoCloseable {
 
   private boolean receive(Envelope envelope) {
     switch (envelope.event().type()) {
-      case COMMIT_RESPONSE:
+      case DATA_WRITTEN:
         commitState.addResponse(envelope);
         return true;
-      case COMMIT_READY:
+      case DATA_COMPLETE:
         commitState.addReady(envelope);
         if (commitState.isCommitReady(totalPartitionCount)) {
           commit(false);
@@ -142,7 +139,7 @@ public class Coordinator extends Channel implements AutoCloseable {
     Map<TableIdentifier, List<Envelope>> commitMap = commitState.tableCommitMap();
 
     String offsetsJson = offsetsJson();
-    Long vtts = commitState.vtts(partialCommit);
+    OffsetDateTime vtts = commitState.vtts(partialCommit);
 
     Tasks.foreach(commitMap.entrySet())
         .executeWith(exec)
@@ -157,10 +154,7 @@ public class Coordinator extends Channel implements AutoCloseable {
     commitState.clearResponses();
 
     Event event =
-        new Event(
-            config.controlGroupId(),
-            EventType.COMMIT_COMPLETE,
-            new CommitCompletePayload(commitState.currentCommitId(), vtts));
+        new Event(config.controlGroupId(), new CommitComplete(commitState.currentCommitId(), vtts));
     send(event);
 
     LOG.info(
@@ -179,7 +173,10 @@ public class Coordinator extends Channel implements AutoCloseable {
   }
 
   private void commitToTable(
-      TableIdentifier tableIdentifier, List<Envelope> envelopeList, String offsetsJson, Long vtts) {
+      TableIdentifier tableIdentifier,
+      List<Envelope> envelopeList,
+      String offsetsJson,
+      OffsetDateTime vtts) {
     Table table;
     try {
       table = catalog.loadTable(tableIdentifier);
@@ -235,7 +232,7 @@ public class Coordinator extends Channel implements AutoCloseable {
           if (i == lastIdx) {
             appendOp.set(snapshotOffsetsProp, offsetsJson);
             if (vtts != null) {
-              appendOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts));
+              appendOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts.toInstant().toEpochMilli()));
             }
           }
 
@@ -249,7 +246,7 @@ public class Coordinator extends Channel implements AutoCloseable {
         deltaOp.set(snapshotOffsetsProp, offsetsJson);
         deltaOp.set(COMMIT_ID_SNAPSHOT_PROP, commitState.currentCommitId().toString());
         if (vtts != null) {
-          deltaOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts));
+          deltaOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts.toInstant().toEpochMilli()));
         }
         dataFiles.forEach(deltaOp::addRows);
         deleteFiles.forEach(deltaOp::addDeletes);
@@ -260,9 +257,11 @@ public class Coordinator extends Channel implements AutoCloseable {
       Event event =
           new Event(
               config.controlGroupId(),
-              EventType.COMMIT_TABLE,
-              new CommitTablePayload(
-                  commitState.currentCommitId(), TableName.of(tableIdentifier), snapshotId, vtts));
+              new CommitToTable(
+                  commitState.currentCommitId(),
+                  TableReference.of(config.catalogName(), tableIdentifier),
+                  snapshotId,
+                  vtts));
       send(event);
 
       LOG.info(

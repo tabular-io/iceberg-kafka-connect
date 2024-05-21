@@ -18,6 +18,7 @@
  */
 package io.tabular.iceberg.connect.channel;
 
+import static io.tabular.iceberg.connect.fixtures.EventTestUtil.createDataFile;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -30,14 +31,10 @@ import static org.mockito.Mockito.when;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.Offset;
 import io.tabular.iceberg.connect.data.WriterResult;
-import io.tabular.iceberg.connect.events.CommitCompletePayload;
-import io.tabular.iceberg.connect.events.CommitReadyPayload;
-import io.tabular.iceberg.connect.events.CommitRequestPayload;
-import io.tabular.iceberg.connect.events.CommitResponsePayload;
-import io.tabular.iceberg.connect.events.Event;
-import io.tabular.iceberg.connect.events.EventTestUtil;
-import io.tabular.iceberg.connect.events.EventType;
 import java.io.IOException;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,6 +47,13 @@ import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.common.DynConstructors;
+import org.apache.iceberg.connect.events.AvroUtil;
+import org.apache.iceberg.connect.events.CommitComplete;
+import org.apache.iceberg.connect.events.DataComplete;
+import org.apache.iceberg.connect.events.DataWritten;
+import org.apache.iceberg.connect.events.Event;
+import org.apache.iceberg.connect.events.PayloadType;
+import org.apache.iceberg.connect.events.StartCommit;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
@@ -78,6 +82,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 class CommitterImplTest {
+
+  private static final String CATALOG_NAME = "iceberg";
   private static final String SOURCE_TOPIC = "source-topic-name";
   private static final TopicPartition SOURCE_TP0 = new TopicPartition(SOURCE_TOPIC, 0);
   private static final TopicPartition SOURCE_TP1 = new TopicPartition(SOURCE_TOPIC, 1);
@@ -229,7 +235,7 @@ class CommitterImplTest {
             expected.stream().map(CommitterImplTest::toPath).collect(Collectors.toList()));
   }
 
-  private void assertCommitResponse(
+  private void assertDataWritten(
       ProducerRecord<String, byte[]> producerRecord,
       UUID expectedProducerId,
       UUID expectedCommitId,
@@ -238,27 +244,28 @@ class CommitterImplTest {
       List<DeleteFile> expectedDeleteFiles) {
     assertThat(producerRecord.key()).isEqualTo(expectedProducerId.toString());
 
-    Event event = Event.decode(producerRecord.value());
-    assertThat(event.type()).isEqualTo(EventType.COMMIT_RESPONSE);
-    assertThat(event.payload()).isInstanceOf(CommitResponsePayload.class);
-    CommitResponsePayload commitResponsePayload = (CommitResponsePayload) event.payload();
-    assertThat(commitResponsePayload.commitId()).isEqualTo(expectedCommitId);
-    assertThat(commitResponsePayload.tableName().toIdentifier()).isEqualTo(expectedTableIdentifier);
-    assertSameContentFiles(commitResponsePayload.dataFiles(), expectedDataFiles);
-    assertSameContentFiles(commitResponsePayload.deleteFiles(), expectedDeleteFiles);
+    Event event = AvroUtil.decode(producerRecord.value());
+    assertThat(event.type()).isEqualTo(PayloadType.DATA_WRITTEN);
+    assertThat(event.payload()).isInstanceOf(DataWritten.class);
+    DataWritten payload = (DataWritten) event.payload();
+    assertThat(payload.commitId()).isEqualTo(expectedCommitId);
+    assertThat(payload.tableReference().identifier()).isEqualTo(expectedTableIdentifier);
+    assertThat(payload.tableReference().catalog()).isEqualTo(CATALOG_NAME);
+    assertSameContentFiles(payload.dataFiles(), expectedDataFiles);
+    assertSameContentFiles(payload.deleteFiles(), expectedDeleteFiles);
   }
 
-  private void assertCommitReady(
+  private void assertDataComplete(
       ProducerRecord<String, byte[]> producerRecord,
       UUID expectedProducerId,
       UUID expectedCommitId,
-      Map<TopicPartition, Pair<Long, Long>> expectedAssignments) {
+      Map<TopicPartition, Pair<Long, OffsetDateTime>> expectedAssignments) {
     assertThat(producerRecord.key()).isEqualTo(expectedProducerId.toString());
 
-    Event event = Event.decode(producerRecord.value());
-    assertThat(event.type()).isEqualTo(EventType.COMMIT_READY);
-    assertThat(event.payload()).isInstanceOf(CommitReadyPayload.class);
-    CommitReadyPayload commitReadyPayload = (CommitReadyPayload) event.payload();
+    Event event = AvroUtil.decode(producerRecord.value());
+    assertThat(event.type()).isEqualTo(PayloadType.DATA_COMPLETE);
+    assertThat(event.payload()).isInstanceOf(DataComplete.class);
+    DataComplete commitReadyPayload = (DataComplete) event.payload();
     assertThat(commitReadyPayload.commitId()).isEqualTo(expectedCommitId);
     assertThat(
             commitReadyPayload.assignments().stream()
@@ -272,6 +279,10 @@ class CommitterImplTest {
             expectedAssignments.entrySet().stream()
                 .map(e -> Pair.of(e.getKey(), e.getValue()))
                 .collect(Collectors.toList()));
+  }
+
+  private OffsetDateTime offsetDateTime(Long ms) {
+   return OffsetDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneOffset.UTC);
   }
 
   @Test
@@ -386,11 +397,10 @@ class CommitterImplTest {
               CONTROL_TOPIC_PARTITION.partition(),
               0,
               UUID.randomUUID().toString(),
-              Event.encode(
+              AvroUtil.encode(
                   new Event(
                       CONFIG.controlGroupId(),
-                      EventType.COMMIT_COMPLETE,
-                      new CommitCompletePayload(UUID.randomUUID(), 100L)))));
+                      new CommitComplete(UUID.randomUUID(), offsetDateTime(100L))))));
 
       committer.commit(committableSupplier);
 
@@ -410,7 +420,7 @@ class CommitterImplTest {
         ImmutableMap.of(
             CONFIG.controlGroupId(), ImmutableMap.of(SOURCE_TP0, 110L, SOURCE_TP1, 100L)));
 
-    List<DataFile> dataFiles = ImmutableList.of(EventTestUtil.createDataFile());
+    List<DataFile> dataFiles = ImmutableList.of(createDataFile());
     List<DeleteFile> deleteFiles = ImmutableList.of();
     Types.StructType partitionStruct = Types.StructType.of();
     Map<TopicPartition, Offset> sourceOffsets = ImmutableMap.of(SOURCE_TP0, new Offset(100L, 200L));
@@ -432,28 +442,27 @@ class CommitterImplTest {
               CONTROL_TOPIC_PARTITION.partition(),
               0,
               UUID.randomUUID().toString(),
-              Event.encode(
+              AvroUtil.encode(
                   new Event(
                       CONFIG.controlGroupId(),
-                      EventType.COMMIT_REQUEST,
-                      new CommitRequestPayload(commitId)))));
+                      new StartCommit(commitId)))));
 
       committer.commit(committableSupplier);
 
       assertThat(producer.transactionCommitted()).isTrue();
       assertThat(producer.history()).hasSize(2);
-      assertCommitResponse(
+      assertDataWritten(
           producer.history().get(0),
           producerId,
           commitId,
           TABLE_1_IDENTIFIER,
           dataFiles,
           deleteFiles);
-      assertCommitReady(
+      assertDataComplete(
           producer.history().get(1),
           producerId,
           commitId,
-          ImmutableMap.of(SOURCE_TP0, Pair.of(100L, 200L)));
+          ImmutableMap.of(SOURCE_TP0, Pair.of(100L, offsetDateTime(200L))));
 
       assertThat(producer.consumerGroupOffsetsHistory()).hasSize(2);
       Map<TopicPartition, OffsetAndMetadata> expectedConsumerOffset =
@@ -491,17 +500,17 @@ class CommitterImplTest {
               CONTROL_TOPIC_PARTITION.partition(),
               0,
               UUID.randomUUID().toString(),
-              Event.encode(
+              AvroUtil.encode(
                   new Event(
                       CONFIG.controlGroupId(),
-                      EventType.COMMIT_REQUEST,
-                      new CommitRequestPayload(commitId)))));
+                      new StartCommit(commitId)))));
+
 
       committer.commit(committableSupplier);
 
       assertThat(producer.transactionCommitted()).isTrue();
       assertThat(producer.history()).hasSize(1);
-      assertCommitReady(
+      assertDataComplete(
           producer.history().get(0),
           producerId,
           commitId,
@@ -529,7 +538,7 @@ class CommitterImplTest {
         ImmutableMap.of(
             CONFIG.controlGroupId(), ImmutableMap.of(SOURCE_TP0, 110L, SOURCE_TP1, 100L)));
 
-    List<DataFile> dataFiles = ImmutableList.of(EventTestUtil.createDataFile());
+    List<DataFile> dataFiles = ImmutableList.of(createDataFile());
     List<DeleteFile> deleteFiles = ImmutableList.of();
     Types.StructType partitionStruct = Types.StructType.of();
     CommittableSupplier committableSupplier =
@@ -550,30 +559,29 @@ class CommitterImplTest {
               CONTROL_TOPIC_PARTITION.partition(),
               0,
               UUID.randomUUID().toString(),
-              Event.encode(
+              AvroUtil.encode(
                   new Event(
                       CONFIG.controlGroupId(),
-                      EventType.COMMIT_REQUEST,
-                      new CommitRequestPayload(commitId)))));
+                      new StartCommit(commitId)))));
 
       committer.commit(committableSupplier);
 
       assertThat(producer.transactionCommitted()).isTrue();
       assertThat(producer.history()).hasSize(2);
-      assertCommitResponse(
+      assertDataWritten(
           producer.history().get(0),
           producerId,
           commitId,
           TABLE_1_IDENTIFIER,
           dataFiles,
           deleteFiles);
-      assertCommitReady(
+      assertDataComplete(
           producer.history().get(1),
           producerId,
           commitId,
           ImmutableMap.of(
               sourceTp0, Pair.of(null, null),
-              sourceTp1, Pair.of(100L, 200L)));
+              sourceTp1, Pair.of(100L, offsetDateTime(200L))));
 
       assertThat(producer.consumerGroupOffsetsHistory()).hasSize(2);
       Map<TopicPartition, OffsetAndMetadata> expectedConsumerOffset =

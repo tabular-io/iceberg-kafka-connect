@@ -22,12 +22,14 @@ import static java.util.stream.Collectors.toList;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.data.Offset;
-import io.tabular.iceberg.connect.events.Event;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
+
+import org.apache.iceberg.connect.events.AvroUtil;
+import org.apache.iceberg.connect.events.Event;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
@@ -55,6 +57,8 @@ public abstract class Channel {
   private final Map<Integer, Long> controlTopicOffsets = Maps.newHashMap();
   private final String producerId;
 
+  private final EventDecoder eventDecoder;
+
   public Channel(
       String name,
       String consumerGroupId,
@@ -69,8 +73,8 @@ public abstract class Channel {
     this.consumer = clientFactory.createConsumer(consumerGroupId);
     consumer.subscribe(ImmutableList.of(controlTopic));
     this.admin = clientFactory.createAdmin();
-
     this.producerId = pair.first().toString();
+    this.eventDecoder = new EventDecoder(config.catalogName());
   }
 
   protected void send(Event event) {
@@ -89,7 +93,7 @@ public abstract class Channel {
             .map(
                 event -> {
                   LOG.debug("Sending event of type: {}", event.type().name());
-                  byte[] data = Event.encode(event);
+                  byte[] data = AvroUtil.encode(event);
                   // key by producer ID to keep event order
                   return new ProducerRecord<>(controlTopic, producerId, data);
                 })
@@ -124,12 +128,13 @@ public abstract class Channel {
             // so increment the record offset by one
             controlTopicOffsets.put(record.partition(), record.offset() + 1);
 
-            Event event = Event.decode(record.value());
-
-            if (event.groupId().equals(groupId)) {
-              LOG.debug("Received event of type: {}", event.type().name());
-              if (receiveFn.apply(new Envelope(event, record.partition(), record.offset()))) {
-                LOG.debug("Handled event of type: {}", event.type().name());
+            Event event = eventDecoder.decode(record.value());
+            if (event != null) {
+              if (event.groupId().equals(groupId)) {
+                LOG.debug("Received event of type: {}", event.type().name());
+                if (receiveFn.apply(new Envelope(event, record.partition(), record.offset()))) {
+                  LOG.debug("Handled event of type: {}", event.type().name());
+                }
               }
             }
           });

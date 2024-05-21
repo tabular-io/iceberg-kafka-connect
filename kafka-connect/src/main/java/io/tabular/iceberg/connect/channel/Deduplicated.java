@@ -20,7 +20,7 @@ package io.tabular.iceberg.connect.channel;
 
 import static java.util.stream.Collectors.toList;
 
-import io.tabular.iceberg.connect.events.CommitResponsePayload;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -31,6 +31,7 @@ import java.util.stream.Stream;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.connect.events.DataWritten;
 import org.apache.iceberg.util.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,7 +83,7 @@ class Deduplicated {
         tableIdentifier,
         envelopes,
         "data",
-        CommitResponsePayload::dataFiles,
+        DataWritten::dataFiles,
         dataFile -> dataFile.path().toString());
   }
 
@@ -97,7 +98,7 @@ class Deduplicated {
         tableIdentifier,
         envelopes,
         "delete",
-        CommitResponsePayload::deleteFiles,
+        DataWritten::deleteFiles,
         deleteFile -> deleteFile.path().toString());
   }
 
@@ -106,14 +107,13 @@ class Deduplicated {
       TableIdentifier tableIdentifier,
       List<Envelope> envelopes,
       String fileType,
-      Function<CommitResponsePayload, List<F>> extractFilesFromPayload,
+      Function<DataWritten, List<F>> extractFilesFromPayload,
       Function<F, String> extractPathFromFile) {
     List<Pair<F, SimpleEnvelope>> filesAndEnvelopes =
         envelopes.stream()
             .flatMap(
                 envelope -> {
-                  CommitResponsePayload payload =
-                      (CommitResponsePayload) envelope.event().payload();
+                  DataWritten payload = (DataWritten) envelope.event().payload();
                   List<F> files = extractFilesFromPayload.apply(payload);
                   if (files == null) {
                     return Stream.empty();
@@ -207,7 +207,7 @@ class Deduplicated {
     private final long offset;
     private final UUID eventId;
     private final String eventGroupId;
-    private final Long eventTimestamp;
+    private final OffsetDateTime eventTimestamp;
     private final UUID payloadCommitId;
 
     SimpleEnvelope(Envelope envelope) {
@@ -216,7 +216,7 @@ class Deduplicated {
       eventId = envelope.event().id();
       eventGroupId = envelope.event().groupId();
       eventTimestamp = envelope.event().timestamp();
-      payloadCommitId = ((CommitResponsePayload) envelope.event().payload()).commitId();
+      payloadCommitId = ((DataWritten) envelope.event().payload()).commitId();
     }
 
     @Override
@@ -255,7 +255,7 @@ class Deduplicated {
           + eventGroupId
           + '\''
           + ", eventTimestamp="
-          + eventTimestamp
+          + eventTimestamp.toInstant().toEpochMilli()
           + ", payloadCommitId="
           + payloadCommitId
           + '}';
