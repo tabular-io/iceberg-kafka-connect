@@ -18,12 +18,8 @@
  */
 package io.tabular.iceberg.connect.channel;
 
-import static io.tabular.iceberg.connect.events.EventType.COMMIT_RESPONSE;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.tabular.iceberg.connect.events.CommitResponsePayload;
-import io.tabular.iceberg.connect.events.Event;
-import io.tabular.iceberg.connect.events.TableName;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -35,6 +31,9 @@ import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.FileMetadata;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.connect.events.DataWritten;
+import org.apache.iceberg.connect.events.Event;
+import org.apache.iceberg.connect.events.TableReference;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableSet;
 import org.apache.iceberg.relocated.com.google.common.collect.Sets;
@@ -54,7 +53,7 @@ class DeduplicatedTest {
   private static final UUID PAYLOAD_COMMIT_ID =
       UUID.fromString("4142add7-7c92-4bbe-b864-21ce8ac4bf53");
   private static final TableIdentifier TABLE_IDENTIFIER = TableIdentifier.of("db", "tbl");
-  private static final TableName TABLE_NAME = TableName.of(TABLE_IDENTIFIER);
+  private static final TableReference TABLE_NAME = TableReference.of("catalog", TABLE_IDENTIFIER);
   private static final String GROUP_ID = "some-group";
   private static final DataFile DATA_FILE_1 = createDataFile("1");
   private static final DataFile DATA_FILE_2 = createDataFile("2");
@@ -124,8 +123,7 @@ class DeduplicatedTest {
   private Event commitResponseEvent(List<DataFile> dataFiles, List<DeleteFile> deleteFiles) {
     return new Event(
         GROUP_ID,
-        COMMIT_RESPONSE,
-        new CommitResponsePayload(
+        new DataWritten(
             Types.StructType.of(), PAYLOAD_COMMIT_ID, TABLE_NAME, dataFiles, deleteFiles));
   }
 

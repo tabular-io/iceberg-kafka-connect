@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
-import org.apache.iceberg.avro.AvroEncoderUtil;
+import org.apache.iceberg.avro.DeprecatedAvroEncoderUtil;
 import org.apache.iceberg.common.DynFields;
 import org.apache.iceberg.data.avro.DecoderResolver;
 
@@ -41,7 +41,7 @@ public class Event implements Element {
 
   public static byte[] encode(Event event) {
     try {
-      return AvroEncoderUtil.encode(event, event.getSchema());
+      return DeprecatedAvroEncoderUtil.encode(event, event.getSchema());
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
@@ -49,7 +49,7 @@ public class Event implements Element {
 
   public static Event decode(byte[] bytes) {
     try {
-      Event event = AvroEncoderUtil.decode(bytes);
+      Event event = DeprecatedAvroEncoderUtil.decode(bytes);
       // workaround for memory leak, until this is addressed upstream
       DECODER_CACHES.get().clear();
       return event;
@@ -63,6 +63,13 @@ public class Event implements Element {
     this.avroSchema = avroSchema;
   }
 
+  /**
+   * @deprecated
+   * <p>This class is required for a fallback decoder that can decode the legacy iceberg 1.4.x avro schemas in the case where
+   *   the coordinator topic was not fully drained during the upgrade to 1.5.2.  This entire module should be removed
+   *   in later releases.</p>
+   */
+  @Deprecated
   public Event(String groupId, EventType type, Payload payload) {
     this.id = UUID.randomUUID();
     this.type = type;

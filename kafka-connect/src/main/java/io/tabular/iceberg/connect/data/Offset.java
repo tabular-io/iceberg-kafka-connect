@@ -18,6 +18,9 @@
  */
 package io.tabular.iceberg.connect.data;
 
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Objects;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 
@@ -37,8 +40,11 @@ public class Offset {
     return offset;
   }
 
-  public Long timestamp() {
-    return timestamp;
+  public OffsetDateTime timestamp() {
+    if (timestamp == null) {
+      return null;
+    }
+    return OffsetDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneOffset.UTC);
   }
 
   @Override

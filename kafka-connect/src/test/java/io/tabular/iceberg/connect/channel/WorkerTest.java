@@ -47,6 +47,7 @@ public class WorkerTest {
   public void testStaticRoute() {
     IcebergSinkConfig config = mock(IcebergSinkConfig.class);
     when(config.tables()).thenReturn(ImmutableList.of(TABLE_NAME));
+    when(config.catalogName()).thenReturn("catalog");
     Map<String, Object> value = ImmutableMap.of(FIELD_NAME, "val");
     workerTest(config, value);
   }
@@ -56,6 +57,8 @@ public class WorkerTest {
     IcebergSinkConfig config = mock(IcebergSinkConfig.class);
     when(config.dynamicTablesEnabled()).thenReturn(true);
     when(config.tablesRouteField()).thenReturn(FIELD_NAME);
+    when(config.catalogName()).thenReturn("catalog");
+
     Map<String, Object> value = ImmutableMap.of(FIELD_NAME, TABLE_NAME);
     workerTest(config, value);
   }
