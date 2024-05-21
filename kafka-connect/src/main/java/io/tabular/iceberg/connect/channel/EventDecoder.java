@@ -156,7 +156,7 @@ public class EventDecoder {
               .get();
       Type fieldType = AvroSchemaUtil.convert(fieldSchema);
       int fieldId = (int) f.getObjectProp("field-id");
-      convertedFields.add(Types.NestedField.of(fieldId, false, f.name(), fieldType));
+      convertedFields.add(Types.NestedField.of(fieldId, f.schema().isNullable(), f.name(), fieldType));
     }
 
     Types.StructType convertedStructType = Types.StructType.of(convertedFields);
