@@ -240,6 +240,28 @@ public class EventDecoderTest {
   }
 
   @Test
+  public void testCommitTableBecomesCommitToTableNullVtts() {
+    io.tabular.iceberg.connect.events.Event event =
+            new io.tabular.iceberg.connect.events.Event(
+                    "cg-connector",
+                    EventType.COMMIT_TABLE,
+                    new CommitTablePayload(
+                            commitId, new TableName(Collections.singletonList("db"), "tbl"), 1L, null));
+
+    byte[] data = io.tabular.iceberg.connect.events.Event.encode(event);
+
+    Event result = eventDecoder.decode(data);
+    assertThat(event.groupId()).isEqualTo("cg-connector");
+    assertThat(result.type()).isEqualTo(PayloadType.COMMIT_TO_TABLE);
+    assertThat(result.payload()).isInstanceOf(CommitToTable.class);
+    CommitToTable payload = (CommitToTable) result.payload();
+
+    assertThat(payload.commitId()).isEqualTo(commitId);
+    assertThat(payload.snapshotId()).isEqualTo(1L);
+    assertThat(payload.validThroughTs()).isNull();
+  }
+
+  @Test
   public void testCommitCompleteBecomesCommitCompleteSerialization() {
     io.tabular.iceberg.connect.events.Event event =
         new io.tabular.iceberg.connect.events.Event(
@@ -254,5 +276,20 @@ public class EventDecoderTest {
     assertThat(payload.commitId()).isEqualTo(commitId);
     assertThat(payload.validThroughTs())
         .isEqualTo(OffsetDateTime.ofInstant(Instant.ofEpochMilli(2L), ZoneOffset.UTC));
+  }
+
+  @Test
+  public void testCommitCompleteBecomesCommitCompleteSerializationNullVtts() {
+    io.tabular.iceberg.connect.events.Event event =
+            new io.tabular.iceberg.connect.events.Event(
+                    "cg-connector", EventType.COMMIT_COMPLETE, new CommitCompletePayload(commitId, null));
+
+    byte[] data = io.tabular.iceberg.connect.events.Event.encode(event);
+
+    Event result = eventDecoder.decode(data);
+    assertThat(result.type()).isEqualTo(PayloadType.COMMIT_COMPLETE);
+    assertThat(result.payload()).isInstanceOf(CommitComplete.class);
+    CommitComplete payload = (CommitComplete) result.payload();
+    assertThat(payload.validThroughTs()).isNull();
   }
 }

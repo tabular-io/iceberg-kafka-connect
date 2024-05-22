@@ -116,12 +116,12 @@ public class EventDecoder {
           pay.commitId(),
           TableReference.of(catalogName, pay.tableName().toIdentifier()),
           pay.snapshotId(),
-          OffsetDateTime.ofInstant(Instant.ofEpochMilli(pay.vtts()), ZoneOffset.UTC));
+          pay.vtts() == null ? null : OffsetDateTime.ofInstant(Instant.ofEpochMilli(pay.vtts()), ZoneOffset.UTC));
     } else if (payload instanceof CommitCompletePayload) {
       CommitCompletePayload pay = (CommitCompletePayload) payload;
       return new CommitComplete(
           pay.commitId(),
-          OffsetDateTime.ofInstant(Instant.ofEpochMilli(pay.vtts()), ZoneOffset.UTC));
+          pay.vtts() == null ? null : OffsetDateTime.ofInstant(Instant.ofEpochMilli(pay.vtts()), ZoneOffset.UTC));
     } else {
       throw new IllegalStateException(
           String.format("Unknown event payload: %s", payload.getSchema()));
