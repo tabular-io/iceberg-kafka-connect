@@ -259,6 +259,8 @@ public class EventDecoderTest {
     assertThat(payload.commitId()).isEqualTo(commitId);
     assertThat(payload.snapshotId()).isEqualTo(1L);
     assertThat(payload.validThroughTs()).isNull();
+    assertThat(payload.tableReference().catalog()).isEqualTo(catalogName);
+    assertThat(payload.tableReference().identifier()).isEqualTo(TableIdentifier.of("db", "tbl"));
   }
 
   @Test
@@ -290,6 +292,7 @@ public class EventDecoderTest {
     assertThat(result.type()).isEqualTo(PayloadType.COMMIT_COMPLETE);
     assertThat(result.payload()).isInstanceOf(CommitComplete.class);
     CommitComplete payload = (CommitComplete) result.payload();
+    assertThat(payload.commitId()).isEqualTo(commitId);
     assertThat(payload.validThroughTs()).isNull();
   }
 }
