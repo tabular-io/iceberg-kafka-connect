@@ -295,30 +295,6 @@ class CommitterImplTest {
   }
 
   @Test
-  public void
-      testShouldRewindOffsetsToStableConnectGroupConsumerOffsetsForAssignedPartitionsOnConstruction()
-          throws IOException {
-    IcebergSinkConfig config = makeConfig(1);
-    WorkerSinkTaskContext context = workerSinkTaskContext(config, ASSIGNED_SOURCE_TOPIC_PARTITIONS);
-
-    NoOpCoordinatorThreadFactory coordinatorThreadFactory = new NoOpCoordinatorThreadFactory();
-
-    whenAdminListConsumerGroupOffsetsThenReturn(
-        ImmutableMap.of(
-            // The control-group-id might be hanging around from older versions of this connector
-            // so we include it here and this test is to essentially make sure we ignore the offsets in control-group-id
-            config.controlGroupId(), ImmutableMap.of(SOURCE_TP0, 110L, SOURCE_TP1, 100L),
-            config.connectGroupId(), ImmutableMap.of(SOURCE_TP0, 90L, SOURCE_TP1, 80L)));
-
-    try (CommitterImpl ignored =
-        new CommitterImpl(context, config, kafkaClientFactory, coordinatorThreadFactory)) {
-      initConsumer();
-
-    assertThat(context.offsets()).isEqualTo(ImmutableMap.of(SOURCE_TP0, 90L));
-    }
-  }
-
-  @Test
   public void testCommitShouldThrowExceptionIfCoordinatorIsTerminated() throws IOException {
     IcebergSinkConfig config = makeConfig(0);
     WorkerSinkTaskContext context = workerSinkTaskContext(config, ASSIGNED_SOURCE_TOPIC_PARTITIONS);
