@@ -72,11 +72,9 @@ public class Utilities {
 
   // use reflection here to avoid requiring Hadoop as a dependency
   private static Object loadHadoopConfig(IcebergSinkConfig config) {
-    Class<?> configClass =
-        DynClasses.builder().impl("org.apache.hadoop.hdfs.HdfsConfiguration").orNull().build();
+    Class<?> configClass = dynamicallyLoad("org.apache.hadoop.hdfs.HdfsConfiguration");
     if (configClass == null) {
-      configClass =
-          DynClasses.builder().impl("org.apache.hadoop.conf.Configuration").orNull().build();
+      configClass = dynamicallyLoad("org.apache.hadoop.conf.Configuration");
     }
 
     if (configClass == null) {
@@ -248,6 +246,37 @@ public class Utilities {
       }
     }
     return writer;
+  }
+
+  /**
+   * Dynamically load hive/hadoop configs to avoid packaging them with the distribution. Gradle
+   * strips hadoop from the classpath which will cause a NoClassDefFoundError to be thrown when
+   * using the version without Hive, so intercept that exception to maintain the underlying
+   * DynClass.builder.impl(...).orNull() behavior.
+   */
+  private static Class<?> dynamicallyLoad(String className) {
+    Class<?> configClass;
+    try {
+      configClass = DynClasses.builder().impl(className).orNull().build();
+    } catch (NoClassDefFoundError e) {
+      configClass = null;
+    }
+    return configClass;
+  }
+
+  public static <C> void close(C closeable) {
+    if (closeable != null) {
+      if (closeable instanceof AutoCloseable) {
+        try {
+          ((AutoCloseable) closeable).close();
+        } catch (Exception e) {
+          LOG.warn(
+              "An error occurred while trying to close {} instance, ignoring...",
+              closeable.getClass().getSimpleName(),
+              e);
+        }
+      }
+    }
   }
 
   private Utilities() {}

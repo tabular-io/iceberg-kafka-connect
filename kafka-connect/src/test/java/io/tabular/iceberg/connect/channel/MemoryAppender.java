@@ -16,29 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.data;
+package io.tabular.iceberg.connect.channel;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 
-import org.junit.jupiter.api.Test;
-
-public class OffsetTest {
-
-  @Test
-  public void testOffsetEquals() {
-    assertThat(new Offset(null, null).compareTo(new Offset(null, null))).isEqualTo(0);
-    assertThat(new Offset(1L, null).compareTo(new Offset(1L, null))).isEqualTo(0);
+class MemoryAppender
+    extends ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> {
+  public List<ch.qos.logback.classic.spi.ILoggingEvent> getLoggedEvents() {
+    return ImmutableList.copyOf(this.list);
   }
 
-  @Test
-  public void testOffsetLessThan() {
-    assertThat(new Offset(null, null).compareTo(new Offset(1L, null))).isEqualTo(-1);
-    assertThat(new Offset(1L, null).compareTo(new Offset(2L, null))).isEqualTo(-1);
-  }
-
-  @Test
-  public void testOffsetGreaterThan() {
-    assertThat(new Offset(1L, null).compareTo(new Offset(null, null))).isEqualTo(1);
-    assertThat(new Offset(2L, null).compareTo(new Offset(1L, null))).isEqualTo(1);
+  public List<String> getWarnOrHigher() {
+    return getLoggedEvents().stream()
+        .filter(e -> e.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
+        .map(e -> e.getMessage())
+        .collect(Collectors.toList());
   }
 }
