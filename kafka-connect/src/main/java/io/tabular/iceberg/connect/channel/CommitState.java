@@ -21,14 +21,18 @@ package io.tabular.iceberg.connect.channel;
 import static java.util.stream.Collectors.groupingBy;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.events.CommitReadyPayload;
-import io.tabular.iceberg.connect.events.CommitResponsePayload;
-import io.tabular.iceberg.connect.events.TopicPartitionOffset;
+import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.UUID;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.connect.events.DataComplete;
+import org.apache.iceberg.connect.events.DataWritten;
+import org.apache.iceberg.connect.events.TopicPartitionOffset;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,10 +40,13 @@ public class CommitState {
   private static final Logger LOG = LoggerFactory.getLogger(CommitState.class);
 
   private final List<Envelope> commitBuffer = new LinkedList<>();
-  private final List<CommitReadyPayload> readyBuffer = new LinkedList<>();
+  private final List<DataComplete> readyBuffer = new LinkedList<>();
   private long startTime;
   private UUID currentCommitId;
   private final IcebergSinkConfig config;
+
+  private final Comparator<OffsetDateTime> dateTimeComparator =
+          OffsetDateTime::compareTo;
 
   public CommitState(IcebergSinkConfig config) {
     this.config = config;
@@ -48,18 +55,18 @@ public class CommitState {
   public void addResponse(Envelope envelope) {
     commitBuffer.add(envelope);
     if (!isCommitInProgress()) {
-      LOG.warn(
-          "Received commit response with commit-id={} when no commit in progress, this can happen during recovery",
-          ((CommitResponsePayload) envelope.event().payload()).commitId());
+      LOG.debug(
+          "Received data written with commit-id={} when no commit in progress, this can happen during recovery",
+          ((DataWritten) envelope.event().payload()).commitId());
     }
   }
 
   public void addReady(Envelope envelope) {
-    readyBuffer.add((CommitReadyPayload) envelope.event().payload());
+    readyBuffer.add((DataComplete) envelope.event().payload());
     if (!isCommitInProgress()) {
-      LOG.warn(
-          "Received commit ready for commit-id={} when no commit in progress, this can happen during recovery",
-          ((CommitReadyPayload) envelope.event().payload()).commitId());
+      LOG.debug(
+          "Received data complete for commit-id={} when no commit in progress, this can happen during recovery",
+          ((DataComplete) envelope.event().payload()).commitId());
     }
   }
 
@@ -118,14 +125,14 @@ public class CommitState {
             .sum();
 
     if (receivedPartitionCount >= expectedPartitionCount) {
-      LOG.info(
+      LOG.debug(
           "Commit {} ready, received responses for all {} partitions",
           currentCommitId,
           receivedPartitionCount);
       return true;
     }
 
-    LOG.info(
+    LOG.debug(
         "Commit {} not ready, received responses for {} of {} partitions, waiting for more",
         currentCommitId,
         receivedPartitionCount,
@@ -139,26 +146,30 @@ public class CommitState {
         .collect(
             groupingBy(
                 envelope ->
-                    ((CommitResponsePayload) envelope.event().payload())
-                        .tableName()
-                        .toIdentifier()));
+                    ((DataWritten) envelope.event().payload())
+                        .tableReference()
+                        .identifier()));
   }
 
-  public Long vtts(boolean partialCommit) {
+  public OffsetDateTime vtts(boolean partialCommit) {
     boolean validVtts =
         !partialCommit
             && readyBuffer.stream()
                 .flatMap(event -> event.assignments().stream())
                 .allMatch(offset -> offset.timestamp() != null);
 
-    Long result;
-    if (validVtts) {
-      result =
-          readyBuffer.stream()
-              .flatMap(event -> event.assignments().stream())
-              .mapToLong(TopicPartitionOffset::timestamp)
-              .min()
-              .getAsLong();
+      OffsetDateTime result;
+      if (validVtts) {
+          Optional<OffsetDateTime> maybeResult =
+                  readyBuffer.stream()
+                          .flatMap(event -> event.assignments().stream())
+                          .map(TopicPartitionOffset::timestamp)
+                          .min(dateTimeComparator);
+          if (maybeResult.isPresent()) {
+              result = maybeResult.get();
+          } else {
+              throw new NoSuchElementException("no vtts found");
+          }
     } else {
       result = null;
     }

@@ -16,29 +16,14 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.data;
+package io.tabular.iceberg.connect.transforms;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import org.junit.jupiter.api.Test;
-
-public class OffsetTest {
-
-  @Test
-  public void testOffsetEquals() {
-    assertThat(new Offset(null, null).compareTo(new Offset(null, null))).isEqualTo(0);
-    assertThat(new Offset(1L, null).compareTo(new Offset(1L, null))).isEqualTo(0);
+class JsonToMapException extends RuntimeException {
+  JsonToMapException(String errorMessage) {
+    super(errorMessage);
   }
 
-  @Test
-  public void testOffsetLessThan() {
-    assertThat(new Offset(null, null).compareTo(new Offset(1L, null))).isEqualTo(-1);
-    assertThat(new Offset(1L, null).compareTo(new Offset(2L, null))).isEqualTo(-1);
-  }
-
-  @Test
-  public void testOffsetGreaterThan() {
-    assertThat(new Offset(1L, null).compareTo(new Offset(null, null))).isEqualTo(1);
-    assertThat(new Offset(2L, null).compareTo(new Offset(1L, null))).isEqualTo(1);
+  JsonToMapException(String errorMessage, Throwable err) {
+    super(errorMessage, err);
   }
 }

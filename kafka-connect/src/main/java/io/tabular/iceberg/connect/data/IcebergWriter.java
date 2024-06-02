@@ -32,8 +32,13 @@ import org.apache.iceberg.io.WriteResult;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class IcebergWriter implements RecordWriter {
+
+  private static final Logger LOG = LoggerFactory.getLogger(IcebergWriter.class);
+
   private final Table table;
   private final String tableName;
   private final IcebergSinkConfig config;
@@ -91,6 +96,7 @@ public class IcebergWriter implements RecordWriter {
       flush();
       // apply the schema updates, this will refresh the table
       SchemaUtils.applySchemaUpdates(table, updates);
+      LOG.info("Table schema evolution on table {} caused by record at topic: {}, partition: {}, offset: {}", table.name(), record.topic(), record.kafkaPartition(), record.kafkaOffset());
       // initialize a new writer with the new schema
       initNewWriter();
       // convert the row again, this time using the new table schema

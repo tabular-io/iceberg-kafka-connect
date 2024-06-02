@@ -33,6 +33,7 @@ dependencies {
     exclude group: "org.apache.zookeeper"
     exclude group: "org.apache.kerby"
     exclude group: "org.apache.hadoop", module: "hadoop-auth"
+    exclude group: "org.apache.commons", module: "commons-configuration2"
     exclude group: "org.apache.hadoop.thirdparty", module: "hadoop-shaded-protobuf_3_7"
     exclude group: "org.eclipse.jetty"
   }

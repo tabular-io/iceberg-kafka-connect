@@ -23,37 +23,40 @@ import static java.util.stream.Collectors.toList;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.events.CommitCompletePayload;
-import io.tabular.iceberg.connect.events.CommitRequestPayload;
-import io.tabular.iceberg.connect.events.CommitTablePayload;
-import io.tabular.iceberg.connect.events.Event;
-import io.tabular.iceberg.connect.events.EventType;
-import io.tabular.iceberg.connect.events.TableName;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
+import java.util.stream.Collectors;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.RowDelta;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.Transaction;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
+import org.apache.iceberg.connect.events.CommitComplete;
+import org.apache.iceberg.connect.events.CommitToTable;
+import org.apache.iceberg.connect.events.Event;
+import org.apache.iceberg.connect.events.StartCommit;
+import org.apache.iceberg.connect.events.TableReference;
 import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
+import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.util.Tasks;
 import org.apache.iceberg.util.ThreadPools;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Coordinator extends Channel {
+public class Coordinator extends Channel implements AutoCloseable {
 
   private static final Logger LOG = LoggerFactory.getLogger(Coordinator.class);
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -85,6 +88,9 @@ public class Coordinator extends Channel {
         String.format(OFFSETS_SNAPSHOT_PROP_FMT, config.controlTopic(), config.controlGroupId());
     this.exec = ThreadPools.newWorkerPool("iceberg-committer", config.commitThreads());
     this.commitState = new CommitState(config);
+
+    // initial poll with longer duration so the consumer will initialize...
+    consumeAvailable(Duration.ofMillis(1000), this::receive);
   }
 
   public void process() {
@@ -92,28 +98,24 @@ public class Coordinator extends Channel {
       // send out begin commit
       commitState.startNewCommit();
       Event event =
-          new Event(
-              config.controlGroupId(),
-              EventType.COMMIT_REQUEST,
-              new CommitRequestPayload(commitState.currentCommitId()));
+          new Event(config.controlGroupId(), new StartCommit(commitState.currentCommitId()));
       send(event);
-      LOG.info("Started new commit with commit-id={}", commitState.currentCommitId().toString());
+      LOG.debug("Started new commit with commit-id={}", commitState.currentCommitId().toString());
     }
 
-    consumeAvailable(POLL_DURATION);
+    consumeAvailable(POLL_DURATION, this::receive);
 
     if (commitState.isCommitTimedOut()) {
       commit(true);
     }
   }
 
-  @Override
-  protected boolean receive(Envelope envelope) {
+  private boolean receive(Envelope envelope) {
     switch (envelope.event().type()) {
-      case COMMIT_RESPONSE:
+      case DATA_WRITTEN:
         commitState.addResponse(envelope);
         return true;
-      case COMMIT_READY:
+      case DATA_COMPLETE:
         commitState.addReady(envelope);
         if (commitState.isCommitReady(totalPartitionCount)) {
           commit(false);
@@ -137,7 +139,7 @@ public class Coordinator extends Channel {
     Map<TableIdentifier, List<Envelope>> commitMap = commitState.tableCommitMap();
 
     String offsetsJson = offsetsJson();
-    Long vtts = commitState.vtts(partialCommit);
+    OffsetDateTime vtts = commitState.vtts(partialCommit);
 
     Tasks.foreach(commitMap.entrySet())
         .executeWith(exec)
@@ -152,10 +154,7 @@ public class Coordinator extends Channel {
     commitState.clearResponses();
 
     Event event =
-        new Event(
-            config.controlGroupId(),
-            EventType.COMMIT_COMPLETE,
-            new CommitCompletePayload(commitState.currentCommitId(), vtts));
+        new Event(config.controlGroupId(), new CommitComplete(commitState.currentCommitId(), vtts));
     send(event);
 
     LOG.info(
@@ -174,7 +173,10 @@ public class Coordinator extends Channel {
   }
 
   private void commitToTable(
-      TableIdentifier tableIdentifier, List<Envelope> envelopeList, String offsetsJson, Long vtts) {
+      TableIdentifier tableIdentifier,
+      List<Envelope> envelopeList,
+      String offsetsJson,
+      OffsetDateTime vtts) {
     Table table;
     try {
       table = catalog.loadTable(tableIdentifier);
@@ -213,22 +215,38 @@ public class Coordinator extends Channel {
       LOG.info("Nothing to commit to table {}, skipping", tableIdentifier);
     } else {
       if (deleteFiles.isEmpty()) {
-        AppendFiles appendOp = table.newAppend();
-        branch.ifPresent(appendOp::toBranch);
-        appendOp.set(snapshotOffsetsProp, offsetsJson);
-        appendOp.set(COMMIT_ID_SNAPSHOT_PROP, commitState.currentCommitId().toString());
-        if (vtts != null) {
-          appendOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts));
+        Transaction transaction = table.newTransaction();
+
+        Map<Integer, List<DataFile>> filesBySpec =
+            dataFiles.stream()
+                .collect(Collectors.groupingBy(DataFile::specId, Collectors.toList()));
+
+        List<List<DataFile>> list = Lists.newArrayList(filesBySpec.values());
+        int lastIdx = list.size() - 1;
+        for (int i = 0; i <= lastIdx; i++) {
+          AppendFiles appendOp = transaction.newAppend();
+          branch.ifPresent(appendOp::toBranch);
+
+          list.get(i).forEach(appendOp::appendFile);
+          appendOp.set(COMMIT_ID_SNAPSHOT_PROP, commitState.currentCommitId().toString());
+          if (i == lastIdx) {
+            appendOp.set(snapshotOffsetsProp, offsetsJson);
+            if (vtts != null) {
+              appendOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts.toInstant().toEpochMilli()));
+            }
+          }
+
+          appendOp.commit();
         }
-        dataFiles.forEach(appendOp::appendFile);
-        appendOp.commit();
+
+        transaction.commitTransaction();
       } else {
         RowDelta deltaOp = table.newRowDelta();
         branch.ifPresent(deltaOp::toBranch);
         deltaOp.set(snapshotOffsetsProp, offsetsJson);
         deltaOp.set(COMMIT_ID_SNAPSHOT_PROP, commitState.currentCommitId().toString());
         if (vtts != null) {
-          deltaOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts));
+          deltaOp.set(VTTS_SNAPSHOT_PROP, Long.toString(vtts.toInstant().toEpochMilli()));
         }
         dataFiles.forEach(deltaOp::addRows);
         deleteFiles.forEach(deltaOp::addDeletes);
@@ -239,9 +257,11 @@ public class Coordinator extends Channel {
       Event event =
           new Event(
               config.controlGroupId(),
-              EventType.COMMIT_TABLE,
-              new CommitTablePayload(
-                  commitState.currentCommitId(), TableName.of(tableIdentifier), snapshotId, vtts));
+              new CommitToTable(
+                  commitState.currentCommitId(),
+                  TableReference.of(config.catalogName(), tableIdentifier),
+                  snapshotId,
+                  vtts));
       send(event);
 
       LOG.info(
@@ -277,5 +297,11 @@ public class Coordinator extends Channel {
       snapshot = parentSnapshotId != null ? table.snapshot(parentSnapshotId) : null;
     }
     return ImmutableMap.of();
+  }
+
+  @Override
+  public void close() throws IOException {
+    exec.shutdownNow();
+    stop();
   }
 }
