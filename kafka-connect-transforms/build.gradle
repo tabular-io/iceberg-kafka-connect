@@ -1,5 +1,5 @@
 dependencies {
-  implementation project(":iceberg-kafka-connect-deadletter")
+  implementation project(":iceberg-kafka-connect-exception")
   implementation libs.iceberg.guava
   implementation libs.bson
   implementation libs.slf4j

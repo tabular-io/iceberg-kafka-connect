@@ -19,8 +19,8 @@
 package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
-import io.tabular.iceberg.connect.deadletter.FailedRecordFactory;
+import io.tabular.iceberg.connect.exception.DeadLetterUtils;
+import io.tabular.iceberg.connect.exception.FailedRecordFactory;
 import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;

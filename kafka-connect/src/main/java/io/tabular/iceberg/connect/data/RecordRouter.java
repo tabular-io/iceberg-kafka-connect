@@ -19,7 +19,7 @@
 package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
+import io.tabular.iceberg.connect.exception.DeadLetterUtils;
 
 import java.util.List;
 

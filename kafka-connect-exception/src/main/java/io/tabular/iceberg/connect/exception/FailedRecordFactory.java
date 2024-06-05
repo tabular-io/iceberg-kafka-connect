@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.deadletter;
+package io.tabular.iceberg.connect.exception;
 
 import java.util.Map;
 import org.apache.kafka.connect.data.Schema;

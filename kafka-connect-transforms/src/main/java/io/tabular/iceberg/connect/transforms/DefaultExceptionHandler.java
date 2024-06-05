@@ -18,8 +18,8 @@
  */
 package io.tabular.iceberg.connect.transforms;
 
-import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
-import io.tabular.iceberg.connect.deadletter.FailedRecordFactory;
+import io.tabular.iceberg.connect.exception.DeadLetterUtils;
+import io.tabular.iceberg.connect.exception.FailedRecordFactory;
 
 import java.util.Map;
 
@@ -36,7 +36,7 @@ public class DefaultExceptionHandler implements TransformExceptionHandler {
           .define(
               FAILED_RECORD_FACTORY_PROP,
               ConfigDef.Type.STRING,
-              "io.tabular.iceberg.connect.deadletter.DefaultFailedRecordFactory",
+              "io.tabular.iceberg.connect.exception.DefaultFailedRecordFactory",
               ConfigDef.Importance.MEDIUM,
               "class name for failed record conversion");
 

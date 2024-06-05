@@ -10,5 +10,5 @@ project(":iceberg-kafka-connect-transforms").projectDir = file("kafka-connect-tr
 include "iceberg-kafka-connect-runtime"
 project(":iceberg-kafka-connect-runtime").projectDir = file("kafka-connect-runtime")
 
-include "iceberg-kafka-connect-deadletter"
-project(":iceberg-kafka-connect-deadletter").projectDir = file("kafka-connect-deadletter")
+include "iceberg-kafka-connect-exception"
+project(":iceberg-kafka-connect-exception").projectDir = file("kafka-connect-exception")

@@ -18,7 +18,7 @@
  */
 package io.tabular.iceberg.connect.transforms;
 
-import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
+import io.tabular.iceberg.connect.exception.DeadLetterUtils;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;

@@ -21,8 +21,8 @@ package io.tabular.iceberg.connect.transforms;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
-import io.tabular.iceberg.connect.deadletter.FailedRecordFactory;
+import io.tabular.iceberg.connect.exception.DeadLetterUtils;
+import io.tabular.iceberg.connect.exception.FailedRecordFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -86,7 +86,7 @@ public class ErrorTransformTest {
     FailedRecordFactory factory =
         (FailedRecordFactory)
             DeadLetterUtils.loadClass(
-                "io.tabular.iceberg.connect.deadletter.DefaultFailedRecordFactory",
+                "io.tabular.iceberg.connect.exception.DefaultFailedRecordFactory",
                 this.getClass().getClassLoader());
     factory.configure(ImmutableMap.of("table_name", DEAD_LETTER_TABLE_NAME, DEAD_LETTER_ROUTE_FIELD_PROP, DEAD_LETTER_ROUTE_FIELD));
     return factory;
