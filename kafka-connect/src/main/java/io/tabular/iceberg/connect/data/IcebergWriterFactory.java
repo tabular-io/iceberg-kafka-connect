@@ -20,6 +20,8 @@ package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import java.util.concurrent.atomic.AtomicReference;
+
+import io.tabular.iceberg.connect.exception.WriteException;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;

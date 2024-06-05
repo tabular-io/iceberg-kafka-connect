@@ -16,14 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.data;
+package io.tabular.iceberg.connect.exception;
 
-import io.tabular.iceberg.connect.IcebergSinkConfig;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 
+import java.util.Map;
+
 public interface WriteExceptionHandler {
-  void initialize(SinkTaskContext context, IcebergSinkConfig config);
+  void initialize(SinkTaskContext context, Map<String, String> config);
 
   /**
    * This method will be invoked whenever the connector runs into an exception while trying to write

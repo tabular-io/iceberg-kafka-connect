@@ -23,6 +23,8 @@ import io.tabular.iceberg.connect.exception.DeadLetterUtils;
 
 import java.util.List;
 
+import io.tabular.iceberg.connect.exception.WriteException;
+import io.tabular.iceberg.connect.exception.WriteExceptionHandler;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -78,7 +80,7 @@ public abstract class RecordRouter {
       String handlerClass = config.getWriteExceptionHandler();
       WriteExceptionHandler handler =
               (WriteExceptionHandler) DeadLetterUtils.loadClass(handlerClass, loader);
-      handler.initialize(context, config);
+      handler.initialize(context, config.writeExceptionHandlerProperties());
       baseRecordRouter =
               new RecordRouter.ErrorHandlingRecordRouter(baseRecordRouter, handler);
     }

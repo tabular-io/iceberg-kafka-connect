@@ -399,9 +399,9 @@ In order to turn on Dead Letter Table mode in the connector:
 | iceberg.write-exception.handler                | Sucblass of io.tabular.iceberg.connect.data.WriteExceptionHandler , if this is not-null write exception mode is turned on in the connector |
 | iceberg.write-exception.handler.properties.*   | properties to be passed to the failed record factory                                                                                       |
 
-You do not need to use the Error SMT to turn on dead letter mode; however, the provided `io.tabular.iceberg.connect.deadletter.DefaultFailedRecordFactory` assumes the Error SMT has been used 
-and will throw exceptions if not.  You can implement your own WriteExceptionHandler/FailedRecordFactory to skip messages, transform messages, strip fields from messages and only write the 
-Kafka metadata etc. 
+You do not need to use the Error SMT to turn on dead letter mode; however, the provided `io.tabular.iceberg.connect.exception.DeadLetterTableWriteExceptionHandler` initializes a 
+`io.tabular.iceberg.connect.exception.DefaultFailedRecordFactory` that assumes the Error SMT has been used and will throw exceptions if not.  This handler will write to a configured Iceberg table.
+You can implement your own WriteExceptionHandler/FailedRecordFactory to skip messages, transform messages, strip fields from messages and only write the Kafka metadata, etc. 
 
 ### Routing 
 
@@ -416,14 +416,14 @@ FailedRecordHandler that can be used to dispatch to one or more Dead Letter tabl
 | populated      | false           | null         | ConfigRouter                                                 |
 | populated      | false           | populated    | DynamicRecordRouter then ConfigRouter                        |
 
-Regardless of the above, if a WriteExceptionHandler `io.tabular.iceberg.connect.data.WriteExceptionHandler` is not null, Dead Letter Table mode 
+Regardless of the above, if a WriteExceptionHandler `io.tabular.iceberg.connect.data.WriteExceptionHandler` is not null, Write Exception mode 
 will wrap one of the underlying record routing modes. All exceptions are passed to the WriteExceptionHandler where
 they can be ignored (message dropped), converted into a record and dispatched to the Dead Letter Table(s), or rethrown
 to fail the connector.
 
 ### Partitioning 
 
-The following properties still apply to the Dead Letter Table. The partition-by field can be used to customize the 
+The following properties still apply if the Write Exception handler writes to a Dead Letter table. The partition-by field can be used to customize the 
 partitioning of the Dead Letter table(s). 
 
 | Property                                   | Description                                                                                    |

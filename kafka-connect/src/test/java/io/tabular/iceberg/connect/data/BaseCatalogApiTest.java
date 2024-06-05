@@ -27,6 +27,8 @@ import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.TableSinkConfig;
 import java.util.function.BiFunction;
 import java.util.regex.Pattern;
+
+import io.tabular.iceberg.connect.exception.WriteException;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.ValidationException;

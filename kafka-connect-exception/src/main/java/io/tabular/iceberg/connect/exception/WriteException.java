@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.data;
+package io.tabular.iceberg.connect.exception;
 
 import org.apache.iceberg.catalog.TableIdentifier;
 
@@ -24,22 +24,22 @@ public class WriteException extends RuntimeException {
 
   private final String tableIdentifier;
 
-  WriteException(Throwable cause) {
+  public WriteException(Throwable cause) {
     super(cause);
     tableIdentifier = null;
   }
 
-  WriteException(String msg) {
+  public WriteException(String msg) {
     super(msg);
     tableIdentifier = null;
   }
 
-  WriteException(TableIdentifier tableId, Throwable cause) {
+  public WriteException(TableIdentifier tableId, Throwable cause) {
     super(cause);
     this.tableIdentifier = tableId.toString();
   }
 
-  WriteException(String tableId, Throwable cause) {
+  public WriteException(String tableId, Throwable cause) {
     super(cause);
     this.tableIdentifier = tableId;
   }
@@ -76,36 +76,36 @@ public class WriteException extends RuntimeException {
 
   public static class RecordConversionException extends WriteException {
 
-    RecordConversionException(Throwable cause) {
+    public RecordConversionException(Throwable cause) {
       super(cause);
     }
   }
 
   public static class RouteException extends WriteException {
-    RouteException(Throwable cause) {
+    public RouteException(Throwable cause) {
       super(cause);
     }
 
-    RouteException(String msg) {
+    public RouteException(String msg) {
       super(msg);
     }
   }
 
   public static class RouteRegexException extends WriteException {
-    RouteRegexException(Throwable cause) {
+    public RouteRegexException(Throwable cause) {
       super(cause);
     }
   }
 
   public static class SchemaEvolutionException extends WriteException {
 
-    SchemaEvolutionException(String name, Throwable cause) {
+    public SchemaEvolutionException(String name, Throwable cause) {
       super(name, cause);
     }
   }
 
   public static class TableIdentifierException extends WriteException {
-    TableIdentifierException(String name, Throwable cause) {
+    public TableIdentifierException(String name, Throwable cause) {
       super(name, cause);
     }
   }

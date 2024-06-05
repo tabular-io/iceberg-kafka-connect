@@ -22,6 +22,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.exception.DeadLetterUtils;
+import io.tabular.iceberg.connect.exception.WriteException;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.util.Pair;
@@ -196,7 +197,7 @@ public class RecordRouterTest {
         when(config.writeExceptionHandlerProperties()).thenReturn(deadLetterProperties);
 
 
-        when(config.getWriteExceptionHandler()).thenReturn("io.tabular.iceberg.connect.data.DeadLetterTableWriteExceptionHandler");
+        when(config.getWriteExceptionHandler()).thenReturn("io.tabular.iceberg.connect.exception.DeadLetterTableWriteExceptionHandler");
 
         RecordRouter router = RecordRouter.from(manager, config, this.getClass().getClassLoader(), context);
         assertThat(router).isInstanceOf(RecordRouter.ErrorHandlingRecordRouter.class);
@@ -232,7 +233,7 @@ public class RecordRouterTest {
         when(config.dynamicTablesEnabled()).thenReturn(true);
         Map<String, String> deadLetterProperties = ImmutableMap.of("failed_record_factory", "io.tabular.iceberg.connect.exception.DefaultFailedRecordFactory","table_name", "dlt.table", "route_field", "route_field_bad");
         when(config.writeExceptionHandlerProperties()).thenReturn(deadLetterProperties);
-        when(config.getWriteExceptionHandler()).thenReturn("io.tabular.iceberg.connect.data.DeadLetterTableWriteExceptionHandler");
+        when(config.getWriteExceptionHandler()).thenReturn("io.tabular.iceberg.connect.exception.DeadLetterTableWriteExceptionHandler");
         // the underlying router is looking for `route_field` but the failed record handler is configured to have
         // the route field on `route_field_bad`
         // this should cause the ErrorHandler to throw an exception

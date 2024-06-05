@@ -16,11 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.data;
+package io.tabular.iceberg.connect.exception;
 
-import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.exception.DeadLetterUtils;
-import io.tabular.iceberg.connect.exception.FailedRecordFactory;
 import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -32,11 +29,10 @@ public class DeadLetterTableWriteExceptionHandler implements WriteExceptionHandl
 
   @Override
   public void initialize(
-      SinkTaskContext context, IcebergSinkConfig config) {
-    Map<String, String> props = config.writeExceptionHandlerProperties();
+      SinkTaskContext context, Map<String, String> props) {
     String failedRecordFactoryClass = props.get("failed_record_factory");
     factory = (FailedRecordFactory) DeadLetterUtils.loadClass(failedRecordFactoryClass, this.getClass().getClassLoader());
-    factory.configure(config.writeExceptionHandlerProperties());
+    factory.configure(props);
   }
 
   @Override
