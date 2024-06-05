@@ -16,37 +16,26 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package io.tabular.iceberg.connect.channel;
+package io.tabular.iceberg.connect.exception;
 
-import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.data.Utilities;
-import java.util.Collection;
-import org.apache.iceberg.catalog.Catalog;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 
-public class TaskImpl implements Task, AutoCloseable {
+import java.util.Map;
 
-  private final Catalog catalog;
-  private final Writer writer;
-  private final Committer committer;
+public interface WriteExceptionHandler {
+  void initialize(SinkTaskContext context, Map<String, String> config);
 
-  public TaskImpl(SinkTaskContext context, IcebergSinkConfig config) {
-    this.catalog = Utilities.loadCatalog(config);
-    this.writer = new Worker(context, config, catalog);
-    this.committer = new CommitterImpl(context, config, catalog);
-  }
-
-  @Override
-  public void put(Collection<SinkRecord> sinkRecords) {
-    writer.write(sinkRecords);
-    committer.commit(writer);
-  }
-
-  @Override
-  public void close() throws Exception {
-    Utilities.close(writer);
-    Utilities.close(committer);
-    Utilities.close(catalog);
-  }
+  /**
+   * This method will be invoked whenever the connector runs into an exception while trying to write
+   * SinkRecords to a table. Implementations of this method have 3 general options:
+   *
+   * <ol>
+   *   <li>Return a SinkRecord
+   *   <li>Return null to drop the SinkRecord
+   * </ol>
+   *
+   * @param record The SinkRecord that couldn't be written
+   */
+  SinkRecord handle(SinkRecord record, Exception exception);
 }

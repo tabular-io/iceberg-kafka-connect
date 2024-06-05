@@ -52,6 +52,7 @@ http-client = { module =  "org.apache.httpcomponents.client5:httpclient5", versi
 junit-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit-ver" }
 junit-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit-ver" }
 junit-params = { module = "org.junit.jupiter:junit-jupiter-params", version.ref = "junit-ver" }
+kafka-connect-runtime = {module = "org.apache.kafka:connect-runtime", version.ref = "kafka-ver"}
 mockito = "org.mockito:mockito-core:4.8.1"
 testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers-ver" }
 testcontainers-kafka = { module = "org.testcontainers:kafka", version.ref = "testcontainers-ver" }

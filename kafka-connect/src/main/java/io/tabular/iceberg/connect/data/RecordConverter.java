@@ -43,6 +43,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+
+import io.tabular.iceberg.connect.exception.WriteException;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.TableProperties;
@@ -91,10 +93,15 @@ public class RecordConverter {
   }
 
   public Record convert(Object data, SchemaUpdate.Consumer schemaUpdateConsumer) {
-    if (data instanceof Struct || data instanceof Map) {
-      return convertStructValue(data, tableSchema.asStruct(), -1, schemaUpdateConsumer);
+    try {
+      if (data instanceof Struct || data instanceof Map) {
+        return convertStructValue(data, tableSchema.asStruct(), -1, schemaUpdateConsumer);
+      }
+      throw new WriteException.RecordConversionException(
+          new UnsupportedOperationException("Cannot convert type: " + data.getClass().getName()));
+    } catch (Exception error) {
+      throw new WriteException.RecordConversionException(error);
     }
-    throw new UnsupportedOperationException("Cannot convert type: " + data.getClass().getName());
   }
 
   private NameMapping createNameMapping(Table table) {

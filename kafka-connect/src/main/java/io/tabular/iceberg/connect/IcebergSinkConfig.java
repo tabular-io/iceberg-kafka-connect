@@ -83,6 +83,8 @@ public class IcebergSinkConfig extends AbstractConfig {
       "iceberg.tables.schema-force-optional";
   private static final String TABLES_SCHEMA_CASE_INSENSITIVE_PROP =
       "iceberg.tables.schema-case-insensitive";
+  private static final String WRITE_EXCEPTION_HANDLER_PROP = "iceberg.writer-exception.handler";
+  public static final String WRITE_EXCEPTION_HANDLER_PREFIX = "iceberg.write-exception.handler.properties";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
   private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group-id";
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.control.commit.interval-ms";
@@ -92,14 +94,11 @@ public class IcebergSinkConfig extends AbstractConfig {
   private static final String COMMIT_THREADS_PROP = "iceberg.control.commit.threads";
   private static final String CONNECT_GROUP_ID_PROP = "iceberg.connect.group-id";
   private static final String HADDOP_CONF_DIR_PROP = "iceberg.hadoop-conf-dir";
-
   private static final String NAME_PROP = "name";
   private static final String BOOTSTRAP_SERVERS_PROP = "bootstrap.servers";
-
   private static final String DEFAULT_CATALOG_NAME = "iceberg";
   private static final String DEFAULT_CONTROL_TOPIC = "control-iceberg";
   public static final String DEFAULT_CONTROL_GROUP_PREFIX = "cg-control-";
-
   public static final int SCHEMA_UPDATE_RETRIES = 2; // 3 total attempts
   public static final int CREATE_TABLE_RETRIES = 2; // 3 total attempts
 
@@ -237,6 +236,18 @@ public class IcebergSinkConfig extends AbstractConfig {
         null,
         Importance.MEDIUM,
         "Coordinator threads to use for table commits, default is (cores * 2)");
+    configDef.define(
+        WRITE_EXCEPTION_HANDLER_PROP,
+        Type.STRING,
+        null,
+        Importance.MEDIUM,
+        "If writing to Dead Letter Table, write exception handler class to use");
+    configDef.define(
+        WRITE_EXCEPTION_HANDLER_PREFIX,
+        Type.STRING,
+        null,
+        Importance.MEDIUM,
+        "If writing to Dead Letter Table, properties to pass during initialization");
     return configDef;
   }
 
@@ -333,6 +344,14 @@ public class IcebergSinkConfig extends AbstractConfig {
     return getBoolean(TABLES_DYNAMIC_PROP);
   }
 
+  public boolean deadLetterTableEnabled() {
+    return getWriteExceptionHandler() != null;
+  }
+
+  public String getWriteExceptionHandler() {
+    return getString(WRITE_EXCEPTION_HANDLER_PROP);
+  }
+
   public String tablesRouteField() {
     return getString(TABLES_ROUTE_FIELD_PROP);
   }
@@ -347,6 +366,10 @@ public class IcebergSinkConfig extends AbstractConfig {
 
   public String tablesDefaultPartitionBy() {
     return getString(TABLES_DEFAULT_PARTITION_BY);
+  }
+
+  public Map<String, String> writeExceptionHandlerProperties() {
+    return PropertyUtil.propertiesWithPrefix(originalProps, WRITE_EXCEPTION_HANDLER_PREFIX + ".");
   }
 
   public TableSinkConfig tableConfig(String tableName) {

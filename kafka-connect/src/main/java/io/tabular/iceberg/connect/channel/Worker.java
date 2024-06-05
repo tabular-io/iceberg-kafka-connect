@@ -18,52 +18,49 @@
  */
 package io.tabular.iceberg.connect.channel;
 
-import static java.util.stream.Collectors.toList;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.data.IcebergWriterFactory;
-import io.tabular.iceberg.connect.data.Offset;
-import io.tabular.iceberg.connect.data.RecordWriter;
-import io.tabular.iceberg.connect.data.Utilities;
-import io.tabular.iceberg.connect.data.WriterResult;
+
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+
+import io.tabular.iceberg.connect.data.IcebergWriterFactory;
+import io.tabular.iceberg.connect.data.Offset;
+import io.tabular.iceberg.connect.data.RecordRouter;
+import io.tabular.iceberg.connect.data.WriterManager;
+import io.tabular.iceberg.connect.data.WriterResult;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
-import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.kafka.connect.sink.SinkTaskContext;
 
 // TODO: rename to WriterImpl later, minimize changes for clearer commit history for now
 class Worker implements Writer, AutoCloseable {
+    private final WriterManager writers;
 
-  private static final Logger LOG = LoggerFactory.getLogger(Worker.class);
-  private final IcebergSinkConfig config;
-  private final IcebergWriterFactory writerFactory;
-  private final Map<String, RecordWriter> writers;
-  private final Map<TopicPartition, Offset> sourceOffsets;
+    private final Map<TopicPartition, Offset> sourceOffsets;
+    private final RecordRouter recordRouter;
 
-  Worker(IcebergSinkConfig config, Catalog catalog) {
-    this(config, new IcebergWriterFactory(catalog, config));
+  Worker(SinkTaskContext context, IcebergSinkConfig config, Catalog catalog) {
+    this(context, config, new IcebergWriterFactory(catalog, config));
   }
 
   @VisibleForTesting
-  Worker(IcebergSinkConfig config, IcebergWriterFactory writerFactory) {
-    this.config = config;
-    this.writerFactory = writerFactory;
-    this.writers = Maps.newHashMap();
+  Worker(SinkTaskContext context, IcebergSinkConfig config, IcebergWriterFactory writerFactory) {
+    this.writers = new WriterManager(writerFactory);
     this.sourceOffsets = Maps.newHashMap();
+    this.recordRouter =
+              RecordRouter.from(writers, config, this.getClass().getClassLoader(), context);
+
   }
 
   @Override
   public Committable committable() {
-    List<WriterResult> writeResults =
-        writers.values().stream().flatMap(writer -> writer.complete().stream()).collect(toList());
+    List<WriterResult> writeResults = writers.writeResults();
     Map<TopicPartition, Offset> offsets = Maps.newHashMap(sourceOffsets);
 
     writers.clear();
@@ -74,7 +71,7 @@ class Worker implements Writer, AutoCloseable {
 
   @Override
   public void close() throws IOException {
-    writers.values().forEach(RecordWriter::close);
+    writers.stop();
     writers.clear();
     sourceOffsets.clear();
   }
@@ -93,67 +90,6 @@ class Worker implements Writer, AutoCloseable {
         new TopicPartition(record.topic(), record.kafkaPartition()),
         new Offset(record.kafkaOffset() + 1, record.timestamp()));
 
-    if (config.dynamicTablesEnabled()) {
-      routeRecordDynamically(record);
-    } else {
-      routeRecordStatically(record);
-    }
-  }
-
-  private void routeRecordStatically(SinkRecord record) {
-    String routeField = config.tablesRouteField();
-
-    if (routeField == null) {
-      // route to all tables
-      config
-          .tables()
-          .forEach(
-              tableName -> {
-                writerForTable(tableName, record, false).write(record);
-              });
-
-    } else {
-      String routeValue = extractRouteValue(record.value(), routeField);
-      if (routeValue != null) {
-        config
-            .tables()
-            .forEach(
-                tableName ->
-                    config
-                        .tableConfig(tableName)
-                        .routeRegex()
-                        .ifPresent(
-                            regex -> {
-                              if (regex.matcher(routeValue).matches()) {
-                                writerForTable(tableName, record, false).write(record);
-                              }
-                            }));
-      }
-    }
-  }
-
-  private void routeRecordDynamically(SinkRecord record) {
-    String routeField = config.tablesRouteField();
-    Preconditions.checkNotNull(routeField, "Route field cannot be null with dynamic routing");
-
-    String routeValue = extractRouteValue(record.value(), routeField);
-    if (routeValue != null) {
-      String tableName = routeValue.toLowerCase();
-      writerForTable(tableName, record, true).write(record);
-    }
-  }
-
-  private String extractRouteValue(Object recordValue, String routeField) {
-    if (recordValue == null) {
-      return null;
-    }
-    Object routeValue = Utilities.extractFromRecordValue(recordValue, routeField);
-    return routeValue == null ? null : routeValue.toString();
-  }
-
-  private RecordWriter writerForTable(
-      String tableName, SinkRecord sample, boolean ignoreMissingTable) {
-    return writers.computeIfAbsent(
-        tableName, notUsed -> writerFactory.createWriter(tableName, sample, ignoreMissingTable));
+    recordRouter.write(record);
   }
 }

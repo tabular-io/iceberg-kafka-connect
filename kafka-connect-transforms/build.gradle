@@ -1,4 +1,5 @@
 dependencies {
+  implementation project(":iceberg-kafka-connect-exception")
   implementation libs.iceberg.guava
   implementation libs.bson
   implementation libs.slf4j
@@ -9,6 +10,7 @@ dependencies {
 
   testImplementation libs.mockito
   testImplementation libs.assertj
+  testRuntimeOnly libs.kafka.connect.runtime
 }
 
 configurations {
