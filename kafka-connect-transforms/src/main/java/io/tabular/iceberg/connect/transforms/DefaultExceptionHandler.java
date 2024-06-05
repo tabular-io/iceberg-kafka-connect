@@ -21,11 +21,8 @@ package io.tabular.iceberg.connect.transforms;
 import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
 import io.tabular.iceberg.connect.deadletter.FailedRecordFactory;
 
-import java.util.Collections;
 import java.util.Map;
-import java.util.stream.Collectors;
 
-import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
@@ -46,8 +43,8 @@ public class DefaultExceptionHandler implements TransformExceptionHandler {
   private FailedRecordFactory recordFactory;
 
   @Override
-  public SinkRecord handle(SinkRecord original, Throwable error, String location) {
-    return recordFactory.recordFromSmt(original, error, location);
+  public SinkRecord handle(SinkRecord original, Throwable error) {
+    return recordFactory.recordFromSmt(original, error);
   }
 
   @Override
@@ -58,27 +55,5 @@ public class DefaultExceptionHandler implements TransformExceptionHandler {
         (FailedRecordFactory)
             DeadLetterUtils.loadClass(config.getString(FAILED_RECORD_FACTORY_PROP), loader);
     recordFactory.configure(props);
-  }
-
-  @Override
-  public ConfigDef config() {
-    return CONFIG_DEF;
-  }
-
-  private Map<String, String> failedRecordProperties(Map<String, String> originalProps) {
-    return propertiesWithPrefix(originalProps, FAILED_RECORD_FACTORY_PROP + ".");
-  }
-
-  private static Map<String, String> propertiesWithPrefix(
-          Map<String, String> properties, String prefix) {
-    if (properties == null || properties.isEmpty()) {
-      return Collections.emptyMap();
-    }
-
-    Preconditions.checkArgument(prefix != null, "Invalid prefix: null");
-
-    return properties.entrySet().stream()
-            .filter(e -> e.getKey().startsWith(prefix))
-            .collect(Collectors.toMap(e -> e.getKey().replaceFirst(prefix, ""), Map.Entry::getValue));
   }
 }

@@ -19,18 +19,24 @@
 package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
+import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
 import io.tabular.iceberg.connect.deadletter.FailedRecordFactory;
 import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 
-public class DefaultWriteExceptionHandler implements WriteExceptionHandler {
+import java.util.Map;
+
+public class DeadLetterTableWriteExceptionHandler implements WriteExceptionHandler {
   private FailedRecordFactory factory;
 
   @Override
   public void initialize(
-      SinkTaskContext context, IcebergSinkConfig config, FailedRecordFactory recordFactory) {
-    this.factory = recordFactory;
+      SinkTaskContext context, IcebergSinkConfig config) {
+    Map<String, String> props = config.writeExceptionHandlerProperties();
+    String failedRecordFactoryClass = props.get("failed_record_factory");
+    factory = (FailedRecordFactory) DeadLetterUtils.loadClass(failedRecordFactoryClass, this.getClass().getClassLoader());
+    factory.configure(config.writeExceptionHandlerProperties());
   }
 
   @Override
@@ -82,6 +88,6 @@ public class DefaultWriteExceptionHandler implements WriteExceptionHandler {
   }
 
   private SinkRecord failedRecord(SinkRecord record, WriteException exception) {
-    return factory.recordFromConnector(record, exception, null);
+    return factory.recordFromConnector(record, exception);
   }
 }

@@ -20,8 +20,8 @@ package io.tabular.iceberg.connect.deadletter;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.List;
-import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -51,19 +51,25 @@ public class DeadLetterUtils {
 
   private DeadLetterUtils() {}
 
-  public static final String KEY_HEADER = "t_original_key";
-  public static final String VALUE_HEADER = "t_original_value";
-
-  public static final String HEADERS_HEADER = "t_original_headers";
+  public static final String ORIGINAL_DATA = "iceberg.error.transform.original";
+  public static final String KEY = "KEY";
+  public static final String VALUE = "VALUE";
+  public static final String HEADERS = "HEADERS";
   public static final Schema HEADER_ELEMENT_SCHEMA =
       SchemaBuilder.struct()
           .field("key", Schema.STRING_SCHEMA)
           .field("value", Schema.OPTIONAL_BYTES_SCHEMA)
           .optional()
           .build();
-
   public static final Schema HEADER_SCHEMA =
-      SchemaBuilder.array(HEADER_ELEMENT_SCHEMA).optional().build();
+          SchemaBuilder.array(HEADER_ELEMENT_SCHEMA).optional().build();
+  public static final Schema HEADER_STRUCT_SCHEMA =
+          SchemaBuilder.struct()
+                  .field(KEY, Schema.OPTIONAL_BYTES_SCHEMA)
+                  .field(VALUE, Schema.OPTIONAL_BYTES_SCHEMA)
+                  .field(HEADERS, HEADER_SCHEMA)
+                  .optional()
+                  .build();
 
   public static String stackTrace(Throwable error) {
     StringWriter sw = new StringWriter();
@@ -82,7 +88,8 @@ public class DeadLetterUtils {
    * @return Struct for an Array that can be put into Iceberg
    */
   public static List<Struct> serializedHeaders(SinkRecord original) {
-    List<Struct> headers = Lists.newArrayList();
+    @SuppressWarnings("RegexpSingleline")
+    List<Struct> headers = new ArrayList<>();
     for (Header header : original.headers()) {
       Struct headerStruct = new Struct(HEADER_ELEMENT_SCHEMA);
       headerStruct.put("key", header.key());

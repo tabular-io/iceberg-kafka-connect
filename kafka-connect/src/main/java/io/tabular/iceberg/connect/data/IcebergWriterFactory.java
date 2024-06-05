@@ -29,9 +29,12 @@ import org.apache.iceberg.exceptions.NoSuchTableException;
 import org.apache.iceberg.relocated.com.google.common.annotations.VisibleForTesting;
 import org.apache.iceberg.util.Tasks;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class IcebergWriterFactory {
 
+  private static final Logger LOG = LoggerFactory.getLogger(IcebergWriterFactory.class);
   private final IcebergSinkConfig config;
 
   private final CatalogApi catalogApi;

@@ -51,7 +51,7 @@ The zip archive will be found under `./kafka-connect-runtime/build/distributions
 | iceberg.hadoop.*                           | Properties passed through to the Hadoop configuration                                                            |
 | iceberg.kafka.*                            | Properties passed through to control topic Kafka client initialization                                           |
 | iceberg.tables.deadletter.handler          | See Dead Letter Table Mode                                                                                       | 
-| iceberg.tables.deadletter.record_factpry   | See Dead Letter Table Mode                                                                                       | 
+| iceberg.tables.deadletter.record_factory   | See Dead Letter Table Mode                                                                                       | 
 | iceberg.tables.deadletter.record_factory.* | see Dead Letter Table Mode                                                                                       |
 
 If `iceberg.tables.dynamic-enabled` is `false` (the default) then you must specify `iceberg.tables`. If
@@ -325,24 +325,24 @@ See above for creating the table
 }
 ```
 
-## Dead Letter Table 
+## Write Exception Handler Mode 
 
-The connector can be configured to write to one or more Dead Letter iceberg tables, with capability beyond 
+The connector can be configured to use configured exception handlers when errors occur, with capability beyond 
 what is offered from Kafka Connects Dead Letter Queue implementation.  This is an optional setting you can 
 ignore if you want failures to cause the connector to fail.  Alternatively, the Dead Letter Table mode can 
 be used to ignore all failures, beyond `error.tolerance = all`
 
-| Location of Failure                                      | Kafka Connect DLQ | Dead Letter Table Mode | 
-|----------------------------------------------------------|-------------------|------------------------|
-| Deserialization/Converter                                | Yes               | Yes*                   | 
-| SMT                                                      | Yes               | Yes*                   | 
-| Table creation / schema issues                           | No                | Yes                    | 
-| Iceberg record conversion                                | No                | Yes                    | 
-| Malformed records (e.g. missing table route information) | No                | Yes                    | 
-| Schema evolution issues                                  | No                | Yes                    | 
+| Location of Failure                                      | Kafka Connect DLQ | Write Exception Handler Mode | 
+|----------------------------------------------------------|-------------------|------------------------------|
+| Deserialization/Converter                                | Yes               | Yes*                         | 
+| SMT                                                      | Yes               | Yes*                         | 
+| Table creation / schema issues                           | No                | Yes                          | 
+| Iceberg record conversion                                | No                | Yes                          | 
+| Malformed records (e.g. missing table route information) | No                | Yes                          | 
+| Schema evolution issues                                  | No                | Yes                          | 
 
-If the `ErrorTransform` SMT is not used, it may be challenging to put records into the Dead Letter Table other than 
-recording metadata (Topic, Partition, Offset) while dropping the message.
+If the `ErrorTransform` SMT is not used, it is not possible to recover the original message bytes.  The only information
+available will be recording metadata (Topic, Partition, Offset) while dropping the message.
 
 If the `ErrorTransform` SMT is used, failures can include the original bytes of the message in the Iceberg Table
 that can be extracted/inspected using a downstream query engine.
@@ -352,15 +352,15 @@ There are several classes that can be implemented and passed to the config for u
 * Error Transform SMT Key, Value, and Header deserialization failure handlers (each can be a different class)
 * SMT transformation failure handlers
 * Connector WriteException handler to handle issues with records themselves (e.g. missing route columns, invalid schema evolutions, etc.)
-* Dead Letter Table schema / Record conversion 
 
-Some default implementations are provided.  
+Some default implementations are provided.  The default implementation provides a **DEAD LETTER TABLE** mode that writes the original 
+message bytes, as well as Kafka metadata, to a configured Iceberg table.
 
-NOTE: **Avro/Schema Registry** should not be used in conjunction with Dead Letter Table using the provided handlers.  Avro deserialization 
+NOTE: **Avro/Schema Registry** should not be used in conjunction with write exception handling using the provided handlers.  Avro deserialization 
 failures mix transient and non-transient errors in the same exception.  A failure handler for avro deserialization is planned, but not 
 yet implemented.
 
-Users can extend these handlers to suit the needs of their particular deserialization method, catalog, etc. all of whihc can raise 
+Users can extend these handlers to suit the needs of their particular deserialization method, catalog, etc. all of which can raise 
 different errors. It is advised to carefully develop these and start conservatively: you do not want to send messages to the Dead Letter
 Table for transient network errors, which may be catalog specific. 
 
@@ -394,11 +394,10 @@ The reference implementation of `io.tabular.iceberg.connect.transforms.DefaultEx
 
 In order to turn on Dead Letter Table mode in the connector: 
 
-| Property                                    | Description                                                                                                                                  |
-|---------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
-| iceberg.deadletter.handler                  | Sucblass of io.tabular.iceberg.connect.data.WriteExceptionHandler , if this is not-null Dead Letter Table mode is turned on in the connector |
-| iceberg.deadletter.failed_record_factory    | Scubclass of io.tabular.iceberg.connect.deadletter.FailedRecordFactory for converting records.  The connector cannot see the SMT version     | 
-| iceberg.deadletter.failed_record_factory.*  | properties to be passed to the failed record factory                                                                                         |
+| Property                                       | Description                                                                                                                                |
+|------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| iceberg.write-exception.handler                | Sucblass of io.tabular.iceberg.connect.data.WriteExceptionHandler , if this is not-null write exception mode is turned on in the connector |
+| iceberg.write-exception.handler.properties.*   | properties to be passed to the failed record factory                                                                                       |
 
 You do not need to use the Error SMT to turn on dead letter mode; however, the provided `io.tabular.iceberg.connect.deadletter.DefaultFailedRecordFactory` assumes the Error SMT has been used 
 and will throw exceptions if not.  You can implement your own WriteExceptionHandler/FailedRecordFactory to skip messages, transform messages, strip fields from messages and only write the 

@@ -20,7 +20,6 @@ package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
 import io.tabular.iceberg.connect.deadletter.DeadLetterUtils;
-import io.tabular.iceberg.connect.deadletter.FailedRecordFactory;
 
 import java.util.List;
 
@@ -76,14 +75,10 @@ public abstract class RecordRouter {
     }
 
     if (config.deadLetterTableEnabled()) {
-      String failedRecordFactoryClass = config.getFailedRecordHandler();
       String handlerClass = config.getWriteExceptionHandler();
-      FailedRecordFactory factory =
-              (FailedRecordFactory) DeadLetterUtils.loadClass(failedRecordFactoryClass, loader);
-      factory.configure(config.failedRecordHandlerProperties());
       WriteExceptionHandler handler =
               (WriteExceptionHandler) DeadLetterUtils.loadClass(handlerClass, loader);
-      handler.initialize(context, config, factory);
+      handler.initialize(context, config);
       baseRecordRouter =
               new RecordRouter.ErrorHandlingRecordRouter(baseRecordRouter, handler);
     }

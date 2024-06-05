@@ -23,14 +23,13 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 public interface FailedRecordFactory {
-  Schema schema(String context);
+  Schema schema();
 
-  // how to take SMT record (which FYI is all ByteArrays) and turn it into some form of FailedRecord
-  SinkRecord recordFromSmt(SinkRecord original, Throwable error, String context);
+  // how to take SMT record (which is all ByteArrays) and turn it into some form of FailedRecord
+  SinkRecord recordFromSmt(SinkRecord original, Throwable error);
 
-  // here is where it starts getting awkward
-  // where in the original are the byte arrays.
-  SinkRecord recordFromConnector(SinkRecord record, Throwable error, String context);
+  // how to take a record that fails in the connector and turn it into a FailedRecord
+  SinkRecord recordFromConnector(SinkRecord record, Throwable error);
 
   void configure(Map<String, ?> props);
 }

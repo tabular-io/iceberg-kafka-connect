@@ -39,12 +39,14 @@ public class DefaultFailedRecordFactory implements FailedRecordFactory {
               ConfigDef.Type.STRING,
               null,
               ConfigDef.Importance.MEDIUM,
-              "dead letter table name namespace.table")
-              .define(DEAD_LETTER_ROUTE_FIELD_PROP,
-                      ConfigDef.Type.STRING,
-                      null,
-                      ConfigDef.Importance.MEDIUM,
-                      "route field to inject table name on");
+              "dead letter table name namespace.table"
+          )
+          .define(DEAD_LETTER_ROUTE_FIELD_PROP,
+              ConfigDef.Type.STRING,
+             null,
+              ConfigDef.Importance.MEDIUM,
+             "route field to inject table name on"
+          );
 
   private static final String HEADERS = "headers";
   private Schema schema;
@@ -53,14 +55,14 @@ public class DefaultFailedRecordFactory implements FailedRecordFactory {
   private String deadLetterRouteField;
 
   @Override
-  public Schema schema(String context) {
+  public Schema schema() {
     return schema;
   }
 
   @Override
-  public SinkRecord recordFromSmt(SinkRecord original, Throwable error, String context) {
+  public SinkRecord recordFromSmt(SinkRecord original, Throwable error) {
     Struct struct = new Struct(schema);
-    addCommon(struct, original, error, context);
+    addCommon(struct, original, error);
 
     if (original.key() != null) {
       struct.put("key_bytes", original.key());
@@ -83,24 +85,28 @@ public class DefaultFailedRecordFactory implements FailedRecordFactory {
   }
 
   @Override
-  public SinkRecord recordFromConnector(SinkRecord record, Throwable error, String context) {
+  public SinkRecord recordFromConnector(SinkRecord record, Throwable error) {
 
     Struct struct = new Struct(schema);
-    addCommon(struct, record, error, context);
+    addCommon(struct, record, error);
 
     Headers headers = record.headers();
-    Header keyHeader = headers.lastWithName(DeadLetterUtils.KEY_HEADER);
-    Header valueHeader = headers.lastWithName(DeadLetterUtils.VALUE_HEADER);
-    Header serializedHeader = headers.lastWithName(DeadLetterUtils.HEADERS_HEADER);
 
-    if (keyHeader != null) {
-      struct.put("key_bytes", keyHeader.value());
+    Header originalData = headers.lastWithName(DeadLetterUtils.ORIGINAL_DATA);
+    Struct originalStruct = (Struct) originalData.value();
+
+    Object keyBytes = originalStruct.get(DeadLetterUtils.KEY);
+    Object valueBytes = originalStruct.get(DeadLetterUtils.VALUE);
+    Object serializedHeader = originalStruct.get(DeadLetterUtils.HEADERS);
+
+    if (keyBytes != null) {
+      struct.put("key_bytes", keyBytes);
     }
-    if (valueHeader != null) {
-      struct.put("value_bytes", valueHeader.value());
+    if (valueBytes != null) {
+      struct.put("value_bytes", valueBytes);
     }
     if (serializedHeader != null) {
-      struct.put(HEADERS, serializedHeader.value());
+      struct.put(HEADERS, serializedHeader);
     }
 
     return record.newRecord(
@@ -117,8 +123,6 @@ public class DefaultFailedRecordFactory implements FailedRecordFactory {
     }
     schema =
         SchemaBuilder.struct()
-            .name("failed_message")
-            .parameter("transform_failed", "true")
             .field("topic", Schema.STRING_SCHEMA)
             .field("partition", Schema.INT32_SCHEMA)
             .field("offset", Schema.INT64_SCHEMA)
@@ -128,13 +132,12 @@ public class DefaultFailedRecordFactory implements FailedRecordFactory {
             .field("key_bytes", Schema.OPTIONAL_BYTES_SCHEMA)
             .field("value_bytes", Schema.OPTIONAL_BYTES_SCHEMA)
             .field(HEADERS, DeadLetterUtils.HEADER_SCHEMA)
-            .field("context", Schema.OPTIONAL_STRING_SCHEMA)
             .field("target_table", Schema.OPTIONAL_STRING_SCHEMA)
             .field(deadLetterRouteField, Schema.STRING_SCHEMA)
             .build();
   }
 
-  private void addCommon(Struct struct, SinkRecord record, Throwable error, String context) {
+  private void addCommon(Struct struct, SinkRecord record, Throwable error) {
     struct.put("topic", record.topic());
     struct.put("partition", record.kafkaPartition());
     struct.put("offset", record.kafkaOffset());
@@ -144,9 +147,7 @@ public class DefaultFailedRecordFactory implements FailedRecordFactory {
     if (!stack.isEmpty()) {
       struct.put("stack_trace", stack);
     }
-    if (context != null) {
-      struct.put("context", context);
-    }
+
     struct.put(deadLetterRouteField, deadLetterTableName);
   }
 }

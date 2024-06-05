@@ -41,17 +41,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 public class ErrorTransformTest {
-
   private static final String TOPIC = "some-topic";
   private static final int PARTITION = 3;
   private static final long OFFSET = 100;
   private static final long TIMESTAMP = 1000;
   private static final String KEY_STRING = "key";
   private static final String VALUE_STRING = "value";
-  private static final String KEY_JSON = "{\"key\": \"blah\"}";
-  private static final String VALUE_JSON = "{\"a\": 1, \"b\": \"b\"}";
-  private static final String BYTE_ARRAY_CONVERTER =
-      "org.apache.kafka.connect.converters.ByteArrayConverter";
   private static final String JSON_CONVERTER = "org.apache.kafka.connect.json.JsonConverter";
   private static final String STRING_CONVERTER = "org.apache.kafka.connect.storage.StringConverter";
 
@@ -123,14 +118,15 @@ public class ErrorTransformTest {
       assertThat(result.value()).isEqualTo(VALUE_STRING);
 
       Headers headers = result.headers();
-      Header keyHeader = headers.lastWithName(DeadLetterUtils.KEY_HEADER);
-      Header valueHeader = headers.lastWithName(DeadLetterUtils.VALUE_HEADER);
-      Header serializedHeader = headers.lastWithName(DeadLetterUtils.HEADERS_HEADER);
+      Header originalData = headers.lastWithName(DeadLetterUtils.ORIGINAL_DATA);
 
-      assertThat(keyHeader.value()).isEqualTo(KEY_STRING.getBytes(StandardCharsets.UTF_8));
-      assertThat(valueHeader.value()).isEqualTo(VALUE_STRING.getBytes(StandardCharsets.UTF_8));
-      assertThat(serializedHeader.value()).isInstanceOf(List.class);
-      List<Struct> resultHeaders = (List<Struct>) serializedHeader.value();
+      assertThat(originalData.value()).isInstanceOf(Struct.class);
+      Struct originalStruct = (Struct) originalData.value();
+
+      assertThat(originalStruct.get(DeadLetterUtils.KEY)).isEqualTo(KEY_STRING.getBytes(StandardCharsets.UTF_8));
+      assertThat(originalStruct.get(DeadLetterUtils.VALUE)).isEqualTo(VALUE_STRING.getBytes(StandardCharsets.UTF_8));
+      assertThat(originalStruct.get(DeadLetterUtils.HEADERS)).isInstanceOf(List.class);
+      List<Struct> resultHeaders = (List<Struct>) originalStruct.get(DeadLetterUtils.HEADERS);
       assertThat(resultHeaders.size()).isEqualTo(1);
       assertThat(resultHeaders.get(0).get("key")).isEqualTo("h1k");
       assertThat(resultHeaders.get(0).get("value"))
@@ -172,13 +168,15 @@ public class ErrorTransformTest {
 
       assertThat(result.kafkaOffset()).isEqualTo(OFFSET);
       Headers headers = result.headers();
-      Header keyHeader = headers.lastWithName(DeadLetterUtils.KEY_HEADER);
-      Header valueHeader = headers.lastWithName(DeadLetterUtils.VALUE_HEADER);
-      Header serializedHeader = headers.lastWithName(DeadLetterUtils.HEADERS_HEADER);
+      Header originalData = headers.lastWithName(DeadLetterUtils.ORIGINAL_DATA);
 
-      assertThat(keyHeader.value()).isEqualTo(KEY_STRING.getBytes(StandardCharsets.UTF_8));
-      assertThat(valueHeader.value()).isEqualTo(VALUE_STRING.getBytes(StandardCharsets.UTF_8));
-      assertThat(serializedHeader).isNull();
+      assertThat(originalData.value()).isInstanceOf(Struct.class);
+      Struct originalStruct = (Struct) originalData.value();
+
+      assertThat(originalStruct.get(DeadLetterUtils.KEY)).isEqualTo(KEY_STRING.getBytes(StandardCharsets.UTF_8));
+      assertThat(originalStruct.get(DeadLetterUtils.VALUE)).isEqualTo(VALUE_STRING.getBytes(StandardCharsets.UTF_8));
+      assertThat(originalStruct.get(DeadLetterUtils.HEADERS)).isNull();
+
     }
   }
 
@@ -248,8 +246,7 @@ public class ErrorTransformTest {
       SinkRecord result =
           smt.apply(createRecord(malformedKey, VALUE_STRING, stringAsByteHeaders()));
       assertThat(result.keySchema()).isNull();
-      assertThat(result.valueSchema()).isEqualTo(failedRecordFactory.schema(null));
-      assertThat(result.valueSchema().name()).isEqualTo("failed_message");
+      assertThat(result.valueSchema()).isEqualTo(failedRecordFactory.schema());
       assertThat(result.value()).isInstanceOf(Struct.class);
       Struct value = (Struct) result.value();
       assertThat(value.get("topic")).isEqualTo(TOPIC);
@@ -293,8 +290,7 @@ public class ErrorTransformTest {
       SinkRecord result =
           smt.apply(createRecord(KEY_STRING, malformedValue, stringAsByteHeaders()));
       assertThat(result.keySchema()).isNull();
-      assertThat(result.valueSchema()).isEqualTo(failedRecordFactory.schema(null));
-      assertThat(result.valueSchema().name()).isEqualTo("failed_message");
+      assertThat(result.valueSchema()).isEqualTo(failedRecordFactory.schema());
       assertThat(result.value()).isInstanceOf(Struct.class);
       Struct value = (Struct) result.value();
       assertThat(value.get("topic")).isEqualTo(TOPIC);
@@ -345,8 +341,7 @@ public class ErrorTransformTest {
       SinkRecord record = createRecord(KEY_STRING, VALUE_STRING, headers);
       SinkRecord result = smt.apply(record);
       assertThat(result.keySchema()).isNull();
-      assertThat(result.valueSchema()).isEqualTo(failedRecordFactory.schema(null));
-      assertThat(result.valueSchema().name()).isEqualTo("failed_message");
+      assertThat(result.valueSchema()).isEqualTo(failedRecordFactory.schema());
       assertThat(result.value()).isInstanceOf(Struct.class);
       Struct value = (Struct) result.value();
       assertThat(value.get("topic")).isEqualTo(TOPIC);
@@ -393,8 +388,7 @@ public class ErrorTransformTest {
       SinkRecord record = createRecord(KEY_STRING, VALUE_STRING, stringAsByteHeaders());
       SinkRecord result = smt.apply(record);
       assertThat(result.keySchema()).isNull();
-      assertThat(result.valueSchema()).isEqualTo(failedRecordFactory.schema(null));
-      assertThat(result.valueSchema().name()).isEqualTo("failed_message");
+      assertThat(result.valueSchema()).isEqualTo(failedRecordFactory.schema());
       assertThat(result.value()).isInstanceOf(Struct.class);
       Struct value = (Struct) result.value();
       assertThat(value.get("topic")).isEqualTo(TOPIC);

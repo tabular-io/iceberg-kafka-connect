@@ -23,15 +23,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.connector.ConnectRecord;
-import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Header;
@@ -41,6 +37,8 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Wraps key, value, header converters and SMTs in order to catch exceptions. Failed records are
@@ -78,6 +76,8 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
  * key/value/header bytes.
  */
 public class ErrorTransform implements Transformation<SinkRecord> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(ErrorTransform.class);
 
   public static class TransformInitializationException extends RuntimeException {
     TransformInitializationException(String errorMessage) {
@@ -126,18 +126,12 @@ public class ErrorTransform implements Transformation<SinkRecord> {
   private static final String CONVERTER_ERROR_HANDLER = "error.converter";
   private static final String SMT_ERROR_HANDLER = "error.smt";
   private static final String TRANSFORMATIONS = "smts";
-  private static final String KEY_FAILURE = "KEY_CONVERTER";
-  private static final String VALUE_FAILURE = "VALUE_CONVERTER";
-  private static final String HEADER_FAILURE = "HEADER_CONVERTER";
-  private static final String SMT_FAILURE = "SMT_FAILURE";
-  private static final Schema OPTIONAL_BYTES_SCHEMA = SchemaBuilder.OPTIONAL_BYTES_SCHEMA;
-
   private TransformExceptionHandler converterErrorHandler;
   private TransformExceptionHandler smtErrorHandler;
-  private List<Transformation<SinkRecord>> smts;
-  private Function<SinkRecord, SchemaAndValue> keyConverter;
-  private Function<SinkRecord, SchemaAndValue> valueConverter;
-  private Function<SinkRecord, Headers> headerConverterFn;
+  private List<Transformation<SinkRecord>> smts = Lists.newArrayList();
+  private Converter keyConverter;
+  private Converter valueConverter;
+  private HeaderConverter headerConverter;
 
   public static final ConfigDef CONFIG_DEF =
       new ConfigDef()
@@ -194,7 +188,7 @@ public class ErrorTransform implements Transformation<SinkRecord> {
           break;
         }
       } catch (Exception e) {
-        return smtErrorHandler.handle(record, e, SMT_FAILURE);
+        return smtErrorHandler.handle(record, e);
       }
     }
     // SMT could filter out messages
@@ -211,7 +205,18 @@ public class ErrorTransform implements Transformation<SinkRecord> {
   }
 
   @Override
-  public void close() {}
+  public void close() {
+    smts.forEach(smt -> {
+      try {
+        smt.close();
+      } catch (Exception e) {
+        LOG.error("error closing SMT", e);
+      }
+    });
+    tryCloseConverter(headerConverter);
+    tryCloseConverter(valueConverter);
+    tryCloseConverter(keyConverter);
+  }
 
   /*
   Kafka Connect filters the properties it passes to the SMT to
@@ -223,68 +228,31 @@ public class ErrorTransform implements Transformation<SinkRecord> {
     SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
     ClassLoader loader = this.getClass().getClassLoader();
 
-    if (Objects.equals(
-        config.getString(KEY_CONVERTER),
-        "org.apache.kafka.connect.converters.ByteArrayConverter")) {
-      keyConverter = record -> new SchemaAndValue(record.keySchema(), record.value());
-    } else {
-      Converter converter = (Converter) loadClass(config.getString(KEY_CONVERTER), loader);
-      converter.configure(PropsParser.apply(props, KEY_CONVERTER), true);
-      keyConverter = record -> converter.toConnectData(record.topic(), (byte[]) record.key());
+
+    keyConverter = (Converter) loadClass(config.getString(KEY_CONVERTER), loader);
+    try {
+      keyConverter.configure(PropsParser.apply(props, KEY_CONVERTER), true);
+    } catch (Exception e){
+      throw new TransformInitializationException("Could not configure key converter", e);
     }
+
 
     if (config.getString(VALUE_CONVERTER) == null) {
       throw new TransformInitializationException(
-          "ManagedTransformWrapper cannot be used without a defined value converter");
-    } else {
-      Converter converter = (Converter) loadClass(config.getString(VALUE_CONVERTER), loader);
-      converter.configure(PropsParser.apply(props, VALUE_CONVERTER), false);
-      valueConverter = record -> converter.toConnectData(record.topic(), (byte[]) record.value());
+              "ManagedTransformWrapper cannot be used without a defined value converter");
+    }
+    valueConverter = (Converter) loadClass(config.getString(VALUE_CONVERTER), loader);
+    try {
+      valueConverter.configure(PropsParser.apply(props, VALUE_CONVERTER), false);
+    } catch (Exception e) {
+      throw new TransformInitializationException("Could not configure value converter", e);
     }
 
-    HeaderConverter headerConverter;
-
-    if (Objects.equals(
-        config.getString(HEADER_CONVERTER),
-        "org.apache.kafka.connect.converters.ByteArrayConverter")) {
-      try (HeaderConverter converter =
-          (HeaderConverter)
-              loadClass("org.apache.kafka.connect.converters.ByteArrayConverter", loader)) {
-        converter.configure(PropsParser.apply(props, HEADER_CONVERTER));
-      } catch (Exception e) {
-        throw new TransformInitializationException(
-            String.format(
-                "Error loading header converter class %s", config.getString(HEADER_CONVERTER)),
-            e);
-      }
-      headerConverterFn = ConnectRecord::headers;
-    } else {
-      try (HeaderConverter converter =
-          (HeaderConverter) loadClass(config.getString(HEADER_CONVERTER), loader)) {
-        converter.configure(PropsParser.apply(props, HEADER_CONVERTER));
-        headerConverter = converter;
-      } catch (Exception e) {
-        throw new TransformInitializationException(
-            String.format(
-                "Error loading header converter class %s", config.getString(HEADER_CONVERTER)),
-            e);
-      }
-
-      headerConverterFn =
-          record -> {
-            Headers newHeaders = new ConnectHeaders();
-            Headers recordHeaders = record.headers();
-            if (recordHeaders != null) {
-              String topic = record.topic();
-              for (Header recordHeader : recordHeaders) {
-                SchemaAndValue schemaAndValue =
-                    headerConverter.toConnectHeader(
-                        topic, recordHeader.key(), (byte[]) recordHeader.value());
-                newHeaders.add(recordHeader.key(), schemaAndValue);
-              }
-            }
-            return newHeaders;
-          };
+    headerConverter = (HeaderConverter) loadClass(config.getString(HEADER_CONVERTER), loader);
+    try {
+      headerConverter.configure(PropsParser.apply(props, HEADER_CONVERTER));
+    } catch (Exception e) {
+      throw new TransformInitializationException("Could not configure header converter", e);
     }
 
     if (config.getString(TRANSFORMATIONS) == null) {
@@ -292,21 +260,21 @@ public class ErrorTransform implements Transformation<SinkRecord> {
     } else {
 
       smts =
-          Arrays.stream(config.getString(TRANSFORMATIONS).split(","))
-              .map(className -> loadClass(className, loader))
-              .map(obj -> (Transformation<SinkRecord>) obj)
-              .peek(smt -> smt.configure(PropsParser.apply(props, TRANSFORMATIONS)))
-              .collect(Collectors.toList());
+              Arrays.stream(config.getString(TRANSFORMATIONS).split(","))
+                      .map(className -> loadClass(className, loader))
+                      .map(obj -> (Transformation<SinkRecord>) obj)
+                      .peek(smt -> smt.configure(PropsParser.apply(props, TRANSFORMATIONS)))
+                      .collect(Collectors.toList());
     }
 
 
     Map<String, String> stringProps = propsAsStrings(props);
 
     converterErrorHandler =
-        (TransformExceptionHandler) loadClass(config.getString(CONVERTER_ERROR_HANDLER), loader);
+            (TransformExceptionHandler) loadClass(config.getString(CONVERTER_ERROR_HANDLER), loader);
     converterErrorHandler.configure(stringProps);
     smtErrorHandler =
-        (TransformExceptionHandler) loadClass(config.getString(SMT_ERROR_HANDLER), loader);
+            (TransformExceptionHandler) loadClass(config.getString(SMT_ERROR_HANDLER), loader);
     smtErrorHandler.configure(stringProps);
   }
 
@@ -330,21 +298,23 @@ public class ErrorTransform implements Transformation<SinkRecord> {
     SchemaAndValue valueData;
     Headers newHeaders;
 
+    String topic = record.topic();
+
     try {
-      keyData = keyConverter.apply(record);
+      keyData = keyConverter.toConnectData(topic, (byte[]) record.key());
     } catch (Exception e) {
-      return new DeserializedRecord(converterErrorHandler.handle(record, e, KEY_FAILURE), true);
+      return new DeserializedRecord(converterErrorHandler.handle(record, e), true);
     }
 
     try {
-      valueData = valueConverter.apply(record);
+      valueData = valueConverter.toConnectData(topic, (byte[]) record.value());
     } catch (Exception e) {
-      return new DeserializedRecord(converterErrorHandler.handle(record, e, VALUE_FAILURE), true);
+      return new DeserializedRecord(converterErrorHandler.handle(record, e), true);
     }
     try {
-      newHeaders = headerConverterFn.apply(record);
+      newHeaders = deserializeHeaders(record);
     } catch (Exception e) {
-      return new DeserializedRecord(converterErrorHandler.handle(record, e, HEADER_FAILURE), true);
+      return new DeserializedRecord(converterErrorHandler.handle(record, e), true);
     }
 
     return new DeserializedRecord(
@@ -360,30 +330,36 @@ public class ErrorTransform implements Transformation<SinkRecord> {
         false);
   }
 
+
+  private Headers deserializeHeaders(SinkRecord record) {
+    Headers newHeaders = new ConnectHeaders();
+    Headers recordHeaders = record.headers();
+    if (recordHeaders != null) {
+      String topic = record.topic();
+      for (Header recordHeader : recordHeaders) {
+        SchemaAndValue schemaAndValue =
+                headerConverter.toConnectHeader(
+                        topic, recordHeader.key(), (byte[]) recordHeader.value());
+        newHeaders.add(recordHeader.key(), schemaAndValue);
+      }
+    }
+    return newHeaders;
+  }
+
   private SinkRecord newRecord(SinkRecord original, SinkRecord transformed) {
+    Struct struct = new Struct(DeadLetterUtils.HEADER_STRUCT_SCHEMA);
     if (!original.headers().isEmpty()) {
       List<Struct> serializedHeaders = DeadLetterUtils.serializedHeaders(original);
-      transformed
-          .headers()
-          .add(
-              DeadLetterUtils.HEADERS_HEADER,
-              new SchemaAndValue(DeadLetterUtils.HEADER_SCHEMA, serializedHeaders));
+      struct.put(DeadLetterUtils.HEADERS, serializedHeaders);
     }
     if (original.key() != null) {
-      transformed
-          .headers()
-          .add(
-              DeadLetterUtils.KEY_HEADER,
-              new SchemaAndValue(OPTIONAL_BYTES_SCHEMA, original.key()));
+      struct.put(DeadLetterUtils.KEY, original.key());
     }
     if (original.value() != null) {
-      transformed
-          .headers()
-          .add(
-              DeadLetterUtils.VALUE_HEADER,
-              new SchemaAndValue(OPTIONAL_BYTES_SCHEMA, original.value()));
+      struct.put(DeadLetterUtils.VALUE, original.value());
     }
 
+    transformed.headers().add(DeadLetterUtils.ORIGINAL_DATA, new SchemaAndValue(DeadLetterUtils.HEADER_STRUCT_SCHEMA, struct));
     return transformed;
   }
 
@@ -395,5 +371,17 @@ public class ErrorTransform implements Transformation<SinkRecord> {
       }
     });
     return newProps;
+  }
+
+  private void tryCloseConverter(Object converter) {
+    if (converter != null) {
+      if (converter instanceof AutoCloseable) {
+        try {
+          ((AutoCloseable) converter).close();
+        } catch (Exception e) {
+          LOG.error("error closing converter", e);
+        }
+      }
+    }
   }
 }

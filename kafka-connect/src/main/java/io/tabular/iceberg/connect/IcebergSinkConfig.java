@@ -83,11 +83,8 @@ public class IcebergSinkConfig extends AbstractConfig {
       "iceberg.tables.schema-force-optional";
   private static final String TABLES_SCHEMA_CASE_INSENSITIVE_PROP =
       "iceberg.tables.schema-case-insensitive";
-  private static final String WRITE_EXCEPTION_HANDLER_PROP = "iceberg.deadletter.handler";
-  private static final String FAILED_RECORD_FACTORY_PROP =
-      "iceberg.deadletter.failed_record_factory";
-  private static final String FAILED_RECORD_FACTORY_PREFIX =
-      "iceberg.deadletter.failed_record_factory";
+  private static final String WRITE_EXCEPTION_HANDLER_PROP = "iceberg.writer-exception.handler";
+  public static final String WRITE_EXCEPTION_HANDLER_PREFIX = "iceberg.write-exception.handler.properties";
   private static final String CONTROL_TOPIC_PROP = "iceberg.control.topic";
   private static final String CONTROL_GROUP_ID_PROP = "iceberg.control.group-id";
   private static final String COMMIT_INTERVAL_MS_PROP = "iceberg.control.commit.interval-ms";
@@ -246,11 +243,11 @@ public class IcebergSinkConfig extends AbstractConfig {
         Importance.MEDIUM,
         "If writing to Dead Letter Table, write exception handler class to use");
     configDef.define(
-        FAILED_RECORD_FACTORY_PROP,
+        WRITE_EXCEPTION_HANDLER_PREFIX,
         Type.STRING,
         null,
         Importance.MEDIUM,
-        "If writing to Dead Letter Table, failed record factory class to use");
+        "If writing to Dead Letter Table, properties to pass during initialization");
     return configDef;
   }
 
@@ -355,10 +352,6 @@ public class IcebergSinkConfig extends AbstractConfig {
     return getString(WRITE_EXCEPTION_HANDLER_PROP);
   }
 
-  public String getFailedRecordHandler() {
-    return getString(FAILED_RECORD_FACTORY_PROP);
-  }
-
   public String tablesRouteField() {
     return getString(TABLES_ROUTE_FIELD_PROP);
   }
@@ -375,8 +368,8 @@ public class IcebergSinkConfig extends AbstractConfig {
     return getString(TABLES_DEFAULT_PARTITION_BY);
   }
 
-  public Map<String, String> failedRecordHandlerProperties() {
-    return PropertyUtil.propertiesWithPrefix(originalProps, FAILED_RECORD_FACTORY_PREFIX + ".");
+  public Map<String, String> writeExceptionHandlerProperties() {
+    return PropertyUtil.propertiesWithPrefix(originalProps, WRITE_EXCEPTION_HANDLER_PREFIX + ".");
   }
 
   public TableSinkConfig tableConfig(String tableName) {

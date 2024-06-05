@@ -3,9 +3,6 @@ plugins {
 }
 
 dependencies {
-  implementation libs.iceberg.core
-  implementation libs.iceberg.common
-  implementation libs.iceberg.guava
   compileOnly libs.bundles.kafka.connect
 }
 

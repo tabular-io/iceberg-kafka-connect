@@ -19,12 +19,11 @@
 package io.tabular.iceberg.connect.data;
 
 import io.tabular.iceberg.connect.IcebergSinkConfig;
-import io.tabular.iceberg.connect.deadletter.FailedRecordFactory;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTaskContext;
 
 public interface WriteExceptionHandler {
-  void initialize(SinkTaskContext context, IcebergSinkConfig config, FailedRecordFactory factory);
+  void initialize(SinkTaskContext context, IcebergSinkConfig config);
 
   /**
    * This method will be invoked whenever the connector runs into an exception while trying to write
