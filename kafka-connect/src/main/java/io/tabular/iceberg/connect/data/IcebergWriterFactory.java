@@ -83,6 +83,7 @@ public class IcebergWriterFactory {
                 result.set(
                     catalogApi.createTable(
                         identifier, schema, partitionSpec, config.autoCreateProps()));
+                LOG.info("Created new table {} from record at topic: {}, partition: {}, offset: {}", identifier, sample.topic(), sample.kafkaPartition(), sample.kafkaOffset());
               }
             });
     return result.get();
