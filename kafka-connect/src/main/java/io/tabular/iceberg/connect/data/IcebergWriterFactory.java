@@ -56,8 +56,7 @@ public class IcebergWriterFactory {
       if (config.autoCreateEnabled()) {
         table = autoCreateTable(tableName, sample);
       } else if (ignoreMissingTable) {
-        return new RecordWriter() {
-        };
+        return new RecordWriter() {};
       } else {
         throw nst;
       }

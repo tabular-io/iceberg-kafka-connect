@@ -101,6 +101,8 @@ public class Coordinator extends Channel implements AutoCloseable {
       Event event =
           new Event(config.controlGroupId(), new StartCommit(commitState.currentCommitId()));
       send(event);
+      LOG.info("Sent workers commit trigger with commit-id={}", commitState.currentCommitId().toString());
+
     }
 
     consumeAvailable(POLL_DURATION, this::receive);
