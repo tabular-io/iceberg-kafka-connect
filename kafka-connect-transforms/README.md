@@ -44,9 +44,10 @@ It will promote the `before` or `after` element fields to top level and add the 
 
 ## Configuration
 
-| Property            | Description                                                                       |
-|---------------------|-----------------------------------------------------------------------------------|
-| cdc.target.pattern  | Pattern to use for setting the CDC target field value, default is `{db}.{table}`  |
+| Property                          | Description                                                                                                                              |
+|-----------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
+| cdc.target.pattern                | Pattern to use for setting the CDC target field value. Available placeholders: `{db}`, `{schema}`,`{table}`.  Default is `{db}.{table}`. |
+| cdc.target.schema.replace.dbname  | Replace db name with schema in CDC target field value, if schema exists. Default is `true`                                               |
 
 # JsonToMapTransform
 _(Experimental)_
